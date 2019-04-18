@@ -133,7 +133,7 @@ ngxExportAggregateService f a = do
     let nameF = 'aggregateServer
         fName = mkName $ "aggregate_" ++ f
         sName = mkName $ "aggregate_storage_" ++ f
-        uName = mkName $ "url_" ++ f
+        uName = mkName $ "aggregate_url_" ++ f
     concat <$> sequence
         [sequence
             [sigD uName [t|ByteString|]
