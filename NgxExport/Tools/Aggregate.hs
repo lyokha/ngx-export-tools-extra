@@ -152,6 +152,9 @@ ngxExportAggregateService f a = do
                     []
                 ]
             ]
+        -- FIXME: name AggregateServerConf must be imported from the user's
+        -- module unqualified (see details in NgxExport/Tools.hs, function
+        -- ngxExportSimpleService')!
         ,ngxExportSimpleServiceTyped
             fName 'AggregateServerConf SingleShotService
         ]
