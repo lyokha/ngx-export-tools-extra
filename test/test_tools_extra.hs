@@ -33,18 +33,20 @@ showAsLazyByteString = C8L.pack . show
 
 updateStats :: ByteString -> IO C8L.ByteString
 updateStats s = do
-    let mv = readFromByteStringAsJSON @Stats s
-    when (isJust mv) $ do
-        let v@Stats {..} = fromJust mv
-        modifyIORef' stats $ \(Stats bs rs mbs) ->
-            Stats (bs + bytesSent) (rs + requests) (mbs + meanBytesSent)
+    let cbs = readFromByteString @Int s
+    modifyIORef' stats $ \(Stats bs rs _) ->
+        let nbs = bs + fromMaybe 0 cbs
+            nrs = rs + 1
+        in Stats nbs nrs $ nbs `div` nrs
     return ""
 ngxExportIOYY 'updateStats
 
 reportStats :: ByteString -> Bool -> IO C8L.ByteString
-reportStats = deferredService $ const $ do
-    s <- readIORef stats
-    reportAggregate 8020 (Just s) "stats"
+reportStats = deferredService $ \conf -> do
+    let port = readFromByteString @Int conf
+    when (isJust port) $ do
+        s <- readIORef stats
+        reportAggregate (fromJust port) (Just s) "stats"
     return ""
 ngxExportSimpleService 'reportStats $ PersistentService $ Just $ Sec 5
 
