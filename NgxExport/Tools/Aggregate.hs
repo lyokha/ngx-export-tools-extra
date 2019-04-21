@@ -1,11 +1,13 @@
 {-# LANGUAGE TemplateHaskell, OverloadedStrings, BangPatterns #-}
 
 module NgxExport.Tools.Aggregate (
+    -- * The typed service exporter
                                   AggregateServerConf
-                                 ,reportAggregate
                                  ,ngxExportAggregateService
+    -- * The client-side reporter
+                                 ,reportAggregate
     -- * Re-exported data constructors from /Foreign.C/
-    -- | Re-exports are needed by exporters for marshalling in foreign calls.
+    -- | Re-exports are needed by the exporter for marshalling in foreign calls.
                                  ,Foreign.C.Types.CInt (..)
                                  ,Foreign.C.Types.CUInt (..)
                                  ) where
@@ -156,6 +158,6 @@ ngxExportAggregateService f a = do
         -- module unqualified (see details in NgxExport/Tools.hs, function
         -- ngxExportSimpleService')!
         ,ngxExportSimpleServiceTyped
-            fName 'AggregateServerConf SingleShotService
+            fName ''AggregateServerConf SingleShotService
         ]
 

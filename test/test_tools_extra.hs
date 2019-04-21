@@ -1,5 +1,5 @@
 {-# LANGUAGE TemplateHaskell, DeriveGeneric, TypeApplications #-}
-{-# LANGUAGE OverloadedStrings, RecordWildCards #-}
+{-# LANGUAGE OverloadedStrings, BangPatterns #-}
 
 module TestToolsExtra where
 
@@ -35,9 +35,10 @@ updateStats :: ByteString -> IO C8L.ByteString
 updateStats s = do
     let cbs = readFromByteString @Int s
     modifyIORef' stats $ \(Stats bs rs _) ->
-        let nbs = bs + fromMaybe 0 cbs
-            nrs = rs + 1
-        in Stats nbs nrs $ nbs `div` nrs
+        let !nbs = bs + fromMaybe 0 cbs
+            !nrs = rs + 1
+            !nmbs = nbs `div` nrs
+        in Stats nbs nrs nmbs
     return ""
 ngxExportIOYY 'updateStats
 
