@@ -113,21 +113,6 @@ handleAggregateExceptions cmsg = handleAny $ \e ->
 throwUserError :: String -> IO a
 throwUserError = ioError . userError
 
-httpManager :: Manager
-httpManager = unsafePerformIO $ newManager defaultManagerSettings
-{-# NOINLINE httpManager #-}
-
-reportAggregate :: ToJSON a => Int -> Maybe a -> ByteString -> IO ()
-reportAggregate p v u =
-    handle (const $ return () :: SomeException -> IO ()) $ do
-        req <- parseRequest "POST http://127.0.0.1"
-        pid <- fromIntegral <$> ngxPid :: IO Int32
-        let !req' = req { requestBody = RequestBodyLBS $ encode (pid, v)
-                        , port = p
-                        , Network.HTTP.Client.path = B.append "put/" u
-                        }
-        void $ httpNoBody req' httpManager
-
 ngxExportAggregateService :: String       -- ^ Name of the service
                           -> Name         -- ^ Name of the aggregate type
                           -> Q [Dec]
@@ -160,4 +145,19 @@ ngxExportAggregateService f a = do
         ,ngxExportSimpleServiceTyped
             fName ''AggregateServerConf SingleShotService
         ]
+
+reportAggregate :: ToJSON a => Int -> Maybe a -> ByteString -> IO ()
+reportAggregate p v u =
+    handle (const $ return () :: SomeException -> IO ()) $ do
+        req <- parseRequest "POST http://127.0.0.1"
+        pid <- fromIntegral <$> ngxPid :: IO Int32
+        let !req' = req { requestBody = RequestBodyLBS $ encode (pid, v)
+                        , port = p
+                        , Network.HTTP.Client.path = B.append "put/" u
+                        }
+        void $ httpNoBody req' httpManager
+
+httpManager :: Manager
+httpManager = unsafePerformIO $ newManager defaultManagerSettings
+{-# NOINLINE httpManager #-}
 
