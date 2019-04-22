@@ -99,9 +99,8 @@ sendAggregate a =
     handleAggregateExceptions "Exception while sending aggregate" $ do
         s <- liftIO $ readIORef a
         modifyResponse $ setContentType "application/json"
-        writeLBS $ encode $ M.map (first $ \(CTime t) ->
-                                      posixSecondsToUTCTime $ fromIntegral t
-                                  ) $ snd s
+        writeLBS $ encode $ (toUTCTime *** M.map (first toUTCTime)) s
+    where toUTCTime (CTime t) = posixSecondsToUTCTime $ fromIntegral t
 
 handleAggregateExceptions :: String -> Snap () -> Snap ()
 handleAggregateExceptions cmsg = handleAny $ \e ->
