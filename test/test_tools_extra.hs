@@ -8,7 +8,6 @@ import           NgxExport.Tools
 import           NgxExport.Tools.Aggregate
 
 import           Data.ByteString (ByteString)
-import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString.Lazy.Char8 as C8L
 import           Data.Aeson
 import           Data.Maybe
@@ -27,9 +26,6 @@ instance ToJSON Stats
 stats :: IORef Stats
 stats = unsafePerformIO $ newIORef $ Stats 0 0 0
 {-# NOINLINE stats #-}
-
-showAsLazyByteString :: Show a => a -> L.ByteString
-showAsLazyByteString = C8L.pack . show
 
 updateStats :: ByteString -> IO C8L.ByteString
 updateStats s = do

@@ -1,10 +1,27 @@
 {-# LANGUAGE TemplateHaskell, OverloadedStrings, BangPatterns #-}
 
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  NgxExport.Tools.Aggregate
+-- Copyright   :  (c) Alexey Radkov 2019
+-- License     :  BSD-style
+--
+-- Maintainer  :  alexey.radkov@gmail.com
+-- Stability   :  experimental
+-- Portability :  non-portable (requires Template Haskell)
+--
+-- More extra tools for using in custom Haskell code with
+-- <http://github.com/lyokha/nginx-haskell-module nginx-haskell-module>.
+--
+-----------------------------------------------------------------------------
+
+
 module NgxExport.Tools.Aggregate (
     -- * The typed service exporter
+    -- $aggregateServiceExporter
                                   AggregateServerConf
                                  ,ngxExportAggregateService
-    -- * The client-side reporter
+    -- * The worker-side reporter
                                  ,reportAggregate
     -- * Re-exported data constructors from /Foreign.C/
     -- | Re-exports are needed by the exporter for marshalling in foreign calls.
@@ -41,6 +58,251 @@ import           Snap.Core
 
 type Aggregate a = IORef (CTime, Map Int32 (CTime, Maybe a))
 
+-- $aggregateServiceExporter
+--
+-- An aggregate service collects custom typed data reported by worker processes
+-- and sends this via HTTP when requested. This is an 'ignitionService' in terms
+-- of module "NgxExport.Tools", which means that it starts upon the startup of
+-- the worker process and runs until termination of the worker. Internally, an
+-- aggregate service starts an HTTP server implemented using the
+-- [Snap framework](http://snapframework.com/), which serves incoming requests
+-- from worker processes (collecting data) as well as from the Nginx server's
+-- administrators (reporting collected data).
+--
+-- Below is a simple example.
+--
+-- ==== File /test_tools_extra.hs/
+-- @
+-- {-\# LANGUAGE TemplateHaskell, DeriveGeneric, TypeApplications \#-}
+-- {-\# LANGUAGE OverloadedStrings, BangPatterns \#-}
+--
+-- module TestToolsExtra where
+--
+-- import           NgxExport
+-- import           NgxExport.Tools
+-- import           NgxExport.Tools.Aggregate
+--
+-- import           Data.ByteString (ByteString)
+-- import qualified Data.ByteString.Lazy.Char8 as C8L
+-- import           Data.Aeson
+-- import           Data.Maybe
+-- import           Data.IORef
+-- import           Control.Monad
+-- import           System.IO.Unsafe
+-- import           GHC.Generics
+--
+-- data Stats = Stats { bytesSent :: Int
+--                    , requests :: Int
+--                    , meanBytesSent :: Int
+--                    } deriving Generic
+-- instance FromJSON Stats
+-- instance ToJSON Stats
+--
+-- stats :: IORef Stats
+-- stats = unsafePerformIO $ newIORef $ Stats 0 0 0
+-- {-\# NOINLINE stats \#-}
+--
+-- updateStats :: ByteString -> IO C8L.ByteString
+-- __/updateStats/__ s = do
+--     let cbs = 'readFromByteString' \@Int s
+--     modifyIORef\' stats $ \\(Stats bs rs _) ->
+--         let !nbs = bs + fromMaybe 0 cbs
+--             !nrs = rs + 1
+--             !nmbs = nbs \`div\` nrs
+--         in Stats nbs nrs nmbs
+--     return \"\"
+-- 'NgxExport.ngxExportIOYY' \'updateStats
+--
+-- reportStats :: ByteString -> Bool -> IO C8L.ByteString
+-- __/reportStats/__ = 'deferredService' $ \conf -> do
+--     let port = 'readFromByteString' \@Int conf
+--     when (isJust port) $ do
+--         s <- readIORef stats
+--         'reportAggregate' (fromJust port) (Just s) \"__/stats/__\"
+--     return \"\"
+-- 'ngxExportSimpleService' \'reportStats $ PersistentService $ Just $ Sec 5
+--
+-- 'ngxExportAggregateService' \"__/stats/__\" \'\'Stats
+-- @
+--
+-- Here, on the bottom line, aggregate service /stats/ is declared. It expects
+-- from worker processes reports in JSON format with data of type /Stats/ which
+-- includes the number of bytes sent so far, the number of client requests, and
+-- the mean value of bytes sent per a single request. Its own configuration
+-- (a TCP port and the /purge interval/) shall be defined in the Nginx
+-- configuration file. The reports from worker processes are sent from a
+-- 'deferredService' /reportStats/ every 5 seconds: it merely reads data
+-- collected in a global IORef /stats/ and then sends this to the aggregate
+-- service using 'reportAggregate'. Handler /updateStats/ updates the /stats/
+-- on every run. It accepts a /ByteString/ from Nginx, then converts it to an
+-- /Int/ value and interprets this as the number of bytes sent in the current
+-- request. It also increments the number or requests and calculates the mean
+-- value of bytes sent in all requests to this worker so far. Notice that all
+-- the parts of /stats/ are evaluated /strictly/, it is important!
+--
+-- ==== File /nginx.conf/
+-- @
+-- user                    nobody;
+-- worker_processes        2;
+--
+-- events {
+--     worker_connections  1024;
+-- }
+--
+-- http {
+--     default_type        application\/octet-stream;
+--     sendfile            on;
+--
+--     log_format combined1 \'$remote_addr - $remote_user [$time_local] \'
+--                          \'\"$request\" $status $body_bytes_sent \'
+--                          \'\"$http_referer\" \"$http_user_agent\"\'
+--                          \'$hs_updateStats\';
+--
+--     haskell load \/var\/lib\/nginx\/test_tools_extra.so;
+--
+--     haskell_run_service __/simpleService_aggregate_stats/__ $hs_stats
+--             \'__/AggregateServerConf/__ { __/asPort/__ = 8100, __/asPurgeInterval/__ = Min 5 }\';
+--
+--     haskell_service_var_in_shm stats 64k \/tmp $hs_stats;
+--
+--     haskell_run_service __/simpleService_reportStats/__ $hs_reportStats 8100;
+--
+--     server {
+--         listen       8010;
+--         server_name  main;
+--         error_log    \/tmp\/nginx-test-haskell-error.log;
+--         access_log   \/tmp\/nginx-test-haskell-access.log combined1;
+--
+--         haskell_run __/updateStats/__ $hs_updateStats $bytes_sent;
+--
+--         location \/ {
+--             echo Ok;
+--         }
+--     }
+--
+--     server {
+--         listen       8020;
+--         server_name  stat;
+--
+--         location \/ {
+--             allow 127.0.0.1;
+--             deny all;
+--             proxy_pass http:\/\/127.0.0.1:8100\/get\/__/stats/__;
+--         }
+--     }
+-- }
+-- @
+--
+-- The aggregate service /stats/ must be referred with prefix
+-- __/simpleService_aggregate_/__. Its configuration is typed, the type is
+-- 'AggregateServerConf'. Though its only constructor /AggregateServerConf/ is
+-- not exported from this module, the service is still configurable from an
+-- Nginx configuration file. Here, the aggregate service listens on TCP port
+-- /8100/, and its /purge interval/ is 5 minutes. Notice that an aggregate
+-- service must be /shared/ (here, variable /$hs_stats/ is in shared memory),
+-- otherwise it won't even start because the internal HTTP servers on each
+-- worker process won't be able to bind to the same TCP port. Inside the upper
+-- /server/ clause, handler /updateStats/ runs on every client request. However,
+-- as soon as Nginx variable handlers are /lazy/, evaluation of
+-- /$hs_updateStats/ must be forced somewhere: the log phase is a good choice
+-- for this (Nginx internal variable /$bytes_sent/ is already evaluated at this
+-- point). That's why /$hs_updateStats/ (it is always empty, but has valuable
+-- side effects) is put inside /log_format combined1/ not affecting the actual
+-- formatting.
+--
+-- Data collected by the aggregate server can be obtained in a request to the
+-- lower server which listens on TCP port /8020/. It simply proxies requests to
+-- the internal aggregate server with url /\/get\/stats/ where /stats/
+-- corresponds to the /name/ of the aggregate service.
+--
+-- ==== A simple test
+-- As far as /reportStats/ is a deferred service, we won't get useful data in 5
+-- seconds after Nginx start.
+--
+-- > $ curl 'http://127.0.0.1:8020/' | jq 
+-- > [
+-- >   "1970-01-01T00:00:00Z",
+-- >   {}
+-- > ]
+--
+-- However, later we should get some useful data.
+--
+-- > $ curl 'http://127.0.0.1:8020/' | jq 
+-- > [
+-- >   "2019-04-22T14:19:04Z",
+-- >   {
+-- >     "5910": [
+-- >       "2019-04-22T14:19:19Z",
+-- >       {
+-- >         "bytesSent": 0,
+-- >         "requests": 0,
+-- >         "meanBytesSent": 0
+-- >       }
+-- >     ],
+-- >     "5911": [
+-- >       "2019-04-22T14:19:14Z",
+-- >       {
+-- >         "bytesSent": 0,
+-- >         "requests": 0,
+-- >         "meanBytesSent": 0
+-- >       }
+-- >     ]
+-- >   }
+-- > ]
+--
+-- Here we have collected stats from two Nginx worker processes with /PIDs/
+-- /5910/ and /5911/. The timestamps show when this information was updated the
+-- last time. The topmost timestamp shows the time of the latest /purge/ event.
+-- The data itself have only zeros as soon we made no request to the main
+-- server so far. Let's run 100 simultaneous requests and look at the stats (it
+-- should update at worst in 5 seconds after running them).
+--
+-- > $ for i in {1..100} ; do curl 'http://127.0.0.1:8010/' & done
+--
+-- Wait 5 seconds...
+--
+-- > $ curl 'http://127.0.0.1:8020/' | jq 
+-- > [
+-- >   "2019-04-22T14:29:04Z",
+-- >   {
+-- >     "5910": [
+-- >       "2019-04-22T14:31:34Z",
+-- >       {
+-- >         "bytesSent": 17751,
+-- >         "requests": 97,
+-- >         "meanBytesSent": 183
+-- >       }
+-- >     ],
+-- >     "5911": [
+-- >       "2019-04-22T14:31:31Z",
+-- >       {
+-- >         "bytesSent": 549,
+-- >         "requests": 3,
+-- >         "meanBytesSent": 183
+-- >       }
+-- >     ]
+-- >   }
+-- > ]
+
+-- | Configuration of an aggregate service.
+--
+-- The type is exported because Template Haskell requires that. Its only
+-- constructor /AggregateServerConf/ is not exported, nevertheless it is still
+-- reachable from Nginx configuration files. Below is its definition.
+--
+-- @
+--     AggregateServerConf { asPort          :: Int
+--                         , asPurgeInterval :: 'TimeInterval'
+--                         }
+-- @
+--
+-- The value of /asPort/ corresponds to a TCP port on which the internal
+-- aggregate server will listen. The /asPurgeInterval/ is a /purge/ interval.
+-- An aggregate server should sometimes purge data from worker processes which
+-- do not report for a long time. For example, it makes no sense to keep data
+-- from workers that have already terminated. The inactive PIDs get checked
+-- every /asPurgeInterval/: data which correspond to PIDs with timestamps older
+-- than /asPurgeInterval/ get removed.
 data AggregateServerConf =
     AggregateServerConf { asPort          :: Int
                         , asPurgeInterval :: TimeInterval
@@ -112,6 +374,16 @@ handleAggregateExceptions cmsg = handleAny $ \e ->
 throwUserError :: String -> IO a
 throwUserError = ioError . userError
 
+-- | Exports a simple aggregate service with specified name and the aggregate
+--   type.
+--
+-- The service is implemented via 'ngxExportSimpleServiceTyped' with
+-- 'AggregateServerConf' as the name of its custom type. This is an
+-- 'ignitionService' with an HTTP server based on the
+-- [Snap framework](http://snapframework.com/) running inside. The internal
+-- HTTP server collects data from worker processes on url
+-- /\/put\/__\<name_of_the_service\>__/ and reports data on url
+-- /\/get\/__\<name_of_the_service\>__/.
 ngxExportAggregateService :: String       -- ^ Name of the service
                           -> Name         -- ^ Name of the aggregate type
                           -> Q [Dec]
@@ -144,8 +416,14 @@ ngxExportAggregateService f a = do
         ,ngxExportSimpleServiceTyped
             fName ''AggregateServerConf SingleShotService
         ]
-
-reportAggregate :: ToJSON a => Int -> Maybe a -> ByteString -> IO ()
+-- | Reports data to an aggregate server.
+--
+-- If reported data is 'Nothing' then the aggregated data won't alter, but the
+-- timestamp associated with the PID of this worker process will be updated.
+reportAggregate :: ToJSON a => Int          -- ^ Port of the aggregate server
+                            -> Maybe a      -- ^ Reported data
+                            -> ByteString   -- ^ Name of the aggregate server
+                            -> IO ()
 reportAggregate p v u =
     handle (const $ return () :: SomeException -> IO ()) $ do
         req <- parseRequest "POST http://127.0.0.1"
