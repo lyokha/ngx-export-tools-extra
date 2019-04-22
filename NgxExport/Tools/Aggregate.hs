@@ -10,7 +10,7 @@
 -- Stability   :  experimental
 -- Portability :  non-portable (requires Template Haskell)
 --
--- More extra tools for using in custom Haskell code with
+-- An aggregate service from the more extra tools collection for
 -- <http://github.com/lyokha/nginx-haskell-module nginx-haskell-module>.
 --
 -----------------------------------------------------------------------------
@@ -64,10 +64,10 @@ type Aggregate a = IORef (CTime, Map Int32 (CTime, Maybe a))
 -- and sends this via HTTP when requested. This is an 'ignitionService' in terms
 -- of module "NgxExport.Tools", which means that it starts upon the startup of
 -- the worker process and runs until termination of the worker. Internally, an
--- aggregate service starts an HTTP server implemented using the
--- [Snap framework](http://snapframework.com/), which serves incoming requests
--- from worker processes (collecting data) as well as from the Nginx server's
--- administrators (reporting collected data).
+-- aggregate service starts an HTTP server implemented with the [Snap
+-- framework](http://snapframework.com/), which serves incoming requests from
+-- worker processes (collecting data) as well as from the Nginx server's
+-- clients (reporting collected data for administration purpose).
 --
 -- Below is a simple example.
 --
@@ -193,26 +193,27 @@ type Aggregate a = IORef (CTime, Map Int32 (CTime, Maybe a))
 -- }
 -- @
 --
--- The aggregate service /stats/ must be referred with prefix
--- __/simpleService_aggregate_/__. Its configuration is typed, the type is
--- 'AggregateServerConf'. Though its only constructor /AggregateServerConf/ is
--- not exported from this module, the service is still configurable from an
--- Nginx configuration file. Here, the aggregate service listens on TCP port
--- /8100/, and its /purge interval/ is 5 minutes. Notice that an aggregate
--- service must be /shared/ (here, variable /$hs_stats/ is in shared memory),
--- otherwise it won't even start because the internal HTTP servers on each
--- worker process won't be able to bind to the same TCP port. Inside the upper
--- /server/ clause, handler /updateStats/ runs on every client request. However,
--- as soon as Nginx variable handlers are /lazy/, evaluation of
--- /$hs_updateStats/ must be forced somewhere: the log phase is a good choice
--- for this (Nginx internal variable /$bytes_sent/ is already evaluated at this
--- point). That's why /$hs_updateStats/ (it is always empty, but has valuable
--- side effects) is put inside /log_format combined1/ not affecting the actual
--- formatting.
+-- The aggregate service /stats/ must be referred from the Nginx configuration
+-- file with prefix __/simpleService_aggregate_/__. Its configuration is typed,
+-- the type is 'AggregateServerConf'. Though its only constructor
+-- /AggregateServerConf/ is not exported from this module, the service is still
+-- configurable from an Nginx configuration. Here, the aggregate service listens
+-- on TCP port /8100/, and its /purge interval/ is 5 minutes. Notice that an
+-- aggregate service must be /shared/ (here, variable /$hs_stats/ is declared as
+-- shared with Nginx directive /haskell_service_var_in_shm/), otherwise it won't
+-- even start because the internal HTTP servers on each worker process won't be
+-- able to bind to the same TCP port. Inside the upper /server/ clause, handler
+-- /updateStats/ runs on every client request. However, as soon as Nginx
+-- variable handlers are /lazy/, evaluation of /$hs_updateStats/ must be forced
+-- somewhere: the log phase is a good choice for this (Nginx internal variable
+-- /$bytes_sent/ has already been evaluated at this point). That's why
+-- /$hs_updateStats/ (which is always empty, but has valuable side effects) is
+-- put inside of the /log_format combined1/ without any risk of affecting the
+-- actual formatting.
 --
 -- Data collected by the aggregate server can be obtained in a request to the
--- lower server which listens on TCP port /8020/. It simply proxies requests to
--- the internal aggregate server with url /\/get\/stats/ where /stats/
+-- virtual server listening on TCP port /8020/. It simply proxies requests to
+-- the internal aggregate server with url /\/get\/__stats__/ where __/stats/__
 -- corresponds to the /name/ of the aggregate service.
 --
 -- ==== A simple test
@@ -250,10 +251,10 @@ type Aggregate a = IORef (CTime, Map Int32 (CTime, Maybe a))
 -- >   }
 -- > ]
 --
--- Here we have collected stats from two Nginx worker processes with /PIDs/
--- /5910/ and /5911/. The timestamps show when this information was updated the
--- last time. The topmost timestamp shows the time of the latest /purge/ event.
--- The data itself have only zeros as soon we made no request to the main
+-- Here we have collected stats from the two Nginx worker processes with /PIDs/
+-- /5910/ and /5911/. The timestamps show when the stats was updated the last
+-- time. The topmost timestamp shows the time of the latest /purge/ event. The
+-- data itself have only zeros as soon we have made no request to the main
 -- server so far. Let's run 100 simultaneous requests and look at the stats (it
 -- should update at worst in 5 seconds after running them).
 --
@@ -296,13 +297,13 @@ type Aggregate a = IORef (CTime, Map Int32 (CTime, Maybe a))
 --                         }
 -- @
 --
--- The value of /asPort/ corresponds to a TCP port on which the internal
--- aggregate server will listen. The /asPurgeInterval/ is a /purge/ interval.
--- An aggregate server should sometimes purge data from worker processes which
--- do not report for a long time. For example, it makes no sense to keep data
--- from workers that have already terminated. The inactive PIDs get checked
--- every /asPurgeInterval/: data which correspond to PIDs with timestamps older
--- than /asPurgeInterval/ get removed.
+-- The value of /asPort/ corresponds to the TCP port of the internal aggregate
+-- server. The /asPurgeInterval/ is a /purge/ interval. An aggregate server
+-- should sometimes purge data from worker processes which did not report for a
+-- long time. For example, it makes no sense to keep data from workers that
+-- have already been terminated. The inactive PIDs get checked every
+-- /asPurgeInterval/: data which correspond to PIDs with timestamps older than
+-- /asPurgeInterval/ get removed.
 data AggregateServerConf =
     AggregateServerConf { asPort          :: Int
                         , asPurgeInterval :: TimeInterval
@@ -379,9 +380,9 @@ throwUserError = ioError . userError
 --
 -- The service is implemented via 'ngxExportSimpleServiceTyped' with
 -- 'AggregateServerConf' as the name of its custom type. This is an
--- 'ignitionService' with an HTTP server based on the
--- [Snap framework](http://snapframework.com/) running inside. The internal
--- HTTP server collects data from worker processes on url
+-- 'ignitionService' with an HTTP server based on the [Snap
+-- framework](http://snapframework.com/) running inside. The internal HTTP
+-- server collects data from worker processes on url
 -- /\/put\/__\<name_of_the_service\>__/ and reports data on url
 -- /\/get\/__\<name_of_the_service\>__/.
 ngxExportAggregateService :: String       -- ^ Name of the service
