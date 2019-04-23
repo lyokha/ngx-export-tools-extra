@@ -12,9 +12,9 @@ framework*](http://snapframework.com/), which serves incoming requests from
 worker processes (collecting data) as well as from the Nginx server's
 clients (reporting collected data for administration purpose).
 
-Below is a simple example.
+##### A simple example.
 
-##### File *test_tools_extra.hs*
+###### File *test_tools_extra.hs*
 
 ```haskell
 {-# LANGUAGE TemplateHaskell, DeriveGeneric, TypeApplications #-}
@@ -84,7 +84,7 @@ request. It also increments the number or requests and calculates the mean
 value of bytes sent in all requests to this worker so far. Notice that all
 the parts of *stats* are evaluated *strictly*, it is important!
 
-##### File *nginx.conf*
+###### File *nginx.conf*
 
 ```nginx
 user                    nobody;
@@ -161,7 +161,7 @@ virtual server listening on TCP port *8020*. It simply proxies requests to
 the internal aggregate server with URL */get/stats* where *stats*
 corresponds to the *name* of the aggregate service.
 
-##### A simple test
+###### A simple test
 
 As far as *reportStats* is a deferred service, we won't get useful data in 5
 seconds after Nginx start.
