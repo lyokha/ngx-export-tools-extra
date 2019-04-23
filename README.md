@@ -143,7 +143,7 @@ http {
 ```
 
 The aggregate service *stats* must be referred from the Nginx configuration
-file with prefix __*simpleService_aggregate_*__. Its configuration is typed,
+file with prefix __*simpleService_aggregate&#95;*__. Its configuration is typed,
 the type is *AggregateServerConf*. Though its only constructor
 *AggregateServerConf* is not exported from this module, the service is still
 configurable from an Nginx configuration. Here, the aggregate service listens
