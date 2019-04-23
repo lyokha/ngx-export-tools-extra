@@ -1,5 +1,5 @@
 This package contains a collection of Haskell modules with more extra tools for
-[*Nginx Haskell module](http://github.com/lyokha/nginx-haskell-module).
+[*Nginx Haskell module*](http://github.com/lyokha/nginx-haskell-module).
 
 #### Module *NgxExport.Tools.Aggregate*
 
@@ -12,7 +12,11 @@ framework*](http://snapframework.com/), which serves incoming requests from
 worker processes (collecting data) as well as from the Nginx server's
 clients (reporting collected data for administration purpose).
 
-##### A simple example.
+See detailed documentation on the module's exported functions and data on the
+[*Hackage
+haddocks*](http://hackage.haskell.org/package/ngx-export-tools-extra/docs/NgxExport-Tools-Aggregate.html).
+
+##### An example
 
 ###### File *test_tools_extra.hs*
 
@@ -139,7 +143,7 @@ http {
 ```
 
 The aggregate service *stats* must be referred from the Nginx configuration
-file with prefix *simpleService_aggregate_*. Its configuration is typed,
+file with prefix __*simpleService_aggregate_*__. Its configuration is typed,
 the type is *AggregateServerConf*. Though its only constructor
 *AggregateServerConf* is not exported from this module, the service is still
 configurable from an Nginx configuration. Here, the aggregate service listens
@@ -158,7 +162,7 @@ actual formatting.
 
 Data collected by the aggregate server can be obtained in a request to the
 virtual server listening on TCP port *8020*. It simply proxies requests to
-the internal aggregate server with URL */get/stats* where *stats*
+the internal aggregate server with URL */get/__stats__* where __*stats*__
 corresponds to the *name* of the aggregate service.
 
 ###### A simple test
