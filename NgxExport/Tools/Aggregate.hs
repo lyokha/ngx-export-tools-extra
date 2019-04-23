@@ -64,7 +64,7 @@ type Aggregate a = IORef (CTime, Map Int32 (CTime, Maybe a))
 -- and sends this via HTTP when requested. This is an 'ignitionService' in terms
 -- of module "NgxExport.Tools", which means that it starts upon the startup of
 -- the worker process and runs until termination of the worker. Internally, an
--- aggregate service starts an HTTP server implemented with the [Snap
+-- aggregate service starts an HTTP server implemented via the [Snap
 -- framework](http://snapframework.com/), which serves incoming requests from
 -- worker processes (collecting data) as well as from the Nginx server's
 -- clients (reporting collected data for administration purpose).
@@ -213,14 +213,14 @@ type Aggregate a = IORef (CTime, Map Int32 (CTime, Maybe a))
 --
 -- Data collected by the aggregate server can be obtained in a request to the
 -- virtual server listening on TCP port /8020/. It simply proxies requests to
--- the internal aggregate server with url /\/get\/__stats__/ where __/stats/__
+-- the internal aggregate server with URL /\/get\/__stats__/ where __/stats/__
 -- corresponds to the /name/ of the aggregate service.
 --
 -- ==== A simple test
 -- As far as /reportStats/ is a deferred service, we won't get useful data in 5
 -- seconds after Nginx start.
 --
--- > $ curl 'http://127.0.0.1:8020/' | jq 
+-- > $ curl 'http://127.0.0.1:8020/' | jq
 -- > [
 -- >   "1970-01-01T00:00:00Z",
 -- >   {}
@@ -228,7 +228,7 @@ type Aggregate a = IORef (CTime, Map Int32 (CTime, Maybe a))
 --
 -- However, later we should get some useful data.
 --
--- > $ curl 'http://127.0.0.1:8020/' | jq 
+-- > $ curl 'http://127.0.0.1:8020/' | jq
 -- > [
 -- >   "2019-04-22T14:19:04Z",
 -- >   {
@@ -262,7 +262,7 @@ type Aggregate a = IORef (CTime, Map Int32 (CTime, Maybe a))
 --
 -- Wait 5 seconds...
 --
--- > $ curl 'http://127.0.0.1:8020/' | jq 
+-- > $ curl 'http://127.0.0.1:8020/' | jq
 -- > [
 -- >   "2019-04-22T14:29:04Z",
 -- >   {
@@ -287,9 +287,9 @@ type Aggregate a = IORef (CTime, Map Int32 (CTime, Maybe a))
 
 -- | Configuration of an aggregate service.
 --
--- The type is exported because Template Haskell requires that. Its only
--- constructor /AggregateServerConf/ is not exported, nevertheless it is still
--- reachable from Nginx configuration files. Below is its definition.
+-- This type is exported because Template Haskell requires that. Though its
+-- only constructor /AggregateServerConf/ is not exported, it is still reachable
+-- from Nginx configuration files. Below is definition of the constructor.
 --
 -- @
 --     AggregateServerConf { asPort          :: Int
@@ -298,12 +298,15 @@ type Aggregate a = IORef (CTime, Map Int32 (CTime, Maybe a))
 -- @
 --
 -- The value of /asPort/ corresponds to the TCP port of the internal aggregate
--- server. The /asPurgeInterval/ is a /purge/ interval. An aggregate server
+-- server. The /asPurgeInterval/ is the /purge/ interval. An aggregate server
 -- should sometimes purge data from worker processes which did not report for a
 -- long time. For example, it makes no sense to keep data from workers that
 -- have already been terminated. The inactive PIDs get checked every
--- /asPurgeInterval/: data which correspond to PIDs with timestamps older than
--- /asPurgeInterval/ get removed.
+-- /asPurgeInterval/, and data which correspond to PIDs with timestamps older
+-- than /asPurgeInterval/ get removed.
+--
+-- Be aware that due to limitations of Template Haskell, this name must be
+-- imported unqualified!
 data AggregateServerConf =
     AggregateServerConf { asPort          :: Int
                         , asPurgeInterval :: TimeInterval
@@ -378,12 +381,16 @@ throwUserError = ioError . userError
 -- | Exports a simple aggregate service with specified name and the aggregate
 --   type.
 --
+-- The name of the service can be chosen arbitrarily, however it must be
+-- exactly referred from 'reportAggregate' and client requests to the service
+-- because the URL of the internal HTTP server contains this.
+--
 -- The service is implemented via 'ngxExportSimpleServiceTyped' with
 -- 'AggregateServerConf' as the name of its custom type. This is an
 -- 'ignitionService' with an HTTP server based on the [Snap
 -- framework](http://snapframework.com/) running inside. The internal HTTP
--- server collects data from worker processes on url
--- /\/put\/__\<name_of_the_service\>__/ and reports data on url
+-- server collects data from worker processes on URL
+-- /\/put\/__\<name_of_the_service\>__/ and reports data on URL
 -- /\/get\/__\<name_of_the_service\>__/.
 ngxExportAggregateService :: String       -- ^ Name of the service
                           -> Name         -- ^ Name of the aggregate type
