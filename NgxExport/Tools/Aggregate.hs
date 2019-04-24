@@ -385,6 +385,9 @@ throwUserError = ioError . userError
 -- exactly referred from 'reportAggregate' and client requests to the service
 -- because the URL of the internal HTTP server contains this.
 --
+-- The aggregate type must have instances of 'FromJSON' and 'ToJSON' as its
+-- objects will be transferred via HTTP in JSON format.
+--
 -- The service is implemented via 'ngxExportSimpleServiceTyped' with
 -- 'AggregateServerConf' as the name of its custom type. This is an
 -- 'ignitionService' with an HTTP server based on the [Snap
