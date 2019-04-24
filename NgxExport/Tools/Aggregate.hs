@@ -430,8 +430,8 @@ ngxExportAggregateService f a = do
 -- | Reports data to an aggregate service.
 --
 -- If reported data is 'Nothing' then data aggregated on the aggregate service
--- won't alter, except the timestamp associated with the PID of the sending
--- worker process that will be updated.
+-- won't alter except that the timestamp associated with the PID of the sending
+-- worker process will be updated.
 reportAggregate :: ToJSON a => Int          -- ^ Port of the aggregate server
                             -> Maybe a      -- ^ Reported data
                             -> ByteString   -- ^ Name of the aggregate service
