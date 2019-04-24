@@ -211,7 +211,7 @@ type Aggregate a = IORef (CTime, Map Int32 (CTime, Maybe a))
 -- put inside of the /log_format combined1/ without any risk of affecting the
 -- actual formatting.
 --
--- Data collected by the aggregate server can be obtained in a request to the
+-- Data collected by the aggregate service can be obtained in a request to the
 -- virtual server listening on TCP port /8020/. It simply proxies requests to
 -- the internal aggregate server with URL /\/get\/__stats__/ where __/stats/__
 -- corresponds to the /name/ of the aggregate service.
@@ -298,7 +298,7 @@ type Aggregate a = IORef (CTime, Map Int32 (CTime, Maybe a))
 -- @
 --
 -- The value of /asPort/ corresponds to the TCP port of the internal aggregate
--- server. The /asPurgeInterval/ is the /purge/ interval. An aggregate server
+-- server. The /asPurgeInterval/ is the /purge/ interval. An aggregate service
 -- should sometimes purge data from worker processes which did not report for a
 -- long time. For example, it makes no sense to keep data from workers that
 -- have already been terminated. The inactive PIDs get checked every
@@ -427,13 +427,14 @@ ngxExportAggregateService f a = do
         ,ngxExportSimpleServiceTyped
             fName ''AggregateServerConf SingleShotService
         ]
--- | Reports data to an aggregate server.
+-- | Reports data to an aggregate service.
 --
--- If reported data is 'Nothing' then the aggregated data won't alter, but the
--- timestamp associated with the PID of this worker process will be updated.
+-- If reported data is 'Nothing' then data aggregated on the aggregate service
+-- won't alter, except the timestamp associated with the PID of the sending
+-- worker process that will be updated.
 reportAggregate :: ToJSON a => Int          -- ^ Port of the aggregate server
                             -> Maybe a      -- ^ Reported data
-                            -> ByteString   -- ^ Name of the aggregate server
+                            -> ByteString   -- ^ Name of the aggregate service
                             -> IO ()
 reportAggregate p v u =
     handle (const $ return () :: SomeException -> IO ()) $ do

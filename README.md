@@ -160,7 +160,7 @@ somewhere: the log phase is a good choice for this (Nginx internal variable
 put inside of the *log_format combined1* without any risk of affecting the
 actual formatting.
 
-Data collected by the aggregate server can be obtained in a request to the
+Data collected by the aggregate service can be obtained in a request to the
 virtual server listening on TCP port *8020*. It simply proxies requests to
 the internal aggregate server with URL */get/__stats__* where __*stats*__
 corresponds to the *name* of the aggregate service.
