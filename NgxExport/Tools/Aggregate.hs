@@ -114,7 +114,7 @@ type Aggregate a = IORef (CTime, Map Int32 (CTime, Maybe a))
 -- 'NgxExport.ngxExportIOYY' \'updateStats
 --
 -- reportStats :: ByteString -> Bool -> IO C8L.ByteString
--- __/reportStats/__ = 'deferredService' $ \conf -> do
+-- __/reportStats/__ = 'deferredService' $ \\conf -> do
 --     let port = 'readFromByteString' \@Int conf
 --     when (isJust port) $ do
 --         s <- readIORef stats

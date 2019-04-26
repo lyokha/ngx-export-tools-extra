@@ -99,7 +99,7 @@ events {
 }
 
 http {
-    default_type        application\/octet-stream;
+    default_type        application/octet-stream;
     sendfile            on;
 
     log_format combined1 '$remote_addr - $remote_user [$time_local] '
