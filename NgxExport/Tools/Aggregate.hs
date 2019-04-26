@@ -163,7 +163,7 @@ type Aggregate a = IORef (CTime, Map Int32 (CTime, Maybe a))
 --     haskell_run_service __/simpleService_aggregate_stats/__ $hs_stats
 --             \'__/AggregateServerConf/__ { __/asPort/__ = 8100, __/asPurgeInterval/__ = Min 5 }\';
 --
---     haskell_service_var_in_shm stats 64k \/tmp $hs_stats;
+--     haskell_service_var_in_shm stats 32k \/tmp $hs_stats;
 --
 --     haskell_run_service __/simpleService_reportStats/__ $hs_reportStats 8100;
 --

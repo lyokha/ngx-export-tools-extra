@@ -112,7 +112,7 @@ http {
     haskell_run_service simpleService_aggregate_stats $hs_stats
             'AggregateServerConf { asPort = 8100, asPurgeInterval = Min 5 }';
 
-    haskell_service_var_in_shm stats 64k /tmp $hs_stats;
+    haskell_service_var_in_shm stats 32k /tmp $hs_stats;
 
     haskell_run_service simpleService_reportStats $hs_reportStats 8100;
 
