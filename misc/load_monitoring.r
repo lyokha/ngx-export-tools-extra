@@ -14,7 +14,7 @@ ui <- fluidPage(
                       div(style = "display: inline-block; margin-right: 20px",
                           radioButtons("rb_mode", NULL,
                                        c("Requests" = "reqs",
-                                         "Bytes_sent" = "bsent"),
+                                         "Bytes sent" = "bsent"),
                                        selected = "reqs", inline = TRUE)),
                       div(style = "display: inline-block",
                           actionButton("b_reset", "Reset Traces"))))),
