@@ -61,7 +61,7 @@ updateStats s = do
             !nmbs = nbs `div` nrs
         in Stats nbs nrs nmbs
     return ""
-NgxExport.ngxExportIOYY 'updateStats
+ngxExportIOYY 'updateStats
 
 reportStats :: ByteString -> Bool -> IO C8L.ByteString
 reportStats = deferredService $ \conf -> do
