@@ -87,7 +87,6 @@ type Aggregate a = IORef (CTime, Map Int32 (CTime, Maybe a))
 -- import           Data.Aeson
 -- import           Data.Maybe
 -- import           Data.IORef
--- import           Control.Monad
 -- import           System.IO.Unsafe
 -- import           GHC.Generics
 --
@@ -105,22 +104,23 @@ type Aggregate a = IORef (CTime, Map Int32 (CTime, Maybe a))
 -- updateStats :: ByteString -> IO C8L.ByteString
 -- __/updateStats/__ s = do
 --     let cbs = 'readFromByteString' \@Int s
---     modifyIORef\' stats $ \\(Stats bs rs _) ->
---         let !nbs = bs + fromMaybe 0 cbs
+--    atomicModifyIORef\' stats $ \\(Stats bs rs _) ->
+--        (let !nbs = bs + fromMaybe 0 cbs
 --             !nrs = rs + 1
 --             !nmbs = nbs \`div\` nrs
 --         in Stats nbs nrs nmbs
+--        ,()
+--        )
 --     return \"\"
 -- 'NgxExport.ngxExportIOYY' \'updateStats
 --
--- reportStats :: ByteString -> Bool -> IO C8L.ByteString
--- __/reportStats/__ = 'deferredService' $ \\conf -> do
---     let port = 'readFromByteString' \@Int conf
---     when (isJust port) $ do
---         s <- readIORef stats
---         'reportAggregate' (fromJust port) (Just s) \"__/stats/__\"
+-- reportStats :: Int -> Bool -> IO C8L.ByteString
+-- __/reportStats/__ = 'deferredService' $ \\port -> do
+--     s <- readIORef stats
+--     'reportAggregate' port (Just s) \"__/stats/__\"
 --     return \"\"
--- 'ngxExportSimpleService' \'reportStats $ PersistentService $ Just $ Sec 5
+-- 'ngxExportSimpleServiceTyped' \'reportStats \'\'Int $
+--     'PersistentService' $ Just $ Sec 5
 --
 -- 'ngxExportAggregateService' \"__/stats/__\" \'\'Stats
 -- @
