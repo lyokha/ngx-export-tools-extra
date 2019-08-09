@@ -54,13 +54,11 @@ stats = unsafePerformIO $ newIORef $ Stats 0 0 0
 updateStats :: ByteString -> IO C8L.ByteString
 updateStats s = do
     let cbs = readFromByteString @Int s
-    atomicModifyIORef' stats $ \(Stats bs rs _) ->
-        (let !nbs = bs + fromMaybe 0 cbs
-             !nrs = rs + 1
-             !nmbs = nbs `div` nrs
-         in Stats nbs nrs nmbs
-        ,()
-        )
+    modifyIORef' stats $ \(Stats bs rs _) ->
+        let !nbs = bs + fromMaybe 0 cbs
+            !nrs = rs + 1
+            !nmbs = nbs `div` nrs
+        in Stats nbs nrs nmbs
     return ""
 ngxExportIOYY 'updateStats
 

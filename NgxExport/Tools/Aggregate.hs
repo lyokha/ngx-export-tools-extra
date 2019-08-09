@@ -104,13 +104,11 @@ type Aggregate a = IORef (CTime, Map Int32 (CTime, Maybe a))
 -- updateStats :: ByteString -> IO C8L.ByteString
 -- __/updateStats/__ s = do
 --     let cbs = 'readFromByteString' \@Int s
---     atomicModifyIORef\' stats $ \\(Stats bs rs _) ->
---         (let !nbs = bs + fromMaybe 0 cbs
---              !nrs = rs + 1
---              !nmbs = nbs \`div\` nrs
---          in Stats nbs nrs nmbs
---         ,()
---         )
+--     modifyIORef\' stats $ \\(Stats bs rs _) ->
+--         let !nbs = bs + fromMaybe 0 cbs
+--             !nrs = rs + 1
+--             !nmbs = nbs \`div\` nrs
+--         in Stats nbs nrs nmbs
 --     return \"\"
 -- 'NgxExport.ngxExportIOYY' \'updateStats
 --
