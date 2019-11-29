@@ -151,11 +151,6 @@ type Aggregate a = IORef (CTime, Map Int32 (CTime, Maybe a))
 --     default_type        application\/octet-stream;
 --     sendfile            on;
 --
---     log_format combined1 \'$remote_addr - $remote_user [$time_local] \'
---                          \'\"$request\" $status $body_bytes_sent \'
---                          \'\"$http_referer\" \"$http_user_agent\"\'
---                          \'$hs_updateStats\';
---
 --     haskell load \/var\/lib\/nginx\/test_tools_extra.so;
 --
 --     haskell_run_service __/simpleService_aggregate_stats/__ $hs_stats
@@ -169,9 +164,9 @@ type Aggregate a = IORef (CTime, Map Int32 (CTime, Maybe a))
 --         listen       8010;
 --         server_name  main;
 --         error_log    \/tmp\/nginx-test-haskell-error.log;
---         access_log   \/tmp\/nginx-test-haskell-access.log combined1;
+--         access_log   \/tmp\/nginx-test-haskell-access.log;
 --
---         haskell_run __/updateStats/__ $hs_updateStats $bytes_sent;
+--         haskell_run __/updateStats/__ !$hs_updateStats $bytes_sent;
 --
 --         location \/ {
 --             echo Ok;
@@ -201,13 +196,12 @@ type Aggregate a = IORef (CTime, Map Int32 (CTime, Maybe a))
 -- shared with Nginx directive /haskell_service_var_in_shm/), otherwise it won't
 -- even start because the internal HTTP servers on each worker process won't be
 -- able to bind to the same TCP port. Inside the upper /server/ clause, handler
--- /updateStats/ runs on every client request. However, as soon as Nginx
+-- /updateStats/ runs on every client request. This handler always returns an
+-- empty string in variable /$hs_updateStats/ as soon as it is only needed for
+-- the side effect of updating of the /stats/. However, as soon as Nginx
 -- variable handlers are /lazy/, evaluation of /$hs_updateStats/ must be forced
--- somewhere: the log phase is a good choice for this (Nginx internal variable
--- /$bytes_sent/ has already been evaluated at this point). That's why
--- /$hs_updateStats/ (which is always empty, but has valuable side effects) is
--- put inside of the /log_format combined1/ without any risk of affecting the
--- actual formatting.
+-- somehow. In our case the /bang/ syntax from the Nginx Haskell module was used
+-- to achieve this.
 --
 -- Data collected by the aggregate service can be obtained in a request to the
 -- virtual server listening on TCP port /8020/. It simply proxies requests to
