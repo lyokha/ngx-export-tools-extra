@@ -148,11 +148,12 @@ shared with Nginx directive *haskell_service_var_in_shm*), otherwise it won't
 even start because the internal HTTP servers on each worker process won't be
 able to bind to the same TCP port. Inside the upper *server* clause, handler
 *updateStats* runs on every client request. This handler always returns an
-empty string in variable *hs_updateStats* as soon as it is only needed for the
-side effect of updating of the *stats*. However, as soon as Nginx variable
-handlers are *lazy*, evaluation of *hs_updateStats* must be forced somehow. In
-this case the *bang* syntax from the Nginx Haskell module was used to achieve
-this.
+empty string in variable *hs_updateStats* because it is only needed for the side
+effect of updating the *stats*. However, as soon as Nginx variable handlers are
+*lazy*, evaluation of *hs_updateStats* must be forced somehow. To achieve this,
+we used the *strict annotation* (the *bang* symbol) in directive *haskell_run*
+that enforces strict evaluation in a late request processing phase, when the
+value of variable *bytes_sent* has been already calculated.
 
 Data collected by the aggregate service can be obtained in a request to the
 virtual server listening on TCP port *8020*. It simply proxies requests to

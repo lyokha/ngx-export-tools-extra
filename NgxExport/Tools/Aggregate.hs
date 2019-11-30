@@ -200,9 +200,10 @@ type Aggregate a = IORef (CTime, Map Int32 (CTime, Maybe a))
 -- empty string in variable /$hs_updateStats/ because it is only needed for the
 -- side effect of updating the /stats/. However, as soon as Nginx variable
 -- handlers are /lazy/, evaluation of /$hs_updateStats/ must be forced somehow.
--- To achieve this, we used the /bang syntax/ in directive /haskell_run/ that
--- enforces strict evaluation in a late request processing phase, when the value
--- of variable /$bytes_sent/ is already calculated.
+-- To achieve this, we used the /strict annotation/ (the /bang/ symbol) in
+-- directive /haskell_run/ that enforces strict evaluation in a late request
+-- processing phase, when the value of variable /$bytes_sent/ has been already
+-- calculated.
 --
 -- Data collected by the aggregate service can be obtained in a request to the
 -- virtual server listening on TCP port /8020/. It simply proxies requests to
