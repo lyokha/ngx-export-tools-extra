@@ -20,7 +20,7 @@ haddocks*](http://hackage.haskell.org/package/ngx-export-tools-extra/docs/NgxExp
 
 ##### An example
 
-###### File *test_tools_extra.hs*
+###### File *test_tools_extra_aggregate.hs*
 
 ```haskell
 {-# LANGUAGE TemplateHaskell, DeriveGeneric, TypeApplications #-}
@@ -102,7 +102,7 @@ http {
     default_type        application/octet-stream;
     sendfile            on;
 
-    haskell load /var/lib/nginx/test_tools_extra.so;
+    haskell load /var/lib/nginx/test_tools_extra_aggregate.so;
 
     haskell_run_service simpleService_aggregate_stats $hs_stats
             'AggregateServerConf { asPort = 8100, asPurgeInterval = Min 5 }';
