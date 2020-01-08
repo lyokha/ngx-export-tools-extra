@@ -1,7 +1,7 @@
 {-# LANGUAGE TemplateHaskell, DeriveGeneric, TypeApplications #-}
 {-# LANGUAGE OverloadedStrings, BangPatterns #-}
 
-module TestToolsExtra where
+module TestToolsExtraAggregate where
 
 import           NgxExport
 import           NgxExport.Tools
