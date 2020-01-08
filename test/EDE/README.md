@@ -1,32 +1,29 @@
 ##### Compile
 
 ```ShellSession
-$ ghc -O2 -dynamic -shared -fPIC -lHSrts_thr-ghc$(ghc --numeric-version) test_tools_extra_aggregate.hs -o test_tools_extra_aggregate.so -fforce-recomp
+$ ghc -O2 -dynamic -shared -fPIC -lHSrts_thr-ghc$(ghc --numeric-version) test_tools_extra_ede.hs -o test_tools_extra_ede.so -fforce-recomp
 ```
-
-To see how *Template Haskell* declarations get instantiated, add option
-*``-ddump-splices``*.
 
 ##### Install
 
-Before installing *test_tools_extra_aggregate.so*, you may need to collect and
+Before installing *test_tools_extra_ede.so*, you may need to collect and
 install all dependent Haskell libraries, and patch
-*test_tools_extra_aggregate.so* using utility
+*test_tools_extra_ede.so* using utility
 [*hslibdeps*](https://github.com/lyokha/nginx-haskell-module/blob/master/utils/README.md#utility-hslibdeps).
 
 ```ShellSession
-$ hslibdeps -t /var/lib/nginx/x86_64-linux-ghc-8.6.1 test_tools_extra_aggregate.so
+$ hslibdeps -t /var/lib/nginx/x86_64-linux-ghc-8.6.1 test_tools_extra_ede.so
 ```
 
 The name of the target directory is arbitrary: the only requirement is that it
 must be accessible by Nginx worker processes' user (i.e. *nginx* or *nobody*).
 
-Copy library *test_tools_extra_aggregate.so* into directory */var/lib/nginx/*
+Copy library *test_tools_extra_ede.so* into directory */var/lib/nginx/*
 (this must correspond to the directory specified in Nginx directive
 *haskell load*) being a superuser.
 
 ```ShellSession
-# cp test_tools_extra_aggregate.so /var/lib/nginx
+# cp test_tools_extra_ede.so /var/lib/nginx
 ```
 
 Then copy all dependent Haskell libraries into directory
