@@ -71,7 +71,7 @@ type Aggregate a = IORef (CTime, Map Int32 (CTime, Maybe a))
 --
 -- Below is a simple example.
 --
--- ==== File /test_tools_extra.hs/
+-- ==== File /test_tools_extra_aggregate.hs/
 -- @
 -- {-\# LANGUAGE TemplateHaskell, DeriveGeneric, TypeApplications \#-}
 -- {-\# LANGUAGE OverloadedStrings, BangPatterns \#-}
@@ -151,7 +151,7 @@ type Aggregate a = IORef (CTime, Map Int32 (CTime, Maybe a))
 --     default_type        application\/octet-stream;
 --     sendfile            on;
 --
---     haskell load \/var\/lib\/nginx\/test_tools_extra.so;
+--     haskell load \/var\/lib\/nginx\/test_tools_extra_aggregate.so;
 --
 --     haskell_run_service __/simpleService_aggregate_stats/__ $hs_stats
 --             \'__/AggregateServerConf/__ { __/asPort/__ = 8100, __/asPurgeInterval/__ = Min 5 }\';
