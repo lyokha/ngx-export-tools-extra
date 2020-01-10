@@ -120,17 +120,24 @@ import           System.IO (FilePath)
 --
 -- There is an EDE template declared by the argument of the service
 -- __/simpleService_compileEDETemplates/__. The template will be accessed later
--- in the asynchronous body handler __/renderEDETemplate/__ by the key
+-- in the asynchronous body handler __/renderEDETemplate/__ with the key
 -- __/user/__. The path /\/var\/lib\/nginx\/EDE/ can be used in the templates to
 -- /include/ more rules from files located inside it, but we do not actually use
--- it here. The rule inside template __/user/__ says: with JSON object, print
--- object /id/ inside a top object /user/, add slash, print object /ops/ inside
--- the top object /user/ filtered by function __/b64/__, add slash, print object
--- /path/ inside a top object /resources/ filtered by function __/uenc/__.
--- Functions /b64/ and /uenc/ are /filters/ in terms of EDE language. There are
--- many filters shipped with EDE, but /b64/ and /uenc/ are defined only in this
--- module. Filter __/b64/__ encodes the object using /base64url/ encoding, while
--- __/uenc/__ encodes the object using /URL encoding/.
+-- this here. The rule inside template /user/ says: with given JSON object,
+--
+-- * print object /id/ inside a top object /user/
+-- * print /slash/
+-- * print object /ops/ inside the top object /user/ filtered by function /b64/
+-- * print /slash/
+-- * print object /path/ inside a top object /resources/ filtered by function
+-- /uenc/.
+--
+-- Functions /b64/ and /uenc/ are /polymorphic filters/ in terms of EDE
+-- language. There are many filters shipped with EDE, but /b64/ and /uenc/ were
+-- defined in this module.
+--
+-- * __/b64/__ encodes a JSON object using /base64url/ encoding
+-- * __/uenc/__ encodes a JSON object using /URL encoding/ rules
 --
 -- So, basically, we used /renderEDETemplate/ to decompose POSTed JSON objects
 -- and then /rewrite/ requests to other locations where extracted fields were

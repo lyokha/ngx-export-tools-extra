@@ -318,17 +318,24 @@ http {
 
 There is an EDE template declared by the argument of the service
 *simpleService_compileEDETemplates*. The template will be accessed later
-in the asynchronous body handler *renderEDETemplate* by the key
+in the asynchronous body handler *renderEDETemplate* with the key
 *user*. The path */var/lib/nginx/EDE* can be used in the templates to
 *include* more rules from files located inside it, but we do not actually use
-it here. The rule inside template *user* says: with JSON object, print
-object *id* inside a top object *user*, add slash, print object *ops* inside
-the top object *user* filtered by function *b64*, add slash, print object
-*path* inside a top object *resources* filtered by function *uenc*.
-Functions *b64* and *uenc* are *filters* in terms of EDE language. There are
-many filters shipped with EDE, but *b64* and *uenc* are defined only in this
-module. Filter *b64* encodes the object using *base64url* encoding, while
-*uenc* encodes the object using *URL encoding*.
+this here. The rule inside template *user* says: with JSON object,
+
+* print object *id* inside a top object *user*
+* print *slash*
+* print object *ops* inside the top object *user* filtered by function *b64*
+* print *slash*
+* print object *path* inside a top object *resources* filtered by function
+  *uenc*.
+
+Functions *b64* and *uenc* are *polymorphic filters* in terms of EDE language.
+There are many filters shipped with EDE, but *b64* and *uenc* were defined in
+this module.
+
+* *b64* encodes a JSON object using *base64url* encoding
+* *uenc* encodes a JSON object using *URL encoding* rules
 
 So, basically, we used *renderEDETemplate* to decompose POSTed JSON objects
 and then *rewrite* requests to other locations where extracted fields were
@@ -394,7 +401,7 @@ or
 # cabal install ngx-export-tools-extra --global
 ```
 
-##### Custom libraries
+##### Building custom libraries
 
 See details in [test/Aggregate/README.md](test/Aggregate/README.md) and
 [test/EDE/README.md](test/EDE/README.md).
