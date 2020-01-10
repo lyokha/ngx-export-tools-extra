@@ -51,8 +51,8 @@ import           System.IO (FilePath)
 -- $renderingEDETemplates
 --
 -- This module allows for complex parsing of JSON objects with [EDE templating
--- language](http://brendanhay.nz/ede/Text-EDE.html#syntax). In terms of module
--- "NgxExport.Tools", it exports a /single-shot/ service
+-- language](http://hackage.haskell.org/package/ede/docs/Text-EDE.html). In
+-- terms of module "NgxExport.Tools", it exports a /single-shot/ service
 -- __/compileEDETemplates/__ to configure the list of templates parameterized
 -- by a simple key, and an asynchronous variable handler __/renderEDETemplate/__
 -- for parsing POSTed JSON objects and substitution of extracted data in the

@@ -247,8 +247,8 @@ $ curl 'http://127.0.0.1:8020/' | jq
 #### Module *NgxExport.Tools.EDE*
 
 This module allows for complex parsing of JSON objects with [*EDE templating
-language*](http://brendanhay.nz/ede/Text-EDE.html#syntax). In terms of module
-*NgxExport.Tools*, it exports a *single-shot* service
+language*](http://hackage.haskell.org/package/ede/docs/Text-EDE.html). In
+terms of module *NgxExport.Tools*, it exports a *single-shot* service
 *compileEDETemplates* to configure the list of templates parameterized
 by a simple key, and an asynchronous variable handler *renderEDETemplate*
 for parsing POSTed JSON objects and substitution of extracted data in the
