@@ -3,6 +3,11 @@
 This package contains a collection of Haskell modules with more extra tools for
 [*Nginx Haskell module*](http://github.com/lyokha/nginx-haskell-module).
 
+#### Table of contents
+
+- [Module NgxExport.Tools.Aggregate](#module-ngx-export-tools-aggregate)
+- [Building and installation](#building-and-installation) 
+
 #### Module *NgxExport.Tools.Aggregate*
 
 An aggregate service collects custom typed data reported by worker processes
@@ -238,6 +243,8 @@ $ curl 'http://127.0.0.1:8020/' | jq
 ]
 ```
 
+#### Building and installation
+
 ##### Configure and build
 
 ```ShellSession
@@ -270,4 +277,9 @@ or
 ```ShellSession
 # cabal install ngx-export-tools-extra --global
 ```
+
+##### Custom libraries
+
+See details in [test/Aggregate/README.md](test/Aggregate/README.md) and
+[test/EDE/README.md](test/EDE/README.md).
 

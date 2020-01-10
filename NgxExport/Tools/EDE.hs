@@ -132,7 +132,7 @@ import           System.IO (FilePath)
 -- module. Filter /b64/ encodes the object using /base64url/ encoding, while
 -- /uenc/ encodes the object using /URL encoding/.
 --
--- So, basically, we used /renderEDETemplate/ to decompose POSTed JSON values
+-- So, basically, we used /renderEDETemplate/ to decompose POSTed JSON objects
 -- and then /rewrite/ requests to other locations where extracted fields were
 -- encoded inside the URL path.
 --
