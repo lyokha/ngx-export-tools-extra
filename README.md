@@ -302,6 +302,12 @@ http {
             rewrite ^ /internal/user/$hs_user last;
         }
 
+        location ~ ^/internal/user/(EDE\ ERROR:.*) {
+            internal;
+            echo_status 404;
+            echo "Bad input: $1";
+        }
+
         location ~ ^/internal/user/([^/]+)/([^/]+)/([^/]+)$ {
             internal;
             echo "User id: $1, options: $2, path: $3";
@@ -310,7 +316,7 @@ http {
         location ~ /internal/user/(.*) {
             internal;
             echo_status 404;
-            echo "Bad input for user: $1";
+            echo "Unexpected input: $1";
         }
     }
 }
@@ -354,7 +360,7 @@ Let's try to send a broken (in any meaning) input value.
 
 ```ShellSession
 $ curl -d '{"user": {"id" : "user1", "ops": ["op1", "op2"]}, "resources": {"p": "/opt/users"}}' 'http://localhost:8010/'
-Bad input for user: EDE ERROR: Text.EDE.parse:1:32 error: variable resources.path doesn't exist.
+Bad input: EDE ERROR: Text.EDE.parse:1:32 error: variable resources.path doesn't exist.
 ```
 
 Now we got response with HTTP status *404* and a comprehensive description of
