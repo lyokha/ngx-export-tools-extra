@@ -246,9 +246,9 @@ $ curl 'http://127.0.0.1:8020/' | jq
 
 #### Module *NgxExport.Tools.EDE*
 
-This module allows for sophisticated parsing of JSON objects with [*EDE
-templating language*](http://brendanhay.nz/ede/Text-EDE.html#syntax). In terms
-of module *NgxExport.Tools*, it exports a *single-shot* service
+This module allows for complex parsing of JSON objects with [*EDE templating
+language*](http://brendanhay.nz/ede/Text-EDE.html#syntax). In terms of module
+*NgxExport.Tools*, it exports a *single-shot* service
 *compileEDETemplates* to configure the list of templates parameterized
 by a simple key, and an asynchronous variable handler *renderEDETemplate*
 for parsing POSTed JSON objects and substitution of extracted data in the
@@ -321,12 +321,14 @@ There is an EDE template declared by the argument of the service
 in the asynchronous body handler *renderEDETemplate* with the key
 *user*. The path */var/lib/nginx/EDE* can be used in the templates to
 *include* more rules from files located inside it, but we do not actually use
-this here. The rule inside template *user* says: with JSON object,
+this here.
 
-* print object *id* inside a top object *user*
-* print *slash*
-* print object *ops* inside the top object *user* filtered by function *b64*
-* print *slash*
+The rule inside template *user* says: with given JSON object,
+
+* print object *id* inside a top object *user*,
+* print *slash*,
+* print object *ops* inside the top object *user* filtered by function *b64*,
+* print *slash*,
 * print object *path* inside a top object *resources* filtered by function
   *uenc*.
 
@@ -339,7 +341,7 @@ this module.
 
 So, basically, we used *renderEDETemplate* to decompose POSTed JSON objects
 and then *rewrite* requests to other locations where extracted fields were
-encoded inside the URL path.
+encoded inside the location's URL path.
 
 ###### A simple test
 
