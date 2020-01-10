@@ -129,8 +129,8 @@ import           System.IO (FilePath)
 -- /path/ inside a top object /resources/ filtered by function __/uenc/__.
 -- Functions /b64/ and /uenc/ are /filters/ in terms of EDE language. There are
 -- many filters shipped with EDE, but /b64/ and /uenc/ are defined only in this
--- module. Filter /b64/ encodes the object using /base64url/ encoding, while
--- /uenc/ encodes the object using /URL encoding/.
+-- module. Filter __/b64/__ encodes the object using /base64url/ encoding, while
+-- __/uenc/__ encodes the object using /URL encoding/.
 --
 -- So, basically, we used /renderEDETemplate/ to decompose POSTed JSON objects
 -- and then /rewrite/ requests to other locations where extracted fields were
@@ -141,7 +141,7 @@ import           System.IO (FilePath)
 -- > $ curl -d '{"user": {"id" : "user1", "ops": ["op1", "op2"]}, "resources": {"path": "/opt/users"}}' 'http://localhost:8010/'
 -- > User id: user1, options: WyJvcDEiLCJvcDIiXQ==, path: %2Fopt%2Fusers
 --
--- Let's try somehow broken input value.
+-- Let's try to send a broken (in any meaning) input value.
 --
 -- > $ curl -d '{"user": {"id" : "user1", "ops": ["op1", "op2"]}, "resources": {"p": "/opt/users"}}' 'http://localhost:8010/'
 -- > Bad input for user: EDE ERROR: Text.EDE.parse:1:32 error: variable resources.path doesn't exist.

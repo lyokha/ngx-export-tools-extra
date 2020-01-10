@@ -5,7 +5,8 @@ This package contains a collection of Haskell modules with more extra tools for
 
 #### Table of contents
 
-- [Module NgxExport.Tools.Aggregate](#module-ngx-export-tools-aggregate)
+- [Module NgxExport.Tools.Aggregate](#module-ngxexporttoolsaggregate)
+- [Module NgxExport.Tools.EDE](#module-ngxexporttoolsede)
 - [Building and installation](#building-and-installation) 
 
 #### Module *NgxExport.Tools.Aggregate*
@@ -242,6 +243,121 @@ $ curl 'http://127.0.0.1:8020/' | jq
   }
 ]
 ```
+
+#### Module *NgxExport.Tools.EDE*
+
+This module allows for sophisticated parsing of JSON objects with [*EDE
+templating language*](http://brendanhay.nz/ede/Text-EDE.html#syntax). In terms
+of module *NgxExport.Tools*, it exports a *single-shot* service
+*compileEDETemplates* to configure the list of templates parameterized
+by a simple key, and an asynchronous variable handler *renderEDETemplate*
+for parsing POSTed JSON objects and substitution of extracted data in the
+provided EDE template.
+
+##### An example
+
+###### File *test_tools_extra_ede.hs*
+
+```haskell
+{-# OPTIONS_GHC -Wno-unused-imports #-}
+
+module TestToolsExtraEDE where
+
+import NgxExport.Tools.EDE
+```
+
+This file does not contain any significant declarations as soon as we do not
+require anything besides the two exporters. As soon as imported entities are
+not used, option *-Wno-unused-imports* was added on the top of the file.
+
+###### File *nginx.conf*
+
+```nginx
+user                    nobody;
+worker_processes        2;
+
+events {
+    worker_connections  1024;
+}
+
+http {
+    default_type        application/octet-stream;
+    sendfile            on;
+
+    haskell load /var/lib/nginx/test_tools_extra_ede.so;
+
+    haskell_run_service simpleService_compileEDETemplates $hs_EDETemplates
+            '("/var/lib/nginx/EDE",
+              [("user",
+                "{{user.id}}/{{user.ops|b64}}/{{resources.path|uenc}}")])';
+
+    server {
+        listen       8010;
+        server_name  main;
+        error_log    /tmp/nginx-test-haskell-error.log;
+        access_log   /tmp/nginx-test-haskell-access.log;
+
+        location / {
+            haskell_run_async_on_request_body renderEDETemplate $hs_user user;
+            rewrite ^ /internal/user/$hs_user last;
+        }
+
+        location ~ ^/internal/user/([^/]+)/([^/]+)/([^/]+)$ {
+            internal;
+            echo "User id: $1, options: $2, path: $3";
+        }
+
+        location ~ /internal/user/(.*) {
+            internal;
+            echo_status 404;
+            echo "Bad input for user: $1";
+        }
+    }
+}
+```
+
+There is an EDE template declared by the argument of the service
+*simpleService_compileEDETemplates*. The template will be accessed later
+in the asynchronous body handler *renderEDETemplate* by the key
+*user*. The path */var/lib/nginx/EDE* can be used in the templates to
+*include* more rules from files located inside it, but we do not actually use
+it here. The rule inside template *user* says: with JSON object, print
+object *id* inside a top object *user*, add slash, print object *ops* inside
+the top object *user* filtered by function *b64*, add slash, print object
+*path* inside a top object *resources* filtered by function *uenc*.
+Functions *b64* and *uenc* are *filters* in terms of EDE language. There are
+many filters shipped with EDE, but *b64* and *uenc* are defined only in this
+module. Filter *b64* encodes the object using *base64url* encoding, while
+*uenc* encodes the object using *URL encoding*.
+
+So, basically, we used *renderEDETemplate* to decompose POSTed JSON objects
+and then *rewrite* requests to other locations where extracted fields were
+encoded inside the URL path.
+
+###### A simple test
+
+```ShellSession
+$ curl -d '{"user": {"id" : "user1", "ops": ["op1", "op2"]}, "resources": {"path": "/opt/users"}}' 'http://localhost:8010/'
+User id: user1, options: WyJvcDEiLCJvcDIiXQ==, path: %2Fopt%2Fusers
+```
+
+Let's try to send a broken (in any meaning) input value.
+
+```ShellSession
+$ curl -d '{"user": {"id" : "user1", "ops": ["op1", "op2"]}, "resources": {"p": "/opt/users"}}' 'http://localhost:8010/'
+Bad input for user: EDE ERROR: Text.EDE.parse:1:32 error: variable resources.path doesn't exist.
+```
+
+Now we got response with HTTP status *404* and a comprehensive description of
+what went wrong. To not mess rewrite logic and error responses, variable
+*hs_user* can be listed inside directive *haskell_var_empty_on_error* in the
+Nginx configuration.
+
+```nginx
+    haskell_var_empty_on_error $hs_user;
+```
+
+Now errors will only be logged by Nginx in the error log.
 
 #### Building and installation
 
