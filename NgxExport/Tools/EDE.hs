@@ -115,7 +115,7 @@ import           System.IO (FilePath)
 --             echo \"User id: $1, options: $2, path: $3\";
 --         }
 --
---         location ~ \/internal\/user\/(.*) {
+--         location ~ ^\/internal\/user\/(.*) {
 --             internal;
 --             echo_status 404;
 --             echo \"Unexpected input: $1\";
