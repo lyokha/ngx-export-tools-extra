@@ -170,7 +170,8 @@ import           System.IO (FilePath)
 --     haskell_var_empty_on_error $hs_user;
 -- @
 --
--- Now errors will only be logged by Nginx in the error log.
+-- Now the variable will always be empty on errors, while the errors will still
+-- be logged by Nginx in the error log.
 
 type InputTemplates = (FilePath, [(ByteString, ByteString)])
 type Templates = HashMap B.ByteString (Result Template)
