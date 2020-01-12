@@ -39,10 +39,8 @@ import           Data.ByteString.Base64.URL
 import           Data.IORef
 import           Data.Text (Text)
 import qualified Data.Text.Encoding as T
-import qualified Data.Text.Lazy as LT
 import qualified Data.Text.Lazy.Encoding as LT
-import           Data.Aeson (decode, Value)
-import           Data.Aeson.Text
+import           Data.Aeson (encode, decode, Value (String))
 import           Network.HTTP.Types.URI (urlEncode)
 import           Control.Exception (Exception, throwIO)
 import           System.IO.Unsafe
@@ -202,8 +200,8 @@ filters = HM.fromList
     ,"uenc" @: applyToValue (T.decodeUtf8 . urlEncode False)
     ]
     where applyToValue :: (ByteString -> Text) -> Value -> Text
-          applyToValue f = f . L.toStrict . LT.encodeUtf8 .
-              LT.dropAround (== '"') . encodeToLazyText
+          applyToValue f (String t) = f $ T.encodeUtf8 t
+          applyToValue f v = f $ L.toStrict $ encode v
 
 -- | The core function of the /renderEDETemplate/ exporter.
 --

@@ -1,3 +1,7 @@
+### 0.2.1.0
+
+- Improved treatment of quoted string values in *b64* and *uenc* EDE filters.
+
 ### 0.2.0.0
 
 - Added module *NgxExport.Tools.EDE* for parsing JSON values.
