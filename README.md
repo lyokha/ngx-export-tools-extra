@@ -322,12 +322,11 @@ http {
 }
 ```
 
-There is an EDE template declared by the argument of the service
+There is an EDE template declared by the argument of the
 *simpleService_compileEDETemplates*. The template will be accessed later
-in the asynchronous body handler *renderEDETemplate* with the key
-*user*. The path */var/lib/nginx/EDE* can be used in the templates to
-*include* more rules from files located inside it, but we do not actually use
-this here.
+in the asynchronous body handler *renderEDETemplate* with key *user*.
+The path */var/lib/nginx/EDE* can be used in the templates to *include* more
+rules from files located inside it, but we do not actually use this here.
 
 The rule inside template *user* says: with given JSON object,
 

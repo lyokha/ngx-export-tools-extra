@@ -20,6 +20,7 @@ module NgxExport.Tools.EDE (
     -- * Rendering JSON objects using EDE templates
     -- $renderingEDETemplates
                             renderEDETemplate
+                           ,renderEDETemplateWith
                            ) where
 
 import           NgxExport
@@ -122,12 +123,11 @@ import           System.IO (FilePath)
 -- }
 -- @
 --
--- There is an EDE template declared by the argument of the service
+-- There is an EDE template declared by the argument of service
 -- __/simpleService_compileEDETemplates/__. The template will be accessed later
--- in the asynchronous body handler __/renderEDETemplate/__ with the key
--- __/user/__. The path /\/var\/lib\/nginx\/EDE/ can be used in the templates to
--- /include/ more rules from files located inside it, but we do not actually use
--- this here.
+-- in the asynchronous body handler __/renderEDETemplate/__ with key __/user/__.
+-- Path /\/var\/lib\/nginx\/EDE/ can be used in the templates to /include/ more
+-- rules from files located inside it, but we do not actually use this here.
 --
 -- The rule inside template /user/ says: with given JSON object,
 --
@@ -203,23 +203,33 @@ filters = HM.fromList
           applyToValue f (String t) = f $ T.encodeUtf8 t
           applyToValue f v = f $ L.toStrict $ encode v
 
--- | The core function of the /renderEDETemplate/ exporter.
+-- | Renders an EDE template from a JSON object.
 --
--- Accepts a JSON object written in a 'L.ByteString' and a key to find the EDE
--- template declared by the /compileEDETemplates/ exporter. The function is
--- exported because it can be useful not only in asynchronous body handlers but
--- anywhere else.
+-- This is the core function of the /renderEDETemplate/ exporter. Accepts a
+-- JSON object written in a 'L.ByteString' and a key to find a compiled EDE
+-- template declared by the /compileEDETemplates/ exporter.
 renderEDETemplate :: L.ByteString       -- ^ JSON object
                   -> ByteString         -- ^ Key to find the EDE template
                   -> IO L.ByteString
-renderEDETemplate v k = do
+renderEDETemplate = renderEDETemplateWith decode
+
+-- | Renders an EDE template with a custom decoding function.
+--
+-- This function can be used for templating from any configuration language
+-- which is translatable to Aeson's 'Value'.
+renderEDETemplateWith
+    :: (L.ByteString -> Maybe Value)    -- ^ Decoding function
+    -> L.ByteString                     -- ^ JSON object
+    -> ByteString                       -- ^ Key to find the EDE template
+    -> IO L.ByteString
+renderEDETemplateWith fdec v k = do
     tpls <- readIORef templates
     case HM.lookup k tpls of
         Nothing -> throwIO $ EDERenderError $
             "EDE template " ++ C8.unpack k ++ " was not found"
         Just (Failure msg) -> throwIO $ EDERenderError $ showPlain msg
         Just (Success tpl) ->
-            case (decode v :: Maybe Value) >>= fromValue of
+            case fdec v >>= fromValue of
                 Nothing -> throwIO $ EDERenderError $
                     "Failed to decode value '" ++ C8L.unpack v ++ "'"
                 Just obj ->

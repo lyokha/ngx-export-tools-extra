@@ -1,6 +1,8 @@
 ### 0.2.1.0
 
 - Improved treatment of quoted string values in *b64* and *uenc* EDE filters.
+- Added function *renderEDETemplateWith* for templating from any configuration
+  language which is translatable to *Aeson*'s *Value*.
 
 ### 0.2.0.0
 
