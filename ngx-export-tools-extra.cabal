@@ -16,8 +16,8 @@ build-type:                 Simple
 cabal-version:              >= 1.8
 
 source-repository head
-    Type: git
-    Location: https://github.com/lyokha/ngx-export-tools-extra
+  type:                     git
+  location:                 https://github.com/lyokha/ngx-export-tools-extra
 
 flag EDE
   description:              Build EDE module.

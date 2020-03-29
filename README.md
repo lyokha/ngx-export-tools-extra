@@ -400,7 +400,7 @@ Nginx configuration.
 Now the variable will always be empty on errors, while the errors will still
 be logged by Nginx in the error log.
 
-Let's read user data encoded in HTTP cookie /user/.
+Let's read user data encoded in HTTP cookie *user*.
 
 ```ShellSession
 $ curl -b 'user=%7B%22user%22%3A%20%7B%22id%22%20%3A%20%22user1%22%2C%20%22ops%22%3A%20%5B%22op1%22%2C%20%22op2%22%5D%7D%2C%20%22resources%22%3A%20%7B%22path%22%3A%20%22%2Fopt%2Fusers%22%7D%7D' 'http://localhost:8010/cookie'
