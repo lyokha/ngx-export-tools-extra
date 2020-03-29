@@ -259,16 +259,35 @@ provided EDE template.
 ###### File *test_tools_extra_ede.hs*
 
 ```haskell
-{-# OPTIONS_GHC -Wno-unused-imports #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module TestToolsExtraEDE where
 
-import NgxExport.Tools.EDE
+import           NgxExport
+import           NgxExport.Tools.EDE
+
+import           Data.Char
+import           Data.ByteString (ByteString)
+import qualified Data.ByteString.Char8 as C8
+import qualified Data.ByteString.Lazy as L
+import qualified Network.HTTP.Types.URI as URI
+import           Control.Arrow
+
+renderEDETemplateFromFreeValue :: ByteString -> IO L.ByteString
+renderEDETemplateFromFreeValue = uncurry (flip renderEDETemplate) .
+    second (L.fromStrict . C8.tail) . C8.break (== '|')
+
+ngxExportIOYY 'renderEDETemplateFromFreeValue
+
+urlDecode :: ByteString -> L.ByteString
+urlDecode = L.fromStrict . URI.urlDecode False
+
+ngxExportYY 'urlDecode
 ```
 
-This file does not contain any significant declarations as soon as we do not
-require anything besides the two exporters. As soon as imported entities are
-not used, option *-Wno-unused-imports* was added on the top of the file.
+Besides the two exporters imported from the EDE module, two additional
+exporters were defined here: *renderEDETemplateFromFreeValue* and *urlDecode*.
+We are going to use them for parsing JSON values from HTTP cookies.
 
 ###### File *nginx.conf*
 
@@ -317,6 +336,13 @@ http {
             internal;
             echo_status 404;
             echo "Unexpected input: $1";
+        }
+
+        location /cookie {
+            haskell_run urlDecode $hs_cookie_user $cookie_user;
+            haskell_run renderEDETemplateFromFreeValue $hs_user_from_cookie
+                    user|$hs_cookie_user;
+            rewrite ^ /internal/user/$hs_user_from_cookie last;
         }
     }
 }
@@ -373,6 +399,13 @@ Nginx configuration.
 
 Now the variable will always be empty on errors, while the errors will still
 be logged by Nginx in the error log.
+
+Let's read user data encoded in HTTP cookie /user/.
+
+```ShellSession
+$ curl -b 'user=%7B%22user%22%3A%20%7B%22id%22%20%3A%20%22user1%22%2C%20%22ops%22%3A%20%5B%22op1%22%2C%20%22op2%22%5D%7D%2C%20%22resources%22%3A%20%7B%22path%22%3A%20%22%2Fopt%2Fusers%22%7D%7D' 'http://localhost:8010/cookie'
+User id: user1, options: WyJvcDEiLCJvcDIiXQ==, path: %2Fopt%2Fusers
+```
 
 #### Building and installation
 

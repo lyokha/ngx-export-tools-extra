@@ -1,9 +1,9 @@
 name:                       ngx-export-tools-extra
-version:                    0.2.1.0
+version:                    0.2.2.1
 synopsis:                   More extra tools for Nginx haskell module
 description:                More extra tools for
-        <http://github.com/lyokha/nginx-haskell-module Nginx haskell module>.
-homepage:                   http://github.com/lyokha/ngx-export-tools-extra
+        <https://github.com/lyokha/nginx-haskell-module Nginx haskell module>.
+homepage:                   https://github.com/lyokha/ngx-export-tools-extra
 license:                    BSD3
 license-file:               LICENSE
 extra-source-files:         Changelog.md
@@ -14,6 +14,19 @@ copyright:                  2019-2020 Alexey Radkov
 category:                   Network
 build-type:                 Simple
 cabal-version:              >= 1.8
+
+source-repository head
+    Type: git
+    Location: https://github.com/lyokha/ngx-export-tools-extra
+
+flag EDE
+  description:              Build EDE module.
+
+flag ExperimentalEDE
+  description:              Build EDE module migrated from @ansi-wl-pprint@ to
+                            @prettyprinter@.
+  default:                  False
+  manual:                   True
 
 library
   build-depends:            base >= 4.8 && < 5
@@ -30,13 +43,24 @@ library
                           , enclosed-exceptions
                           , snap-core
                           , snap-server
-                          , ede
-                          , ansi-wl-pprint
                           , text
                           , time
 
+  if flag(EDE)
+    if flag(ExperimentalEDE)
+      build-depends:        ede
+                          , prettyprinter
+                          , trifecta >= 2.1
+      cpp-options:         -DEDE_USE_PRETTYPRINTER
+    else
+      build-depends:        ede
+                          , ansi-wl-pprint
+                          , trifecta <= 2
+
   exposed-modules:          NgxExport.Tools.Aggregate
-                            NgxExport.Tools.EDE
+
+  if flag(EDE)
+    exposed-modules:        NgxExport.Tools.EDE
 
   ghc-options:             -Wall
 

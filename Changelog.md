@@ -1,3 +1,10 @@
+### 0.2.2.0
+
+- Added Cabal flag *EDE* to detect automatically if EDE module can be built.
+- Added manual Cabal flag *ExperimentalEDE* to compile against patched *ede*
+  package where package *ansi-wl-pprint* was replaced with *prettyprinter*.
+- The EDE example was enhanced to show how to parse free JSON values.
+
 ### 0.2.1.0
 
 - Improved treatment of quoted string values in *b64* and *uenc* EDE filters.

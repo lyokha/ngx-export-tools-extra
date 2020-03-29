@@ -1,4 +1,4 @@
-{-# LANGUAGE TemplateHaskell, OverloadedStrings #-}
+{-# LANGUAGE CPP, TemplateHaskell, OverloadedStrings #-}
 
 -----------------------------------------------------------------------------
 -- |
@@ -28,7 +28,11 @@ import           NgxExport.Tools
 
 import           Text.EDE
 import           Text.EDE.Filters
+#if EDE_USE_PRETTYPRINTER
+import           Data.Text.Prettyprint.Doc (unAnnotate)
+#else
 import           Text.PrettyPrint.ANSI.Leijen.Internal (plain)
+#endif
 import qualified Data.HashMap.Strict as HM
 import           Data.HashMap.Strict (HashMap)
 import qualified Data.ByteString as B
@@ -45,7 +49,6 @@ import           Data.Aeson (encode, decode, Value (String))
 import           Network.HTTP.Types.URI (urlEncode)
 import           Control.Exception (Exception, throwIO)
 import           System.IO.Unsafe
-import           System.IO (FilePath)
 
 -- $renderingEDETemplates
 --
@@ -61,16 +64,36 @@ import           System.IO (FilePath)
 --
 -- ==== File /test_tools_extra_ede.hs/
 -- @
--- {-\# OPTIONS_GHC -Wno-unused-imports \#-}
+-- {-\# LANGUAGE TemplateHaskell \#-}
 --
 -- module TestToolsExtraEDE where
 --
--- import NgxExport.Tools.EDE
+-- import           NgxExport
+-- import           NgxExport.Tools.EDE
+--
+-- import           Data.Char
+-- import           Data.ByteString (ByteString)
+-- import qualified Data.ByteString.Char8 as C8
+-- import qualified Data.ByteString.Lazy as L
+-- import qualified Network.HTTP.Types.URI as URI
+-- import           Control.Arrow
+--
+-- renderEDETemplateFromFreeValue :: ByteString -> IO L.ByteString
+-- __/renderEDETemplateFromFreeValue/__ = uncurry (flip renderEDETemplate) .
+--     second (L.fromStrict . C8.tail) . C8.break (== \'|\')
+--
+-- 'ngxExportIOYY' \'renderEDETemplateFromFreeValue
+--
+-- urlDecode :: ByteString -> L.ByteString
+-- __/urlDecode/__ = L.fromStrict . URI.urlDecode False
+--
+-- 'ngxExportYY' \'urlDecode
 -- @
 --
--- This file does not contain any significant declarations as soon as we do not
--- require anything besides the two exporters. As soon as imported entities are
--- not used, option /-Wno-unused-imports/ was added on the top of the file.
+-- Besides the two exporters imported from the EDE module, two additional
+-- exporters were defined here: /renderEDETemplateFromFreeValue/ and
+-- /urlDecode/. We are going to use them for parsing JSON values from HTTP
+-- cookies.
 --
 -- ==== File /nginx.conf/
 -- @
@@ -118,6 +141,13 @@ import           System.IO (FilePath)
 --             internal;
 --             echo_status 404;
 --             echo \"Unexpected input: $1\";
+--         }
+--
+--         location \/cookie {
+--             haskell_run __/urlDecode/__ $hs_cookie_user $cookie_user;
+--             haskell_run __/renderEDETemplateFromFreeValue/__ $hs_user_from_cookie
+--                     user|$hs_cookie_user;
+--             rewrite ^ \/internal\/user\/$hs_user_from_cookie last;
 --         }
 --     }
 -- }
@@ -170,6 +200,11 @@ import           System.IO (FilePath)
 --
 -- Now the variable will always be empty on errors, while the errors will still
 -- be logged by Nginx in the error log.
+--
+-- Let's read user data encoded in HTTP cookie /user/.
+--
+-- > $ curl -b 'user=%7B%22user%22%3A%20%7B%22id%22%20%3A%20%22user1%22%2C%20%22ops%22%3A%20%5B%22op1%22%2C%20%22op2%22%5D%7D%2C%20%22resources%22%3A%20%7B%22path%22%3A%20%22%2Fopt%2Fusers%22%7D%7D' 'http://localhost:8010/cookie'
+-- > User id: user1, options: WyJvcDEiLCJvcDIiXQ==, path: %2Fopt%2Fusers
 
 type InputTemplates = (FilePath, [(ByteString, ByteString)])
 type Templates = HashMap B.ByteString (Result Template)
@@ -236,7 +271,12 @@ renderEDETemplateWith fdec v k = do
                     case renderWith filters tpl obj of
                         Failure msg -> throwIO $ EDERenderError $ showPlain msg
                         Success r -> return $ LT.encodeUtf8 r
-    where showPlain = show . plain
+    where showPlain = show .
+#if EDE_USE_PRETTYPRINTER
+              unAnnotate
+#else
+              plain
+#endif
 
 ngxExportAsyncOnReqBody 'renderEDETemplate
 
