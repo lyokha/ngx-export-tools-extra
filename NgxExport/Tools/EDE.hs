@@ -85,15 +85,14 @@ import           System.IO.Unsafe
 -- 'ngxExportIOYY' \'renderEDETemplateFromFreeValue
 --
 -- urlDecode :: ByteString -> L.ByteString
--- __/urlDecode/__ = L.fromStrict . URI.urlDecode False
+-- urlDecode = L.fromStrict . URI.urlDecode False
 --
 -- 'ngxExportYY' \'urlDecode
 -- @
 --
--- Besides the two exporters imported from the EDE module, two additional
--- exporters were defined here: /renderEDETemplateFromFreeValue/ and
--- /urlDecode/. We are going to use them for parsing JSON values from HTTP
--- cookies.
+-- Besides the two handlers imported from the EDE module, two additional
+-- handlers were defined here: /renderEDETemplateFromFreeValue/ and /urlDecode/.
+-- We are going to use them for parsing JSON values from HTTP cookies.
 --
 -- ==== File /nginx.conf/
 -- @
@@ -144,9 +143,9 @@ import           System.IO.Unsafe
 --         }
 --
 --         location \/cookie {
---             haskell_run __/urlDecode/__ $hs_cookie_user $cookie_user;
+--             haskell_run urlDecode $hs_cookie_user $cookie_user;
 --             haskell_run __/renderEDETemplateFromFreeValue/__ $hs_user_from_cookie
---                     user|$hs_cookie_user;
+--                     __/user/__|$hs_cookie_user;
 --             rewrite ^ \/internal\/user\/$hs_user_from_cookie last;
 --         }
 --     }
@@ -240,9 +239,9 @@ filters = HM.fromList
 
 -- | Renders an EDE template from a JSON object.
 --
--- This is the core function of the /renderEDETemplate/ exporter. Accepts a
--- JSON object written in a 'L.ByteString' and a key to find a compiled EDE
--- template declared by the /compileEDETemplates/ exporter.
+-- This is the core function of the /renderEDETemplate/ handler. Accepts a JSON
+-- object written in a 'L.ByteString' and a key to find a compiled EDE template
+-- declared by the /compileEDETemplates/ handler.
 renderEDETemplate :: L.ByteString       -- ^ JSON object
                   -> ByteString         -- ^ Key to find the EDE template
                   -> IO L.ByteString

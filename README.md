@@ -285,8 +285,8 @@ urlDecode = L.fromStrict . URI.urlDecode False
 ngxExportYY 'urlDecode
 ```
 
-Besides the two exporters imported from the EDE module, two additional
-exporters were defined here: *renderEDETemplateFromFreeValue* and *urlDecode*.
+Besides the two handlers imported from the EDE module, two additional
+handlers were defined here: *renderEDETemplateFromFreeValue* and *urlDecode*.
 We are going to use them for parsing JSON values from HTTP cookies.
 
 ###### File *nginx.conf*
