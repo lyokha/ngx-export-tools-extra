@@ -76,7 +76,7 @@ type Aggregate a = IORef (CTime, Map Int32 (CTime, Maybe a))
 -- {-\# LANGUAGE TemplateHaskell, DeriveGeneric, TypeApplications \#-}
 -- {-\# LANGUAGE OverloadedStrings, BangPatterns \#-}
 --
--- module TestToolsExtra where
+-- module TestToolsExtraAggregate where
 --
 -- import           NgxExport
 -- import           NgxExport.Tools
@@ -421,6 +421,7 @@ ngxExportAggregateService f a = do
         ,ngxExportSimpleServiceTyped
             fName ''AggregateServerConf SingleShotService
         ]
+
 -- | Reports data to an aggregate service.
 --
 -- If reported data is 'Nothing' then data collected on the aggregate service

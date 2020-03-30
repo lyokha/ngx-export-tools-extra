@@ -1,3 +1,8 @@
+### 0.3.0.0
+
+- Added module *NgxExport.Tools.Subrequest* for making HTTP (sub)requests
+  easily.
+
 ### 0.2.2.0
 
 - Added Cabal flag *EDE* to detect automatically if EDE module can be built.

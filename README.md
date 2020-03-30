@@ -7,6 +7,7 @@ This package contains a collection of Haskell modules with more extra tools for
 
 - [Module NgxExport.Tools.Aggregate](#module-ngxexporttoolsaggregate)
 - [Module NgxExport.Tools.EDE](#module-ngxexporttoolsede)
+- [Module NgxExport.Tools.Subrequest](#module-ngxexporttoolssubrequest)
 - [Building and installation](#building-and-installation) 
 
 #### Module *NgxExport.Tools.Aggregate*
@@ -32,7 +33,7 @@ haddocks*](http://hackage.haskell.org/package/ngx-export-tools-extra/docs/NgxExp
 {-# LANGUAGE TemplateHaskell, DeriveGeneric, TypeApplications #-}
 {-# LANGUAGE OverloadedStrings, BangPatterns #-}
 
-module TestToolsExtra where
+module TestToolsExtraAggregate where
 
 import           NgxExport
 import           NgxExport.Tools
@@ -407,6 +408,153 @@ $ curl -b 'user=%7B%22user%22%3A%20%7B%22id%22%20%3A%20%22user1%22%2C%20%22ops%2
 User id: user1, options: WyJvcDEiLCJvcDIiXQ==, path: %2Fopt%2Fusers
 ```
 
+#### Module *NgxExport.Tools.Subrequest*
+
+Using asynchronous variable handlers and services together with the HTTP
+client from *Network.HTTP.Client* allows making HTTP subrequests easily.
+This module provides such functionality by exporting asynchronous variable
+handler *subrequest* and function *subrequest* to build custom handlers.
+
+##### An example
+
+###### File *test_tools_extra_subrequest.hs*
+
+```haskell
+{-# LANGUAGE TemplateHaskell #-}
+
+module TestToolsExtraSubrequest where
+
+import           NgxExport
+import           NgxExport.Tools
+import           NgxExport.Tools.Subrequest
+
+import           Data.ByteString (ByteString)
+import qualified Data.ByteString.Lazy as L
+
+subrequestFromService :: ByteString -> Bool -> IO L.ByteString
+subrequestFromService = const . subrequest
+
+ngxExportSimpleService 'subrequestFromService $
+    PersistentService $ Just $ Sec 10
+```
+
+Handler *subrequestFromService* will be used in a *periodical* service which
+will retrieve data from a specified URI every 10 seconds.
+
+###### File *nginx.conf*
+
+```nginx
+user                    nobody;
+worker_processes        2;
+
+events {
+    worker_connections  1024;
+}
+
+http {
+    default_type        application/octet-stream;
+    sendfile            on;
+
+    upstream backend {
+        server 127.0.0.1:8020;
+    }
+
+    haskell load /var/lib/nginx/test_tools_extra_subrequest.so;
+
+    haskell_run_service simpleService_subrequestFromService $hs_service_httpbin
+            '{"uri": "http://httpbin.org"}';
+
+    haskell_var_empty_on_error $hs_subrequest;
+
+    server {
+        listen       8010;
+        server_name  main;
+        error_log    /tmp/nginx-test-haskell-error.log;
+        access_log   /tmp/nginx-test-haskell-access.log;
+
+        location / {
+            haskell_run_async subrequest $hs_subrequest
+                    '{"uri": "http://127.0.0.1:8020/proxy",
+                      "headers": [["Custom-Header", "$arg_a"]]}';
+
+            if ($hs_subrequest = '') {
+                echo_status 500;
+                echo "Failed to perform subrequest";
+            }
+
+            echo -n $hs_subrequest;
+        }
+
+        location /proxy {
+            internal;
+            proxy_pass http://backend;
+        }
+
+        location /httpbin {
+            echo $hs_service_httpbin;
+        }
+    }
+
+    server {
+        listen       8020;
+        server_name  backend;
+
+        location / {
+            set $custom_header $http_custom_header;
+            echo "In backend, Custom-Header is '$custom_header'";
+        }
+    }
+}
+```
+
+Configurations of subrequests are defined via JSON objects which contain URI
+and other relevant data such as HTTP method, request body and headers. In
+this configuration we are running a periodical service which gets contents of
+*httpbin.org* every 10 seconds, and doing a subrequest to a virtual server
+*backend* on every request to *location /*. In this subrequest, an HTTP
+header *Custom-Header* is sent to the backend with value equal to the value
+of argument *a* from the client request's URI.
+
+It is worth noting that making HTTP subrequests to the own Nginx service
+(e.g. via *127.0.0.1*) allows for leveraging well-known advantages of Nginx
+such as load-balancing via upstreams as it is happening in this example.
+
+###### A simple test
+
+```ShellSession
+$ curl -s 'http://localhost:8010/httpbin' | head
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>httpbin.org</title>
+    <link href="https://fonts.googleapis.com/css?family=Open+Sans:400,700|Source+Code+Pro:300,600|Titillium+Web:400,600,700"
+        rel="stylesheet">
+    <link rel="stylesheet" type="text/css" href="/flasgger_static/swagger-ui.css">
+    <link rel="icon" type="image/png" href="/static/favicon.ico" sizes="64x64 32x32 16x16" />
+```
+
+```ShellSession
+$ curl 'http://localhost:8010/?a=Value'
+In backend, Custom-Header is 'Value'
+```
+
+Let's do a nasty thing. By injecting a comma into the argument *a* we shall
+break parsing JSON.
+
+```ShellSession
+$ curl -D- 'http://localhost:8010/?a=Value"'
+HTTP/1.1 500 Internal Server Error
+Server: nginx/1.17.9
+Date: Mon, 30 Mar 2020 14:42:42 GMT
+Content-Type: application/octet-stream
+Transfer-Encoding: chunked
+Connection: keep-alive
+
+Failed to perform subrequest
+```
+
 #### Building and installation
 
 ##### Configure and build
@@ -444,6 +592,7 @@ or
 
 ##### Building custom libraries
 
-See details in [test/Aggregate/README.md](test/Aggregate/README.md) and
-[test/EDE/README.md](test/EDE/README.md).
+See details in [test/Aggregate/README.md](test/Aggregate/README.md),
+[test/EDE/README.md](test/EDE/README.md), and
+[test/Subrequest/README.md](test/Subrequest/README.md).
 
