@@ -27,11 +27,11 @@ import           NgxExport
 import           NgxExport.Tools
 
 import           Network.HTTP.Client
+import           Network.HTTP.Types
 import           Data.ByteString (ByteString)
+import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
-import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
-import           Data.Text (Text)
 import           Data.CaseInsensitive (mk)
 import           Data.Aeson
 import           Control.Arrow
@@ -177,41 +177,36 @@ import           System.IO.Unsafe
 -- >
 -- > Failed to perform subrequest
 
-type ReqHeaders = [(Text, Text)]
-
 data SubrequestParseError = SubrequestParseError deriving Show
 instance Exception SubrequestParseError
 
 data SubrequestConf =
-    SubrequestConf { srMethod  :: Text
+    SubrequestConf { srMethod  :: ByteString
                    , srUri     :: String
-                   , srBody    :: Text
-                   , srHeaders :: ReqHeaders
+                   , srBody    :: ByteString
+                   , srHeaders :: RequestHeaders
                    }
 instance FromJSON SubrequestConf where
     parseJSON = withObject "SubrequestConf" $ \o -> do
-        srMethod <- o .:? "method" .!= "GET"
+        srMethod <- maybe "GET" T.encodeUtf8 <$> o .:? "method"
         srUri <- o .: "uri"
-        srBody <- o .:? "body" .!= ""
-        srHeaders <- o .:? "headers" .!= []
+        srBody <- maybe "" T.encodeUtf8 <$> o .:? "body"
+        srHeaders <- map (mk . T.encodeUtf8 *** T.encodeUtf8) <$>
+            o .:? "headers" .!= []
         return SubrequestConf {..}
 
 doSubrequest :: SubrequestConf -> IO L.ByteString
 doSubrequest SubrequestConf {..} = do
     req <- parseUrlThrow srUri
-    let req' = if T.null srMethod
+    let req' = if B.null srMethod
                    then req
-                   else req { method = T.encodeUtf8 srMethod }
-        req'' = if T.null srBody
+                   else req { method = srMethod }
+        req'' = if B.null srBody
                     then req'
-                    else req' { requestBody =
-                                    RequestBodyBS $ T.encodeUtf8 srBody }
+                    else req' { requestBody = RequestBodyBS srBody }
         req''' = if null srHeaders
                      then req''
-                     -- TODO: implement caching of frequent header values
-                     else req'' { requestHeaders =
-                                      map (mk . T.encodeUtf8 *** T.encodeUtf8)
-                                        srHeaders }
+                     else req'' { requestHeaders = srHeaders }
     responseBody <$> httpLbs req''' httpManager
 
 httpManager :: Manager
