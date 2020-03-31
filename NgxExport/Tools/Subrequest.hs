@@ -192,12 +192,13 @@ data SubrequestConf =
 
 instance FromJSON SubrequestConf where
     parseJSON = withObject "SubrequestConf" $ \o -> do
-        srMethod <- maybe "GET" T.encodeUtf8 <$> o .:? "method"
+        srMethod <- maybeEmpty $ o .:? "method"
         srUri <- o .: "uri"
-        srBody <- maybe "" T.encodeUtf8 <$> o .:? "body"
+        srBody <- maybeEmpty $ o .:? "body"
         srHeaders <- map (mk . T.encodeUtf8 *** T.encodeUtf8) <$>
             o .:? "headers" .!= []
         return SubrequestConf {..}
+        where maybeEmpty = fmap $ maybe "" T.encodeUtf8
 
 doSubrequest :: SubrequestConf -> IO L.ByteString
 doSubrequest SubrequestConf {..} = do
@@ -257,14 +258,15 @@ ngxExportAsyncIOYY 'subrequest
 --
 -- An example of a subrequest configuration:
 --
--- > SubrequestConf { srMethod = "GET"
+-- > SubrequestConf { srMethod = ""
 -- >                , srUri = "http://127.0.0.1/subreq"}
 -- >                , srBody = ""
 -- >                , srHeaders = [("Header1", "Value1"), ("Header2", "Value2")]
 -- >                }
 --
 -- Notice that unlike JSON parsing, fields of /SubrequestConf/ are not
--- omittable and must be listed in the order shown in the example.
+-- omittable and must be listed in the order shown in the example. Empty
+-- /srMethod/ implies /GET/.
 subrequestWithRead
     :: ByteString       -- ^ Subrequest configuration
     -> IO L.ByteString
