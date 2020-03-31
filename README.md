@@ -413,7 +413,8 @@ User id: user1, options: WyJvcDEiLCJvcDIiXQ==, path: %2Fopt%2Fusers
 Using asynchronous variable handlers and services together with the HTTP
 client from *Network.HTTP.Client* allows making HTTP subrequests easily.
 This module provides such functionality by exporting asynchronous variable
-handler *subrequest* and function *subrequest* to build custom handlers.
+handlers *subrequest* and *subrequestWithRead*, and functions *subrequest*
+and *subrequestWithRead* to build custom handlers.
 
 ##### An example
 
@@ -478,7 +479,7 @@ http {
                       "headers": [["Custom-Header", "$arg_a"]]}';
 
             if ($hs_subrequest = '') {
-                echo_status 500;
+                echo_status 404;
                 echo "Failed to perform subrequest";
             }
 
@@ -541,11 +542,11 @@ In backend, Custom-Header is 'Value'
 ```
 
 Let's do a nasty thing. By injecting a comma into the argument *a* we shall
-break parsing JSON.
+break JSON parsing.
 
 ```ShellSession
 $ curl -D- 'http://localhost:8010/?a=Value"'
-HTTP/1.1 500 Internal Server Error
+HTTP/1.1 404 Not Found
 Server: nginx/1.17.9
 Date: Mon, 30 Mar 2020 14:42:42 GMT
 Content-Type: application/octet-stream

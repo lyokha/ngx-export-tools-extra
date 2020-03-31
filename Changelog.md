@@ -1,3 +1,8 @@
+### 0.3.1.0
+
+- Added function *subrequestWithRead* and an asynchronous variable handler of
+  the same name.
+
 ### 0.3.0.0
 
 - Added module *NgxExport.Tools.Subrequest* for making HTTP (sub)requests

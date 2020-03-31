@@ -21,6 +21,7 @@ module NgxExport.Tools.Subrequest (
     -- * Making HTTP subrequests
     -- $makingHTTPSubrequests
                                    subrequest
+                                  ,subrequestWithRead
                                   ) where
 
 import           NgxExport
@@ -43,7 +44,8 @@ import           System.IO.Unsafe
 -- Using asynchronous variable handlers and services together with the HTTP
 -- client from "Network.HTTP.Client" allows making HTTP subrequests easily.
 -- This module provides such functionality by exporting asynchronous variable
--- handler __/subrequest/__ and function 'subrequest' to build custom handlers.
+-- handlers __/subrequest/__ and __/subrequestWithRead/__, and functions
+-- 'subrequest' and 'subrequestWithRead' to build custom handlers.
 --
 -- Below is a simple example.
 --
@@ -106,7 +108,7 @@ import           System.IO.Unsafe
 --                       \"headers\": [[\"Custom-Header\", \"$arg_a\"]]}\';
 --
 --             if ($hs_subrequest = \'\') {
---                 echo_status 500;
+--                 echo_status 404;
 --                 echo \"Failed to perform subrequest\";
 --             }
 --
@@ -165,10 +167,10 @@ import           System.IO.Unsafe
 -- > In backend, Custom-Header is 'Value'
 --
 -- Let's do a nasty thing. By injecting a comma into the argument /a/ we shall
--- break parsing JSON.
+-- break JSON parsing.
 --
 -- > $ curl -D- 'http://localhost:8010/?a=Value"'
--- > HTTP/1.1 500 Internal Server Error
+-- > HTTP/1.1 404 Not Found
 -- > Server: nginx/1.17.9
 -- > Date: Mon, 30 Mar 2020 14:42:42 GMT
 -- > Content-Type: application/octet-stream
@@ -178,6 +180,7 @@ import           System.IO.Unsafe
 -- > Failed to perform subrequest
 
 data SubrequestParseError = SubrequestParseError deriving Show
+
 instance Exception SubrequestParseError
 
 data SubrequestConf =
@@ -185,7 +188,8 @@ data SubrequestConf =
                    , srUri     :: String
                    , srBody    :: ByteString
                    , srHeaders :: RequestHeaders
-                   }
+                   } deriving Read
+
 instance FromJSON SubrequestConf where
     parseJSON = withObject "SubrequestConf" $ \o -> do
         srMethod <- maybe "GET" T.encodeUtf8 <$> o .:? "method"
@@ -245,4 +249,27 @@ subrequest = maybe (throwIO SubrequestParseError) doSubrequest .
     readFromByteStringAsJSON @SubrequestConf
 
 ngxExportAsyncIOYY 'subrequest
+
+-- | Makes an HTTP request.
+--
+-- Behaves exactly as 'subrequest' except it parses Haskell terms representing
+-- /SubrequestConf/ with 'read'.
+--
+-- An example of a subrequest configuration:
+--
+-- > SubrequestConf { srMethod = "GET"
+-- >                , srUri = "http://127.0.0.1/subreq"}
+-- >                , srBody = ""
+-- >                , srHeaders = [("Header1", "Value1"), ("Header2", "Value2")]
+-- >                }
+--
+-- Notice that unlike JSON parsing, fields of /SubrequestConf/ are not
+-- omittable and must be listed in the order shown in the example.
+subrequestWithRead
+    :: ByteString       -- ^ Subrequest configuration
+    -> IO L.ByteString
+subrequestWithRead = maybe (throwIO SubrequestParseError) doSubrequest .
+    readFromByteString @SubrequestConf
+
+ngxExportAsyncIOYY 'subrequestWithRead
 
