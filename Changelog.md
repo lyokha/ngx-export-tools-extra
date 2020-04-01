@@ -1,3 +1,8 @@
+### 0.3.2.0
+
+- Functions and handlers *subrequest* and *subrequestWithRead* were renamed to
+  *makeSubrequest* and *makeSubrequestWithRead* respectively.
+
 ### 0.3.1.0
 
 - Added function *subrequestWithRead* and an asynchronous variable handler of

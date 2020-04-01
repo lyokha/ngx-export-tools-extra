@@ -20,8 +20,8 @@
 module NgxExport.Tools.Subrequest (
     -- * Making HTTP subrequests
     -- $makingHTTPSubrequests
-                                   subrequest
-                                  ,subrequestWithRead
+                                   makeSubrequest
+                                  ,makeSubrequestWithRead
                                   ) where
 
 import           NgxExport
@@ -44,8 +44,8 @@ import           System.IO.Unsafe
 -- Using asynchronous variable handlers and services together with the HTTP
 -- client from "Network.HTTP.Client" allows making HTTP subrequests easily.
 -- This module provides such functionality by exporting asynchronous variable
--- handlers __/subrequest/__ and __/subrequestWithRead/__, and functions
--- 'subrequest' and 'subrequestWithRead' to build custom handlers.
+-- handlers __/makeSubrequest/__ and __/makeSubrequestWithRead/__, and functions
+-- 'makeSubrequest' and 'makeSubrequestWithRead' to build custom handlers.
 --
 -- Below is a simple example.
 --
@@ -62,15 +62,14 @@ import           System.IO.Unsafe
 -- import           Data.ByteString (ByteString)
 -- import qualified Data.ByteString.Lazy as L
 --
--- subrequestFromService :: ByteString -> Bool -> IO L.ByteString
--- __/subrequestFromService/__ = const . 'subrequest'
+-- makeRequest :: ByteString -> Bool -> IO L.ByteString
+-- __/makeRequest/__ = const . 'makeSubrequest'
 --
--- 'ngxExportSimpleService' \'subrequestFromService $
---     'PersistentService' $ Just $ 'Sec' 10
+-- 'ngxExportSimpleService' \'makeRequest $ 'PersistentService' $ Just $ 'Sec' 10
 -- @
 --
--- Handler /subrequestFromService/ will be used in a /periodical/ service which
--- will retrieve data from a specified URI every 10 seconds.
+-- Handler /makeRequest/ will be used in a /periodical/ service which will
+-- retrieve data from a specified URI every 10 seconds.
 --
 -- ==== File /nginx.conf/
 -- @
@@ -91,7 +90,7 @@ import           System.IO.Unsafe
 --         server 127.0.0.1:8020;
 --     }
 --
---     haskell_run_service __/simpleService_subrequestFromService/__ $hs_service_httpbin
+--     haskell_run_service __/simpleService_makeRequest/__ $hs_service_httpbin
 --             \'{\"uri\": \"http:\/\/httpbin.org\"}\';
 --
 --     haskell_var_empty_on_error $hs_subrequest;
@@ -103,13 +102,14 @@ import           System.IO.Unsafe
 --         access_log   \/tmp\/nginx-test-haskell-access.log;
 --
 --         location \/ {
---             haskell_run_async __/subrequest/__ $hs_subrequest
+--             haskell_run_async __/makeSubrequest/__ $hs_subrequest
 --                     \'{\"uri\": \"http:\/\/127.0.0.1:8020\/proxy\",
 --                       \"headers\": [[\"Custom-Header\", \"$arg_a\"]]}\';
 --
 --             if ($hs_subrequest = \'\') {
 --                 echo_status 404;
 --                 echo \"Failed to perform subrequest\";
+--                 break;
 --             }
 --
 --             echo -n $hs_subrequest;
@@ -200,8 +200,8 @@ instance FromJSON SubrequestConf where
         return SubrequestConf {..}
         where maybeEmpty = fmap $ maybe "" T.encodeUtf8
 
-doSubrequest :: SubrequestConf -> IO L.ByteString
-doSubrequest SubrequestConf {..} = do
+subrequest :: SubrequestConf -> IO L.ByteString
+subrequest SubrequestConf {..} = do
     req <- parseUrlThrow srUri
     let req' = if B.null srMethod
                    then req
@@ -220,8 +220,8 @@ httpManager = unsafePerformIO $ newManager defaultManagerSettings
 
 -- | Makes an HTTP request.
 --
--- This is the core function of the /subrequest/ handler. From perspective of
--- an Nginx request, it spawns a subrequest, hence the name. However, this
+-- This is the core function of the /makeSubrequest/ handler. From perspective
+-- of an Nginx request, it spawns a subrequest, hence the name. However, this
 -- function can also be used to initiate an original HTTP request from a
 -- service handler.
 --
@@ -241,20 +241,21 @@ httpManager = unsafePerformIO $ newManager defaultManagerSettings
 --
 -- Returns the response body if HTTP status of the response is /2xx/, otherwise
 -- throws an error. To avoid leakage of error messages into variable handlers,
--- put the corresponding variables into the list of the directive
+-- put the corresponding variables into the list of directive
 -- /haskell_var_empty_on_error/.
-subrequest
+makeSubrequest
     :: ByteString       -- ^ Subrequest configuration
     -> IO L.ByteString
-subrequest = maybe (throwIO SubrequestParseError) doSubrequest .
+makeSubrequest = maybe (throwIO SubrequestParseError) subrequest .
     readFromByteStringAsJSON @SubrequestConf
 
-ngxExportAsyncIOYY 'subrequest
+ngxExportAsyncIOYY 'makeSubrequest
 
 -- | Makes an HTTP request.
 --
--- Behaves exactly as 'subrequest' except it parses Haskell terms representing
--- /SubrequestConf/ with 'read'.
+-- Behaves exactly as 'makeSubrequest' except it parses Haskell terms
+-- representing /SubrequestConf/ with 'read'. Exported on the Nginx level by
+-- handler /makeSubrequestWithRead/.
 --
 -- An example of a subrequest configuration:
 --
@@ -267,11 +268,11 @@ ngxExportAsyncIOYY 'subrequest
 -- Notice that unlike JSON parsing, fields of /SubrequestConf/ are not
 -- omittable and must be listed in the order shown in the example. Empty
 -- /srMethod/ implies /GET/.
-subrequestWithRead
+makeSubrequestWithRead
     :: ByteString       -- ^ Subrequest configuration
     -> IO L.ByteString
-subrequestWithRead = maybe (throwIO SubrequestParseError) doSubrequest .
+makeSubrequestWithRead = maybe (throwIO SubrequestParseError) subrequest .
     readFromByteString @SubrequestConf
 
-ngxExportAsyncIOYY 'subrequestWithRead
+ngxExportAsyncIOYY 'makeSubrequestWithRead
 

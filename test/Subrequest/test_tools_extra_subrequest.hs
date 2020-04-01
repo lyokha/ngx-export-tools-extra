@@ -9,9 +9,8 @@ import           NgxExport.Tools.Subrequest
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as L
 
-subrequestFromService :: ByteString -> Bool -> IO L.ByteString
-subrequestFromService = const . subrequest
+makeRequest :: ByteString -> Bool -> IO L.ByteString
+makeRequest = const . makeSubrequest
 
-ngxExportSimpleService 'subrequestFromService $
-    PersistentService $ Just $ Sec 10
+ngxExportSimpleService 'makeRequest $ PersistentService $ Just $ Sec 10
 

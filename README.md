@@ -413,8 +413,8 @@ User id: user1, options: WyJvcDEiLCJvcDIiXQ==, path: %2Fopt%2Fusers
 Using asynchronous variable handlers and services together with the HTTP
 client from *Network.HTTP.Client* allows making HTTP subrequests easily.
 This module provides such functionality by exporting asynchronous variable
-handlers *subrequest* and *subrequestWithRead*, and functions *subrequest*
-and *subrequestWithRead* to build custom handlers.
+handlers *makeSubrequest* and *makeSubrequestWithRead*, and functions
+*makeSubrequest* and *makeSubrequestWithRead* to build custom handlers.
 
 ##### An example
 
@@ -432,15 +432,14 @@ import           NgxExport.Tools.Subrequest
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as L
 
-subrequestFromService :: ByteString -> Bool -> IO L.ByteString
-subrequestFromService = const . subrequest
+makeRequest :: ByteString -> Bool -> IO L.ByteString
+makeRequest = const . makeSubrequest
 
-ngxExportSimpleService 'subrequestFromService $
-    PersistentService $ Just $ Sec 10
+ngxExportSimpleService 'makeRequest $ PersistentService $ Just $ Sec 10
 ```
 
-Handler *subrequestFromService* will be used in a *periodical* service which
-will retrieve data from a specified URI every 10 seconds.
+Handler *makeRequest* will be used in a *periodical* service which will
+retrieve data from a specified URI every 10 seconds.
 
 ###### File *nginx.conf*
 
@@ -462,7 +461,7 @@ http {
 
     haskell load /var/lib/nginx/test_tools_extra_subrequest.so;
 
-    haskell_run_service simpleService_subrequestFromService $hs_service_httpbin
+    haskell_run_service simpleService_makeRequest $hs_service_httpbin
             '{"uri": "http://httpbin.org"}';
 
     haskell_var_empty_on_error $hs_subrequest;
@@ -474,13 +473,14 @@ http {
         access_log   /tmp/nginx-test-haskell-access.log;
 
         location / {
-            haskell_run_async subrequest $hs_subrequest
+            haskell_run_async makeSubrequest $hs_subrequest
                     '{"uri": "http://127.0.0.1:8020/proxy",
                       "headers": [["Custom-Header", "$arg_a"]]}';
 
             if ($hs_subrequest = '') {
                 echo_status 404;
                 echo "Failed to perform subrequest";
+                break;
             }
 
             echo -n $hs_subrequest;
