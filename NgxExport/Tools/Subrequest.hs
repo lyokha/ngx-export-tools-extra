@@ -184,10 +184,11 @@ data SubrequestParseError = SubrequestParseError deriving Show
 instance Exception SubrequestParseError
 
 data SubrequestConf =
-    SubrequestConf { srMethod  :: ByteString
-                   , srUri     :: String
-                   , srBody    :: ByteString
-                   , srHeaders :: RequestHeaders
+    SubrequestConf { srMethod          :: ByteString
+                   , srUri             :: String
+                   , srBody            :: ByteString
+                   , srHeaders         :: RequestHeaders
+                   , srResponseTimeout :: ResponseTimeout
                    } deriving Read
 
 instance FromJSON SubrequestConf where
@@ -197,8 +198,13 @@ instance FromJSON SubrequestConf where
         srBody <- maybeEmpty $ o .:? "body"
         srHeaders <- map (mk . T.encodeUtf8 *** T.encodeUtf8) <$>
             o .:? "headers" .!= []
+        srResponseTimeout <- maybe defaultTimeout (setTimeout . toSec) <$>
+            o .:? "timeout"
         return SubrequestConf {..}
         where maybeEmpty = fmap $ maybe "" T.encodeUtf8
+              defaultTimeout = responseTimeoutDefault
+              setTimeout 0 = responseTimeoutNone
+              setTimeout v = responseTimeoutMicro * 1000000
 
 subrequest :: SubrequestConf -> IO L.ByteString
 subrequest SubrequestConf {..} = do
@@ -212,7 +218,8 @@ subrequest SubrequestConf {..} = do
         req''' = if null srHeaders
                      then req''
                      else req'' { requestHeaders = srHeaders }
-    responseBody <$> httpLbs req''' httpManager
+    responseBody <$>
+        httpLbs req''' { responseTimeout = srResponseTimeout } httpManager
 
 httpManager :: Manager
 httpManager = unsafePerformIO $ newManager defaultManagerSettings
