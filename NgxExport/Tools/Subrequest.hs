@@ -27,7 +27,7 @@ module NgxExport.Tools.Subrequest (
 import           NgxExport
 import           NgxExport.Tools
 
-import           Network.HTTP.Client
+import           Network.HTTP.Client hiding (ResponseTimeout)
 import           Network.HTTP.Types
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString as B
@@ -183,6 +183,9 @@ data SubrequestParseError = SubrequestParseError deriving Show
 
 instance Exception SubrequestParseError
 
+data ResponseTimeout = ResponseTimeoutDefault
+                     | ResponseTimeout TimeInterval deriving (Eq, Read)
+
 data SubrequestConf =
     SubrequestConf { srMethod          :: ByteString
                    , srUri             :: String
@@ -198,13 +201,10 @@ instance FromJSON SubrequestConf where
         srBody <- maybeEmpty $ o .:? "body"
         srHeaders <- map (mk . T.encodeUtf8 *** T.encodeUtf8) <$>
             o .:? "headers" .!= []
-        srResponseTimeout <- maybe defaultTimeout (setTimeout . toSec) <$>
+        srResponseTimeout <- maybe ResponseTimeoutDefault ResponseTimeout <$>
             o .:? "timeout"
         return SubrequestConf {..}
         where maybeEmpty = fmap $ maybe "" T.encodeUtf8
-              defaultTimeout = responseTimeoutDefault
-              setTimeout 0 = responseTimeoutNone
-              setTimeout v = responseTimeoutMicro * 1000000
 
 subrequest :: SubrequestConf -> IO L.ByteString
 subrequest SubrequestConf {..} = do
@@ -218,8 +218,16 @@ subrequest SubrequestConf {..} = do
         req''' = if null srHeaders
                      then req''
                      else req'' { requestHeaders = srHeaders }
-    responseBody <$>
-        httpLbs req''' { responseTimeout = srResponseTimeout } httpManager
+        req'''' = if srResponseTimeout == ResponseTimeoutDefault
+                      then req'''
+                      else req''' { responseTimeout =
+                                        setTimeout srResponseTimeout }
+    responseBody <$> httpLbs req'''' httpManager
+    where setTimeout (ResponseTimeout v)
+              | t == 0 = responseTimeoutNone
+              | otherwise = responseTimeoutMicro $ t * 1000000
+              where t = toSec v
+          setTimeout _ = undefined
 
 httpManager :: Manager
 httpManager = unsafePerformIO $ newManager defaultManagerSettings
@@ -233,13 +241,16 @@ httpManager = unsafePerformIO $ newManager defaultManagerSettings
 -- service handler.
 --
 -- Accepts a JSON object representing an opaque type /SubrequestConf/.
--- The object may contain 4 fields: /method/ (optional, default is /GET/),
--- /uri/ (mandatory), /body/ (optional, default is an empty value), and
--- /headers/ (optional, default is an empty array).
+-- The object may contain 5 fields: /method/ (optional, default is /GET/),
+-- /uri/ (mandatory), /body/ (optional, default is an empty value), /headers/
+-- (optional, default is an empty array), and /timeout/ (optional, default is
+-- the default response timeout of the HTTP manager which is normally 30
+-- seconds, use value @{\"tag\": \"Sec\", \"contents\": 0}@ to disable timeout
+-- completely).
 --
 -- Examples of subrequest configurations:
 --
--- > {"uri": "http://example.com/"}
+-- > {"uri": "http://example.com/", "timeout": {"tag": "Sec", "contents": 10}}
 --
 -- > {"uri": "http://127.0.0.1/subreq", "method": "POST", "body": "some value"}
 --
@@ -267,9 +278,10 @@ ngxExportAsyncIOYY 'makeSubrequest
 -- An example of a subrequest configuration:
 --
 -- > SubrequestConf { srMethod = ""
--- >                , srUri = "http://127.0.0.1/subreq"}
+-- >                , srUri = "http://127.0.0.1/subreq"
 -- >                , srBody = ""
 -- >                , srHeaders = [("Header1", "Value1"), ("Header2", "Value2")]
+-- >                , srResponseTimeout = ResponseTimeout (Sec 10)
 -- >                }
 --
 -- Notice that unlike JSON parsing, fields of /SubrequestConf/ are not
