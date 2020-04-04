@@ -438,7 +438,7 @@ ngxExportAsyncIOYY 'makeSubrequestWithRead
 -- argument /$arg_p/. Skipping this makes URI look unparsable
 -- (/http:\/\/127.0.0.1:\//) which leads to the error.
 --
--- > curl -D- 'http://localhost:8010/full/?a=Value&p=8020'
+-- > $ curl -D- 'http://localhost:8010/full/?a=Value&p=8020'
 -- > HTTP/1.1 200 OK
 -- > Server: nginx/1.17.9
 -- > Date: Sat, 04 Apr 2020 12:52:03 GMT
@@ -455,7 +455,7 @@ ngxExportAsyncIOYY 'makeSubrequestWithRead
 --
 -- Let's try another port.
 --
--- > curl -D- 'http://localhost:8010/full/?a=Value&p=8021'
+-- > $ curl -D- 'http://localhost:8010/full/?a=Value&p=8021'
 -- > HTTP/1.1 502 Bad Gateway
 -- > Server: nginx/1.17.9
 -- > Date: Sat, 04 Apr 2020 12:56:02 GMT
