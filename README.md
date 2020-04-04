@@ -555,6 +555,8 @@ Connection: keep-alive
 Failed to perform subrequest
 ```
 
+---
+
 Handlers *makeSubrequest* and *makeSubrequestWithRead* return response body
 of subrequests skipping the response status and headers. To retrieve full
 data from a response, use another pair of asynchronous variable handlers and
