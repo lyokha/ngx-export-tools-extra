@@ -1,5 +1,5 @@
 {-# LANGUAGE TemplateHaskell, OverloadedStrings, RecordWildCards #-}
-{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeApplications, NumDecimals #-}
 
 -----------------------------------------------------------------------------
 -- |
@@ -22,19 +22,31 @@ module NgxExport.Tools.Subrequest (
     -- $makingHTTPSubrequests
                                    makeSubrequest
                                   ,makeSubrequestWithRead
+    -- * Getting full response data from HTTP subrequests
+    -- $gettingFullResponse
+                                  ,makeSubrequestFull
+                                  ,makeSubrequestFullWithRead
+                                  ,extractStatusFromFullResponse
+                                  ,extractHeaderFromFullResponse
+                                  ,extractBodyFromFullResponse
                                   ) where
 
 import           NgxExport
 import           NgxExport.Tools
 
 import           Network.HTTP.Client hiding (ResponseTimeout)
+import qualified Network.HTTP.Client (HttpExceptionContent (ResponseTimeout))
 import           Network.HTTP.Types
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString as B
+import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as L
+import qualified Data.ByteString.Lazy.Char8 as C8L
 import qualified Data.Text.Encoding as T
-import           Data.CaseInsensitive (mk)
+import qualified Data.Binary as Binary
+import           Data.CaseInsensitive (mk, original)
 import           Data.Aeson
+import           Data.Maybe
 import           Control.Arrow
 import           Control.Exception
 import           System.IO.Unsafe
@@ -206,8 +218,9 @@ instance FromJSON SubrequestConf where
         return SubrequestConf {..}
         where maybeEmpty = fmap $ maybe "" T.encodeUtf8
 
-subrequest :: SubrequestConf -> IO L.ByteString
-subrequest SubrequestConf {..} = do
+subrequest :: (Response L.ByteString -> L.ByteString) -> SubrequestConf ->
+    IO L.ByteString
+subrequest fromResponse SubrequestConf {..} = do
     req <- parseUrlThrow srUri
     let req' = if B.null srMethod
                    then req
@@ -222,12 +235,38 @@ subrequest SubrequestConf {..} = do
                       then req'''
                       else req''' { responseTimeout =
                                         setTimeout srResponseTimeout }
-    responseBody <$> httpLbs req'''' httpManager
+    fromResponse <$> httpLbs req'''' httpManager
     where setTimeout (ResponseTimeout v)
               | t == 0 = responseTimeoutNone
-              | otherwise = responseTimeoutMicro $ t * 1000000
+              | otherwise = responseTimeoutMicro $ t * 1e6
               where t = toSec v
           setTimeout _ = undefined
+
+subrequestBody :: SubrequestConf -> IO L.ByteString
+subrequestBody = subrequest responseBody
+
+type FullResponse = (Int, [(ByteString, L.ByteString)], L.ByteString)
+
+subrequestFull :: SubrequestConf -> IO L.ByteString
+subrequestFull = handleAll . subrequest buildResponse
+    where handleAll = handle $ \e -> return $ Binary.encode @FullResponse $
+              case fromException e of
+                  Just (HttpExceptionRequest _ c) ->
+                      case c of
+                          StatusCodeException r _ ->
+                              (statusCode $ responseStatus r, [], "")
+                          Network.HTTP.Client.ResponseTimeout -> response502
+                          ConnectionTimeout -> response502
+                          ConnectionFailure _ -> response502
+                          _ -> response500
+                  _ -> response500
+          response500 = (500, [], "")
+          response502 = (502, [], "")
+          buildResponse r =
+              let status = statusCode $ responseStatus r
+                  headers = map (first original) $ responseHeaders r
+                  body = responseBody r
+              in Binary.encode (status, headers, body)
 
 httpManager :: Manager
 httpManager = unsafePerformIO $ newManager defaultManagerSettings
@@ -245,7 +284,7 @@ httpManager = unsafePerformIO $ newManager defaultManagerSettings
 -- /uri/ (mandatory), /body/ (optional, default is an empty value), /headers/
 -- (optional, default is an empty array), and /timeout/ (optional, default is
 -- the default response timeout of the HTTP manager which is normally 30
--- seconds, use value @{\"tag\": \"Sec\", \"contents\": 0}@ to disable timeout
+-- seconds, use value @{\"tag\": \"Unset\"}@ to disable response timeout
 -- completely).
 --
 -- Examples of subrequest configurations:
@@ -264,8 +303,9 @@ httpManager = unsafePerformIO $ newManager defaultManagerSettings
 makeSubrequest
     :: ByteString       -- ^ Subrequest configuration
     -> IO L.ByteString
-makeSubrequest = maybe (throwIO SubrequestParseError) subrequest .
-    readFromByteStringAsJSON @SubrequestConf
+makeSubrequest =
+    maybe (throwIO SubrequestParseError) subrequestBody .
+        readFromByteStringAsJSON @SubrequestConf
 
 ngxExportAsyncIOYY 'makeSubrequest
 
@@ -290,8 +330,217 @@ ngxExportAsyncIOYY 'makeSubrequest
 makeSubrequestWithRead
     :: ByteString       -- ^ Subrequest configuration
     -> IO L.ByteString
-makeSubrequestWithRead = maybe (throwIO SubrequestParseError) subrequest .
-    readFromByteString @SubrequestConf
+makeSubrequestWithRead =
+    maybe (throwIO SubrequestParseError) subrequestBody .
+        readFromByteString @SubrequestConf
 
 ngxExportAsyncIOYY 'makeSubrequestWithRead
+
+-- $gettingFullResponse
+--
+-- Handlers /makeSubrequest/ and /makeSubrequestWithRead/ return response body
+-- of subrequests skipping the response status and headers. To retrieve full
+-- data from a response, use another pair of asynchronous variable handlers and
+-- functions: __/makeSubrequestFull/__ and __/makeSubrequestFullWithRead/__,
+-- and 'makeSubrequestFull' and 'makeSubrequestFullWithRead' respectively.
+--
+-- Unlike the simple body handlers, there is no sense of using the corresponding
+-- variables directly as they are binary encoded values. Instead, the response
+-- status, headers and the body must be extracted using handlers
+-- __/extractStatusFromFullResponse/__, __/extractHeaderFromFullResponse/__,
+-- and __/extractBodyFromFullResponse/__ which are based on functions of the
+-- same name.
+--
+-- Let's extend our example with these handlers.
+--
+-- File /test_tools_extra_subrequest.hs/ does not have any changes as we are
+-- going to use exported handlers only.
+--
+-- ==== File /nginx.conf/: new location /\/full/ in server /main/
+-- @
+--         location \/full {
+--             haskell_run_async __/makeSubrequestFull/__ $hs_subrequest
+--                     \'{\"uri\": \"http:\/\/127.0.0.1:$arg_p\/proxy\",
+--                       \"headers\": [[\"Custom-Header\", \"$arg_a\"]]}\';
+--
+--             haskell_run __/extractStatusFromFullResponse/__ $hs_subrequest_status
+--                     $hs_subrequest;
+--
+--             haskell_run __/extractHeaderFromFullResponse/__ $hs_subrequest_header
+--                     subrequest-header|$hs_subrequest;
+--
+--             haskell_run __/extractBodyFromFullResponse/__ $hs_subrequest_body
+--                     $hs_subrequest;
+--
+--             if ($hs_subrequest_status = 400) {
+--                 echo_status 400;
+--                 echo \"Bad request\";
+--                 break;
+--             }
+--
+--             if ($hs_subrequest_status = 500) {
+--                 echo_status 500;
+--                 echo \"Internal server error while making subrequest\";
+--                 break;
+--             }
+--
+--             if ($hs_subrequest_status = 502) {
+--                 echo_status 502;
+--                 echo \"Backend unavailable\";
+--                 break;
+--             }
+--
+--             if ($hs_subrequest_status != 200) {
+--                 echo_status 404;
+--                 echo \"Subrequest status: $hs_subrequest_status\";
+--                 break;
+--             }
+--
+--             echo    \"Subrequest status: $hs_subrequest_status\";
+--             echo    \"Subrequest-Header: $hs_subrequest_header\";
+--             echo -n \"Subrequest body: $hs_subrequest_body\";
+--         }
+-- @
+--
+-- Now we can recognize HTTP response statuses of subrequests and handle them
+-- differently. We also can read a response header /Subrequest-Header/.
+--
+-- ==== File /nginx.conf/: new response header /Subrequest-Header/ in /location \// of server /backend/
+-- @
+--             add_header Subrequest-Header \"This is response from subrequest\";
+-- @
+--
+-- ==== A simple test
+--
+-- > $ curl -D- 'http://localhost:8010/full/?a=Value"'
+-- > HTTP/1.1 400 Bad Request
+-- > Server: nginx/1.17.9
+-- > Date: Sat, 04 Apr 2020 12:44:36 GMT
+-- > Content-Type: application/octet-stream
+-- > Transfer-Encoding: chunked
+-- > Connection: keep-alive
+-- >
+-- > Bad request
+--
+-- Good. Now we see that adding a comma into a JSON field is a bad request.
+--
+-- > $ curl -D- 'http://localhost:8010/full/?a=Value'
+-- > HTTP/1.1 500 Internal Server Error
+-- > Server: nginx/1.17.9
+-- > Date: Sat, 04 Apr 2020 12:47:11 GMT
+-- > Content-Type: application/octet-stream
+-- > Transfer-Encoding: chunked
+-- > Connection: keep-alive
+-- >
+-- > Internal server error while making subrequest
+--
+-- This is also good. Now we are going to define port of the backend server via
+-- argument /$arg_p/. Skipping this makes URI look unparsable
+-- (/http:\/\/127.0.0.1:\//) which leads to the error.
+--
+-- > curl -D- 'http://localhost:8010/full/?a=Value&p=8020'
+-- > HTTP/1.1 200 OK
+-- > Server: nginx/1.17.9
+-- > Date: Sat, 04 Apr 2020 12:52:03 GMT
+-- > Content-Type: application/octet-stream
+-- > Transfer-Encoding: chunked
+-- > Connection: keep-alive
+-- >
+-- > Subrequest status: 200
+-- > Subrequest-Header: This is response from subrequest
+-- > Subrequest body: In backend, Custom-Header is 'Value'
+--
+-- Finally, we are getting a good response with all the response data decoded
+-- correctly.
+--
+-- Let's try another port.
+--
+-- > curl -D- 'http://localhost:8010/full/?a=Value&p=8021'
+-- > HTTP/1.1 502 Bad Gateway
+-- > Server: nginx/1.17.9
+-- > Date: Sat, 04 Apr 2020 12:56:02 GMT
+-- > Content-Type: application/octet-stream
+-- > Transfer-Encoding: chunked
+-- > Connection: keep-alive
+-- >
+-- > Backend unavailable
+--
+-- Good. There is no server listening on port 8021.
+
+-- | Makes an HTTP request.
+--
+-- The same as 'makeSubrequest' except it returns a binary encoded response data
+-- whose parts must be extracted by handlers made of
+-- 'extractStatusFromFullResponse', 'extractHeaderFromFullResponse', and
+-- 'extractBodyFromFullResponse'.
+--
+-- Exported on the Nginx level by a handler of the same name.
+makeSubrequestFull
+    :: ByteString       -- ^ Subrequest configuration
+    -> IO L.ByteString
+makeSubrequestFull =
+    maybe (return $ Binary.encode @FullResponse (400, [], "")) subrequestFull .
+        readFromByteStringAsJSON @SubrequestConf
+
+ngxExportAsyncIOYY 'makeSubrequestFull
+
+-- | Makes an HTTP request.
+--
+-- The same as 'makeSubrequestWithRead' except it returns a binary encoded
+-- response data whose parts must be extracted by handlers made of
+-- 'extractStatusFromFullResponse', 'extractHeaderFromFullResponse', and
+-- 'extractBodyFromFullResponse'.
+--
+-- Exported on the Nginx level by a handler of the same name.
+makeSubrequestFullWithRead
+    :: ByteString       -- ^ Subrequest configuration
+    -> IO L.ByteString
+makeSubrequestFullWithRead =
+    maybe (return $ Binary.encode @FullResponse (400, [], "")) subrequestFull .
+        readFromByteString @SubrequestConf
+
+ngxExportAsyncIOYY 'makeSubrequestFullWithRead
+
+-- | Extracts the HTTP status from an encoded response.
+--
+-- Must be used to extract response data encoded by 'makeSubrequestFull' and
+-- 'makeSubrequestFullWithRead'.
+--
+-- Exported on the Nginx level by a handler of the same name.
+extractStatusFromFullResponse :: ByteString -> L.ByteString
+extractStatusFromFullResponse = C8L.pack . show .
+    (\(a, _, _) -> a) . (Binary.decode @FullResponse) . L.fromStrict
+
+ngxExportYY 'extractStatusFromFullResponse
+
+-- | Extracts a specified header from an encoded response.
+--
+-- Must be used to extract response data encoded by 'makeSubrequestFull' and
+-- 'makeSubrequestFullWithRead'.
+--
+-- Expects that the encoded response data is attached after the name of the
+-- header and a vertical bar such as /Header-Name|$hs_body/. The lookup of the
+-- header name is case-insensitive.
+--
+-- Exported on the Nginx level by a handler of the same name.
+extractHeaderFromFullResponse :: ByteString -> L.ByteString
+extractHeaderFromFullResponse v =
+    let (h, b) = mk *** C8.tail $ C8.break ('|' ==) v
+        hs = (\(_, a, _) -> map (first mk) a) $
+            Binary.decode @FullResponse $ L.fromStrict b
+    in fromMaybe L.empty $ lookup h hs
+
+ngxExportYY 'extractHeaderFromFullResponse
+
+-- | Extracts the body from an encoded response.
+--
+-- Must be used to extract response data encoded by 'makeSubrequestFull' and
+-- 'makeSubrequestFullWithRead'.
+--
+-- Exported on the Nginx level by a handler of the same name.
+extractBodyFromFullResponse :: ByteString -> L.ByteString
+extractBodyFromFullResponse =
+    (\(_, _, a) -> a) . (Binary.decode @FullResponse) . L.fromStrict
+
+ngxExportYY 'extractBodyFromFullResponse
 

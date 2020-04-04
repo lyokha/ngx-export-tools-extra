@@ -1,3 +1,8 @@
+### 0.4.0.0
+
+- Implemented adjustable response timeouts.
+- Implemented subrequest handlers with ability to extract full response data.
+
 ### 0.3.2.0
 
 - Functions and handlers *subrequest* and *subrequestWithRead* were renamed to

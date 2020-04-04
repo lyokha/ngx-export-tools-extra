@@ -267,7 +267,6 @@ module TestToolsExtraEDE where
 import           NgxExport
 import           NgxExport.Tools.EDE
 
-import           Data.Char
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as L
@@ -555,6 +554,145 @@ Connection: keep-alive
 
 Failed to perform subrequest
 ```
+
+Handlers *makeSubrequest* and *makeSubrequestWithRead* return response body
+of subrequests skipping the response status and headers. To retrieve full
+data from a response, use another pair of asynchronous variable handlers and
+functions: *makeSubrequestFull* and *makeSubrequestFullWithRead*,
+and *makeSubrequestFull* and *makeSubrequestFullWithRead* respectively.
+
+Unlike the simple body handlers, there is no sense of using the corresponding
+variables directly as they are binary encoded values. Instead, the response
+status, headers and the body must be extracted using handlers
+*extractStatusFromFullResponse*, *extractHeaderFromFullResponse*,
+and *extractBodyFromFullResponse* which are based on functions of the
+same name.
+
+Let's extend our example with these handlers.
+
+File *test_tools_extra_subrequest.hs* does not have any changes as we are
+going to use exported handlers only.
+
+###### File *nginx.conf*: new location */full* in server *main*
+
+```nginx
+        location /full {
+            haskell_run_async makeSubrequestFull $hs_subrequest
+                    '{"uri": "http://127.0.0.1:$arg_p/proxy",
+                      "headers": [["Custom-Header", "$arg_a"]]}';
+
+            haskell_run extractStatusFromFullResponse $hs_subrequest_status
+                    $hs_subrequest;
+
+            haskell_run extractHeaderFromFullResponse $hs_subrequest_header
+                    subrequest-header|$hs_subrequest;
+
+            haskell_run extractBodyFromFullResponse $hs_subrequest_body
+                    $hs_subrequest;
+
+            if ($hs_subrequest_status = 400) {
+                echo_status 400;
+                echo "Bad request";
+                break;
+            }
+
+            if ($hs_subrequest_status = 500) {
+                echo_status 500;
+                echo "Internal server error while making subrequest";
+                break;
+            }
+
+            if ($hs_subrequest_status = 502) {
+                echo_status 502;
+                echo "Backend unavailable";
+                break;
+            }
+
+            if ($hs_subrequest_status != 200) {
+                echo_status 404;
+                echo "Subrequest status: $hs_subrequest_status";
+                break;
+            }
+
+            echo    "Subrequest status: $hs_subrequest_status";
+            echo    "Subrequest-Header: $hs_subrequest_header";
+            echo -n "Subrequest body: $hs_subrequest_body";
+        }
+```
+
+Now we can recognize HTTP response statuses of subrequests and handle them
+differently. We also can read a response header *Subrequest-Header*.
+
+###### File *nginx.conf*: new response header *Subrequest-Header* in *location /* of server *backend*
+
+```nginx
+            add_header Subrequest-Header "This is response from subrequest";
+```
+
+###### A simple test
+
+```ShellSession
+$ curl -D- 'http://localhost:8010/full/?a=Value"'
+HTTP/1.1 400 Bad Request
+Server: nginx/1.17.9
+Date: Sat, 04 Apr 2020 12:44:36 GMT
+Content-Type: application/octet-stream
+Transfer-Encoding: chunked
+Connection: keep-alive
+
+Bad request
+```
+
+Good. Now we see that adding a comma into a JSON field is a bad request.
+
+```ShellSession
+$ curl -D- 'http://localhost:8010/full/?a=Value'
+HTTP/1.1 500 Internal Server Error
+Server: nginx/1.17.9
+Date: Sat, 04 Apr 2020 12:47:11 GMT
+Content-Type: application/octet-stream
+Transfer-Encoding: chunked
+Connection: keep-alive
+
+Internal server error while making subrequest
+```
+
+This is also good. Now we are going to define port of the backend server via
+argument *arg_p*. Skipping this makes URI look unparsable
+(*http://127.0.0.1:/*) which leads to the error.
+
+```ShellSession
+curl -D- 'http://localhost:8010/full/?a=Value&p=8020'
+HTTP/1.1 200 OK
+Server: nginx/1.17.9
+Date: Sat, 04 Apr 2020 12:52:03 GMT
+Content-Type: application/octet-stream
+Transfer-Encoding: chunked
+Connection: keep-alive
+
+Subrequest status: 200
+Subrequest-Header: This is response from subrequest
+Subrequest body: In backend, Custom-Header is 'Value'
+```
+
+Finally, we are getting a good response with all the response data decoded
+correctly.
+
+Let's try another port.
+
+```ShellSession
+curl -D- 'http://localhost:8010/full/?a=Value&p=8021'
+HTTP/1.1 502 Bad Gateway
+Server: nginx/1.17.9
+Date: Sat, 04 Apr 2020 12:56:02 GMT
+Content-Type: application/octet-stream
+Transfer-Encoding: chunked
+Connection: keep-alive
+
+Backend unavailable
+```
+
+Good. There is no server listening on port 8021.
 
 #### Building and installation
 
