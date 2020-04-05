@@ -250,16 +250,21 @@ $ curl 'http://127.0.0.1:8020/' | jq
 This module allows for complex parsing of JSON objects with [*EDE templating
 language*](http://hackage.haskell.org/package/ede/docs/Text-EDE.html). In
 terms of module *NgxExport.Tools*, it exports a *single-shot* service
-*compileEDETemplates* to configure the list of templates parameterized
-by a simple key, and an asynchronous variable handler *renderEDETemplate*
-for parsing POSTed JSON objects and substitution of extracted data in the
-provided EDE template.
+*compileEDETemplates* to configure a list of templates parameterized by
+a simple key, and two variable handlers *renderEDETemplate* and
+*renderEDETemplateFromFreeValue* for parsing JSON objects and
+substitution of extracted data into provided EDE templates. The former
+handler is *asynchronous* and suitable for parsing JSON objects POSTed in a
+request body, while the latter is *synchronous* and can parse JSON objects
+contained in Nginx variables.
 
 ##### An example
 
 ###### File *test_tools_extra_ede.hs*
 
 ```haskell
+{-# OPTIONS_GHC -Wno-unused-imports #-}
+
 {-# LANGUAGE TemplateHaskell #-}
 
 module TestToolsExtraEDE where
@@ -268,16 +273,8 @@ import           NgxExport
 import           NgxExport.Tools.EDE
 
 import           Data.ByteString (ByteString)
-import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as L
 import qualified Network.HTTP.Types.URI as URI
-import           Control.Arrow
-
-renderEDETemplateFromFreeValue :: ByteString -> IO L.ByteString
-renderEDETemplateFromFreeValue = uncurry (flip renderEDETemplate) .
-    second (L.fromStrict . C8.tail) . C8.break (== '|')
-
-ngxExportIOYY 'renderEDETemplateFromFreeValue
 
 urlDecode :: ByteString -> L.ByteString
 urlDecode = L.fromStrict . URI.urlDecode False
@@ -285,9 +282,12 @@ urlDecode = L.fromStrict . URI.urlDecode False
 ngxExportYY 'urlDecode
 ```
 
-Besides the two handlers imported from the EDE module, two additional
-handlers were defined here: *renderEDETemplateFromFreeValue* and *urlDecode*.
-We are going to use them for parsing JSON values from HTTP cookies.
+We are going to use *urlDecode* to decode JSON  values contained in HTTP
+cookies. Notice that we are not using any Haskell declarations from module
+*NgxExport.Tools.EDE* while still need to import this to access the three
+handlers from the Nginx configuration. This situation is quite valid though
+not usual to *ghc*, and to make it keep silence, pragma
+*OPTIONS_GHC -Wno-unused-imports* was added on the top of the file.
 
 ###### File *nginx.conf*
 
@@ -372,7 +372,9 @@ this module.
 
 So, basically, we used *renderEDETemplate* to decompose POSTed JSON objects
 and then *rewrite* requests to other locations where extracted fields were
-encoded inside the location's URL path.
+encoded inside the location's URL path. Handler
+*renderEDETemplateFromFreeValue* in *location /cookie* does the same but
+reads JSON objects from HTTP cookie *user*.
 
 ###### A simple test
 

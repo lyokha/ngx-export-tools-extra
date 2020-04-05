@@ -1,3 +1,8 @@
+### 0.4.1.0
+
+- Handler *renderEDETemplateFromFreeValue* was moved from the example to the
+  module.
+
 ### 0.4.0.0
 
 - Implemented adjustable response timeouts.

@@ -516,11 +516,9 @@ ngxExportYY 'extractStatusFromFullResponse
 -- | Extracts a specified header from an encoded response.
 --
 -- Must be used to extract response data encoded by 'makeSubrequestFull' and
--- 'makeSubrequestFullWithRead'.
---
--- Expects that the encoded response data is attached after the name of the
--- header and a vertical bar such as /Header-Name|$hs_body/. The lookup of the
--- header name is case-insensitive.
+-- 'makeSubrequestFullWithRead'. Expects that the encoded response data is
+-- attached after the name of the header and a vertical bar such as
+-- /Header-Name|$hs_body/. The lookup of the header name is case-insensitive.
 --
 -- Exported on the Nginx level by a handler of the same name.
 extractHeaderFromFullResponse :: ByteString -> L.ByteString
