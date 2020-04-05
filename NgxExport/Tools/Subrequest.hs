@@ -507,7 +507,9 @@ ngxExportAsyncIOYY 'makeSubrequestFullWithRead
 -- 'makeSubrequestFullWithRead'.
 --
 -- Exported on the Nginx level by a handler of the same name.
-extractStatusFromFullResponse :: ByteString -> L.ByteString
+extractStatusFromFullResponse
+    :: ByteString       -- ^ Encoded HTTP response
+    -> L.ByteString
 extractStatusFromFullResponse = C8L.pack . show .
     (\(a, _, _) -> a) . (Binary.decode @FullResponse) . L.fromStrict
 
@@ -521,7 +523,9 @@ ngxExportYY 'extractStatusFromFullResponse
 -- /Header-Name|$hs_body/. The lookup of the header name is case-insensitive.
 --
 -- Exported on the Nginx level by a handler of the same name.
-extractHeaderFromFullResponse :: ByteString -> L.ByteString
+extractHeaderFromFullResponse
+    :: ByteString       -- ^ Encoded HTTP response
+    -> L.ByteString
 extractHeaderFromFullResponse v =
     let (h, b) = mk *** C8.tail $ C8.break ('|' ==) v
         hs = (\(_, a, _) -> map (first mk) a) $
@@ -536,7 +540,9 @@ ngxExportYY 'extractHeaderFromFullResponse
 -- 'makeSubrequestFullWithRead'.
 --
 -- Exported on the Nginx level by a handler of the same name.
-extractBodyFromFullResponse :: ByteString -> L.ByteString
+extractBodyFromFullResponse
+    :: ByteString       -- ^ Encoded HTTP response
+    -> L.ByteString
 extractBodyFromFullResponse =
     (\(_, _, a) -> a) . (Binary.decode @FullResponse) . L.fromStrict
 
