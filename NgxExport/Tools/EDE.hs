@@ -36,7 +36,6 @@ import           Text.PrettyPrint.ANSI.Leijen.Internal (plain)
 #endif
 import qualified Data.HashMap.Strict as HM
 import           Data.HashMap.Strict (HashMap)
-import qualified Data.ByteString as B
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as L
@@ -209,7 +208,7 @@ import           System.IO.Unsafe
 -- > User id: user1, options: WyJvcDEiLCJvcDIiXQ==, path: %2Fopt%2Fusers
 
 type InputTemplates = (FilePath, [(ByteString, ByteString)])
-type Templates = HashMap B.ByteString (Result Template)
+type Templates = HashMap ByteString (Result Template)
 
 newtype EDERenderError = EDERenderError String
 

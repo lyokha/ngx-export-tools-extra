@@ -40,6 +40,8 @@ library
                           , http-client >= 0.5.0
                           , binary
                           , case-insensitive
+                          , pcre-light
+                          , pcre-heavy >= 1.0.0
                           , containers
                           , unordered-containers
                           , enclosed-exceptions
@@ -61,6 +63,7 @@ library
 
   exposed-modules:          NgxExport.Tools.Aggregate
                           , NgxExport.Tools.Subrequest
+                          , NgxExport.Tools.PCRE
 
   if flag(EDE)
     exposed-modules:        NgxExport.Tools.EDE
