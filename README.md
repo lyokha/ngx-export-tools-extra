@@ -263,14 +263,12 @@ contained in Nginx variables.
 ###### File *test_tools_extra_ede.hs*
 
 ```haskell
-{-# OPTIONS_GHC -Wno-unused-imports #-}
-
 {-# LANGUAGE TemplateHaskell #-}
 
 module TestToolsExtraEDE where
 
 import           NgxExport
-import           NgxExport.Tools.EDE
+import           NgxExport.Tools.EDE ()
 
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as L
@@ -286,8 +284,8 @@ We are going to use *urlDecode* to decode JSON  values contained in HTTP
 cookies. Notice that we are not using any Haskell declarations from module
 *NgxExport.Tools.EDE* while still need to import this to access the three
 handlers from the Nginx configuration. This situation is quite valid though
-not usual to *ghc*, and to make it keep silence, pragma
-*OPTIONS_GHC -Wno-unused-imports* was added on the top of the file.
+not usual to *ghc*, and to make it keep silence, an explicitly empty import
+list was added at the end of the import stanza.
 
 ###### File *nginx.conf*
 

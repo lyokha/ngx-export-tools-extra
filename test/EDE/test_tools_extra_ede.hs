@@ -1,11 +1,9 @@
-{-# OPTIONS_GHC -Wno-unused-imports #-}
-
 {-# LANGUAGE TemplateHaskell #-}
 
 module TestToolsExtraEDE where
 
 import           NgxExport
-import           NgxExport.Tools.EDE
+import           NgxExport.Tools.EDE ()
 
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as L
