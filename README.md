@@ -284,7 +284,7 @@ We are going to use *urlDecode* to decode JSON  values contained in HTTP
 cookies. Notice that we are not using any Haskell declarations from module
 *NgxExport.Tools.EDE* while still need to import this to access the three
 handlers from the Nginx configuration. This situation is quite valid though
-not usual to *ghc*, and to make it keep silence, an explicitly empty import
+not usual to *ghc*, and to make it keep silence, an explicit empty import
 list was added at the end of the import stanza.
 
 ###### File *nginx.conf*
