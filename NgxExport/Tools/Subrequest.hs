@@ -501,7 +501,7 @@ ngxExportAsyncIOYY 'makeSubrequestFullWithRead
 
 -- | Extracts the HTTP status from an encoded response.
 --
--- Must be used to extract response data encoded by 'makeSubrequestFull' and
+-- Must be used to extract response data encoded by 'makeSubrequestFull' or
 -- 'makeSubrequestFullWithRead'. Exported on the Nginx level by handler
 -- /extractStatusFromFullResponse/.
 extractStatusFromFullResponse
@@ -514,7 +514,7 @@ ngxExportYY 'extractStatusFromFullResponse
 
 -- | Extracts a specified header from an encoded response.
 --
--- Must be used to extract response data encoded by 'makeSubrequestFull' and
+-- Must be used to extract response data encoded by 'makeSubrequestFull' or
 -- 'makeSubrequestFullWithRead'. Exported on the Nginx level by handler
 -- /extractHeaderFromFullResponse/.
 --
@@ -535,7 +535,7 @@ ngxExportYY 'extractHeaderFromFullResponse
 
 -- | Extracts the body from an encoded response.
 --
--- Must be used to extract response data encoded by 'makeSubrequestFull' and
+-- Must be used to extract response data encoded by 'makeSubrequestFull' or
 -- 'makeSubrequestFullWithRead'. Exported on the Nginx level by handler
 -- /extractBodyFromFullResponse/.
 extractBodyFromFullResponse
