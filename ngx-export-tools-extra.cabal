@@ -45,6 +45,8 @@ library
                           , enclosed-exceptions
                           , snap-core
                           , snap-server
+                          , pcre-light >= 0.4
+                          , pcre-heavy
                           , text
                           , time
 
@@ -61,6 +63,7 @@ library
 
   exposed-modules:          NgxExport.Tools.Aggregate
                           , NgxExport.Tools.Subrequest
+                          , NgxExport.Tools.PCRE
 
   if flag(EDE)
     exposed-modules:        NgxExport.Tools.EDE
