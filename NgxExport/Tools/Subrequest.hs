@@ -115,7 +115,7 @@ import           System.IO.Unsafe
 --
 --         location \/ {
 --             haskell_run_async __/makeSubrequest/__ $hs_subrequest
---                     \'{\"uri\": \"http:\/\/127.0.0.1:8020\/proxy\",
+--                     \'{\"uri\": \"http:\/\/127.0.0.1:8010\/proxy\",
 --                       \"headers\": [[\"Custom-Header\", \"$arg_a\"]]}\';
 --
 --             if ($hs_subrequest = \'\') {
@@ -128,7 +128,8 @@ import           System.IO.Unsafe
 --         }
 --
 --         location \/proxy {
---             internal;
+--             allow 127.0.0.1;
+--             deny all;
 --             proxy_pass http:\/\/backend;
 --         }
 --
