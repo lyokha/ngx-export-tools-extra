@@ -47,6 +47,7 @@ library
                           , snap-server
                           , text
                           , time
+                          , safe
 
   if flag(EDE)
     if flag(ExperimentalEDE)
@@ -60,6 +61,7 @@ library
                           , trifecta <= 2
 
   exposed-modules:          NgxExport.Tools.Aggregate
+                          , NgxExport.Tools.Prometheus
                           , NgxExport.Tools.Subrequest
 
   if flag(EDE)
