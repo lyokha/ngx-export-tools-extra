@@ -242,7 +242,7 @@ conf = unsafePerformIO $ newIORef Nothing
 -- @
 --
 -- Type /PrometheusConf/ contains fields /pcMetrics/ and /pcScale1000/. The
--- latter is a map from metrics names to help messages: this can be used to
+-- former is a map from metrics names to help messages: this can be used to
 -- bind small descriptions to the metrics as /nginx-custom-counters-module/
 -- does not provide such functionality. Setting descriptions to counters is
 -- optional. Field /pcScale1000/ contains a list of counters that were scaled

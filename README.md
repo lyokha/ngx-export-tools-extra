@@ -570,7 +570,7 @@ http {
 ```
 
 Type *PrometheusConf* contains fields *pcMetrics* and *pcScale1000*. The
-latter is a map from metrics names to help messages: this can be used to
+former is a map from metrics names to help messages: this can be used to
 bind small descriptions to the metrics as *nginx-custom-counters-module*
 does not provide such functionality. Setting descriptions to counters is
 optional. Field *pcScale1000* contains a list of counters that were scaled
@@ -579,7 +579,7 @@ with *scale1000* and must be converted back.
 Handler *toPrometheusMetrics* expects 4 fields: the name of the
 *counter set id*: in our example there is only one counter set *main*,
 predefined variables *cnt_collection* and *cnt_histograms* from
-/nginx-custom-counters-module/, and a list of additional counters: in our
+*nginx-custom-counters-module*, and a list of additional counters: in our
 example there are two additional counters *cnt_uptime* and
 *cnt_uptime_reload* which are also defined in
 *nginx-custom-counters-module*.
