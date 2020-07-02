@@ -1,3 +1,9 @@
+### 0.5.0.0
+
+- Added module *NgxExport.Tools.Prometheus* to convert custom counters from
+  [*nginx-custom-counters-module*](https://github.com/lyokha/nginx-custom-counters-module)
+  to Prometheus metrics.
+
 ### 0.4.1.0
 
 - Handler *renderEDETemplateFromFreeValue* was moved from the example to the
