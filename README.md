@@ -7,6 +7,7 @@ This package contains a collection of Haskell modules with more extra tools for
 
 - [Module NgxExport.Tools.Aggregate](#module-ngxexporttoolsaggregate)
 - [Module NgxExport.Tools.EDE](#module-ngxexporttoolsede)
+- [Module NgxExport.Tools.Prometheus](#module-ngxexporttoolsprometheus)
 - [Module NgxExport.Tools.Subrequest](#module-ngxexporttoolssubrequest)
 - [Building and installation](#building-and-installation) 
 
@@ -407,6 +408,307 @@ $ curl -b 'user=%7B%22user%22%3A%20%7B%22id%22%20%3A%20%22user1%22%2C%20%22ops%2
 User id: user1, options: WyJvcDEiLCJvcDIiXQ==, path: %2Fopt%2Fusers
 ```
 
+#### Module *NgxExport.Tools.Prometheus*
+
+This module is aimed to convert custom counters from
+[nginx-custom-counters-module](https://github.com/lyokha/nginx-custom-counters-module)
+to Prometheus metrics. For this, it exposes three exporters:
+*prometheusConf* which is an *ignitionService* in terms of module
+*NgxExport.Tools*, *toPrometheusMetrics* to convert *custom counters* to
+Prometheus metrics, and *scale1000*: a small utility to convert small
+floating point numbers to integers by multiplying them by *1000* (this fits
+well for dealing with request durations, for instance).
+
+The module makes use of a few custom data types which are not exported while
+still needed when writing Nginx configurations. In the following example they
+are used in configurations of *simpleService_prometheusConf* and
+*toPrometheusMetrics*.
+
+##### An example
+
+###### File *test_tools_extra_prometheus.hs*
+
+```haskell
+module TestToolsExtraPrometheus where
+
+import NgxExport.Tools.Prometheus ()
+```
+
+The file does not contain any significant declarations as we are going to use
+only the exporters.
+
+###### File *nginx.conf*
+
+```nginx
+user                    nobody;
+worker_processes        2;
+
+events {
+    worker_connections  1024;
+}
+
+http {
+    default_type        application/octet-stream;
+    sendfile            on;
+
+    map $status $inc_cnt_4xx {
+        default                0;
+        '~^4(?:\d){2}'         1;
+    }
+
+    map $status $inc_cnt_5xx {
+        default                0;
+        '~^5(?:\d){2}'         1;
+    }
+
+    map_to_range_index $hs_request_time $request_time_bucket
+        0.005
+        0.01
+        0.05
+        0.1
+        0.5
+        1.0
+        5.0
+        10.0
+        30.0
+        60.0;
+
+    map_to_range_index $hs_bytes_sent $bytes_sent_bucket
+        0
+        10
+        100
+        1000
+        10000;
+
+    haskell load /var/lib/nginx/test_tools_extra_prometheus.so;
+
+    haskell_run_service simpleService_prometheusConf $hs_prometheus_conf
+            'PrometheusConf
+                { pcMetrics = fromList
+                    [("cnt_4xx", "Number of responses with 4xx status")
+                    ,("cnt_5xx", "Number of responses with 5xx status")
+                    ,("cnt_uptime", "Nginx master uptime")
+                    ,("cnt_uptime_reload", "Nginx master uptime after reload")
+                    ,("hst_request_time", "Request duration")
+                    ]
+                , pcScale1000 = ["hst_request_time_sum"]
+                }';
+
+    haskell_var_empty_on_error $hs_prom_metrics;
+
+    counters_survive_reload on;
+
+    server {
+        listen       8010;
+        server_name  main;
+        error_log    /tmp/nginx-test-haskell-error.log;
+        access_log   /tmp/nginx-test-haskell-access.log;
+
+        counter $cnt_4xx inc $inc_cnt_4xx;
+        counter $cnt_5xx inc $inc_cnt_5xx;
+
+        # cache $request_time and $bytes_sent
+        haskell_run ! $hs_request_time $request_time;
+        haskell_run ! $hs_bytes_sent $bytes_sent;
+
+        histogram $hst_request_time 11 $request_time_bucket;
+        haskell_run scale1000 $hs_request_time_scaled $hs_request_time;
+        counter $hst_request_time_sum inc $hs_request_time_scaled;
+
+        histogram $hst_bytes_sent 6 $bytes_sent_bucket;
+        counter $hst_bytes_sent_sum inc $hs_bytes_sent;
+
+        location / {
+            echo_sleep 0.5;
+            echo Ok;
+        }
+
+        location /1 {
+            echo_sleep 1.0;
+            echo Ok;
+        }
+
+        location /404 {
+            return 404;
+        }
+    }
+
+    server {
+        listen       8020;
+        server_name  stats;
+
+        location / {
+            haskell_run toPrometheusMetrics $hs_prom_metrics
+                    '["main"
+                      ,$cnt_collection
+                      ,$cnt_histograms
+                      ,{"cnt_uptime": $cnt_uptime
+                       ,"cnt_uptime_reload": $cnt_uptime_reload
+                       }
+                     ]';
+
+            if ($hs_prom_metrics = '') {
+                return 503;
+            }
+
+            echo -n $hs_prom_metrics;
+        }
+
+        location /counters {
+            echo $cnt_collection;
+        }
+
+        location /histograms {
+            echo $cnt_histograms;
+        }
+
+        location /uptime {
+            echo "$cnt_uptime ($cnt_uptime_reload)";
+        }
+    }
+}
+```
+
+Type *PrometheusConf* contains fields *pcMetrics* and *pcScale1000*. The
+latter is a map from metrics names to help messages: this can be used to
+bind small descriptions to the metrics as *nginx-custom-counters-module*
+does not provide such functionality. Setting descriptions to counters is
+optional. Field *pcScale1000* contains a list of counters that were scaled
+with *scale1000* and must be converted back.
+
+Handler *toPrometheusMetrics* expects 4 fields: the name of the
+*counter set id*: in our example there is only one counter set *main*,
+predefined variables *cnt_collection* and *cnt_histograms* from
+/nginx-custom-counters-module/, and a list of additional counters: in our
+example there are two additional counters *cnt_uptime* and
+*cnt_uptime_reload* which are also defined in
+*nginx-custom-counters-module*.
+
+To fulfill histogram description in Prometheus, the *sum* value must be
+provided. Histogram sums are not supported in *nginx-custom-counters-module*,
+and therefore they must be declared in separate counters. In this example
+there are two histograms collecting request durations and sent bytes:
+accordingly, there are two sum counters: *hst_request_time_sum* and
+*hst_bytes_sent_sum*. As request durations may last milliseconds while being
+shown in seconds, they must be scaled with *scale1000*.
+
+To further ensure histogram validity, it is important to have the last bucket
+in a histogram labeled as *"+Inf"*. This is achieved automatically when
+the number of range boundaries in directive *map_to_range_index* is less by
+one than the number in the corresponding histogram declaration: in this
+example, the map for *request_time_bucket* has 10 range boundaries while
+histogram *hst_request_time* has 11 buckets, the map for *bytes_sent_bucket*
+has 5 range boundaries while histogram *hst_bytes_sent* has 6 buckets.
+
+###### A simple test
+
+Let's look at the metrics right after starting Nginx.
+
+```ShellSession
+$ curl -s 'http://localhost:8020/'
+# HELP cnt_4xx Number of responses with 4xx status
+# TYPE cnt_4xx counter
+cnt_4xx 0.0
+# HELP cnt_5xx Number of responses with 5xx status
+# TYPE cnt_5xx counter
+cnt_5xx 0.0
+# HELP cnt_uptime Nginx master uptime
+# TYPE cnt_uptime counter
+cnt_uptime 8.0
+# HELP cnt_uptime_reload Nginx master uptime after reload
+# TYPE cnt_uptime_reload counter
+cnt_uptime_reload 8.0
+# HELP hst_bytes_sent 
+# TYPE hst_bytes_sent histogram
+hst_bytes_sent_bucket{le="0"} 0
+hst_bytes_sent_bucket{le="10"} 0
+hst_bytes_sent_bucket{le="100"} 0
+hst_bytes_sent_bucket{le="1000"} 0
+hst_bytes_sent_bucket{le="10000"} 0
+hst_bytes_sent_bucket{le="+Inf"} 0
+hst_bytes_sent_count 0
+hst_bytes_sent_sum 0.0
+# HELP hst_bytes_sent_err 
+# TYPE hst_bytes_sent_err counter
+hst_bytes_sent_err 0.0
+# HELP hst_request_time Request duration
+# TYPE hst_request_time histogram
+hst_request_time_bucket{le="0.005"} 0
+hst_request_time_bucket{le="0.01"} 0
+hst_request_time_bucket{le="0.05"} 0
+hst_request_time_bucket{le="0.1"} 0
+hst_request_time_bucket{le="0.5"} 0
+hst_request_time_bucket{le="1.0"} 0
+hst_request_time_bucket{le="5.0"} 0
+hst_request_time_bucket{le="10.0"} 0
+hst_request_time_bucket{le="30.0"} 0
+hst_request_time_bucket{le="60.0"} 0
+hst_request_time_bucket{le="+Inf"} 0
+hst_request_time_count 0
+hst_request_time_sum 0.0
+# HELP hst_request_time_err 
+# TYPE hst_request_time_err counter
+hst_request_time_err 0.0
+```
+
+Run some requests and look at the metrics again.
+
+```ShellSession
+$ for in in {1..20} ; do curl -D- 'http://localhost:8010/' & done
+  ...
+$ for in in {1..30} ; do curl -D- 'http://localhost:8010/1' & done
+  ...
+$ curl 'http://127.0.0.1:8010/404'
+  ...
+```
+
+```ShellSession
+$ curl -s 'http://localhost:8020/'
+# HELP cnt_4xx Number of responses with 4xx status
+# TYPE cnt_4xx counter
+cnt_4xx 1.0
+# HELP cnt_5xx Number of responses with 5xx status
+# TYPE cnt_5xx counter
+cnt_5xx 0.0
+# HELP cnt_uptime Nginx master uptime
+# TYPE cnt_uptime counter
+cnt_uptime 371.0
+# HELP cnt_uptime_reload Nginx master uptime after reload
+# TYPE cnt_uptime_reload counter
+cnt_uptime_reload 371.0
+# HELP hst_bytes_sent 
+# TYPE hst_bytes_sent histogram
+hst_bytes_sent_bucket{le="0"} 0
+hst_bytes_sent_bucket{le="10"} 0
+hst_bytes_sent_bucket{le="100"} 0
+hst_bytes_sent_bucket{le="1000"} 51
+hst_bytes_sent_bucket{le="10000"} 51
+hst_bytes_sent_bucket{le="+Inf"} 51
+hst_bytes_sent_count 51
+hst_bytes_sent_sum 9458.0
+# HELP hst_bytes_sent_err 
+# TYPE hst_bytes_sent_err counter
+hst_bytes_sent_err 0.0
+# HELP hst_request_time Request duration
+# TYPE hst_request_time histogram
+hst_request_time_bucket{le="0.005"} 1
+hst_request_time_bucket{le="0.01"} 1
+hst_request_time_bucket{le="0.05"} 1
+hst_request_time_bucket{le="0.1"} 1
+hst_request_time_bucket{le="0.5"} 13
+hst_request_time_bucket{le="1.0"} 44
+hst_request_time_bucket{le="5.0"} 51
+hst_request_time_bucket{le="10.0"} 51
+hst_request_time_bucket{le="30.0"} 51
+hst_request_time_bucket{le="60.0"} 51
+hst_request_time_bucket{le="+Inf"} 51
+hst_request_time_count 51
+hst_request_time_sum 40.006
+# HELP hst_request_time_err 
+# TYPE hst_request_time_err counter
+hst_request_time_err 0.0
+```
+
 #### Module *NgxExport.Tools.Subrequest*
 
 Using asynchronous variable handlers and services together with the HTTP
@@ -735,6 +1037,7 @@ or
 ##### Building custom libraries
 
 See details in [test/Aggregate/README.md](test/Aggregate/README.md),
-[test/EDE/README.md](test/EDE/README.md), and
+[test/EDE/README.md](test/EDE/README.md),
+[test/Prometheus/README.md](test/Prometheus/README.md), and
 [test/Subrequest/README.md](test/Subrequest/README.md).
 

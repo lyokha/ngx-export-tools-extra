@@ -18,6 +18,10 @@
 
 
 module NgxExport.Tools.Prometheus (
+    -- *Exporters
+    -- $exporters
+
+    -- *Utilities
                                    scale
                                   ,scale1000
                                   ) where
@@ -60,7 +64,7 @@ data HistogramLayout =
     HistogramLayout { range :: MetricsToLabelMap
                     , cnt :: (MetricsName, MetricsLabel)
                     , err :: (MetricsName, MetricsLabel)
-                    } deriving (Generic, Show)
+                    } deriving Generic
 
 instance FromJSON HistogramLayout
 
@@ -76,21 +80,311 @@ data MetricsType = Counter Double
 
 type PrometheusMetrics = Map MetricsName (MetricsHelp, MetricsType)
 
-conf :: IORef PrometheusConf
-conf = unsafePerformIO $ newIORef $ PrometheusConf M.empty []
+conf :: IORef (Maybe PrometheusConf)
+conf = unsafePerformIO $ newIORef Nothing
 {-# NOINLINE conf #-}
+
+-- $exporters
+--
+-- This module is aimed to convert custom counters from
+-- [nginx-custom-counters-module](https://github.com/lyokha/nginx-custom-counters-module)
+-- to Prometheus metrics. For this, it exposes three exporters:
+-- __/prometheusConf/__ which is an 'ignitionService' in terms of module
+-- "NgxExport.Tools", __/toPrometheusMetrics/__ to convert /custom counters/ to
+-- Prometheus metrics, and __/scale1000/__: a small utility to convert small
+-- floating point numbers to integers by multiplying them by /1000/ (this fits
+-- well for dealing with request durations, for instance).
+--
+-- The module makes use of a few custom data types which are not exported while
+-- still needed when writing Nginx configurations. In the following example they
+-- are used in configurations of /simpleService_prometheusConf/ and
+-- /toPrometheusMetrics/.
+--
+-- ==== File /test_tools_extra_prometheus.hs/
+-- @
+-- module TestToolsExtraPrometheus where
+--
+-- import NgxExport.Tools.Prometheus ()
+-- @
+--
+-- The file does not contain any significant declarations as we are going to use
+-- only the exporters.
+--
+-- ==== File /nginx.conf/
+-- @
+-- user                    nobody;
+-- worker_processes        2;
+--
+-- events {
+--     worker_connections  1024;
+-- }
+--
+-- http {
+--     default_type        application\/octet-stream;
+--     sendfile            on;
+--
+--     map $status $inc_cnt_4xx {
+--         default                0;
+--         \'~^4(?:\\d){2}\'         1;
+--     }
+--
+--     map $status $inc_cnt_5xx {
+--         default                0;
+--         \'~^5(?:\\d){2}\'         1;
+--     }
+--
+--     map_to_range_index $hs_request_time $request_time_bucket
+--         0.005
+--         0.01
+--         0.05
+--         0.1
+--         0.5
+--         1.0
+--         5.0
+--         10.0
+--         30.0
+--         60.0;
+--
+--     map_to_range_index $hs_bytes_sent $bytes_sent_bucket
+--         0
+--         10
+--         100
+--         1000
+--         10000;
+--
+--     haskell load \/var\/lib\/nginx\/test_tools_extra_prometheus.so;
+--
+--     haskell_run_service __/simpleService_prometheusConf/__ $hs_prometheus_conf
+--             \'__/PrometheusConf/__
+--                 { __/pcMetrics/__ = fromList
+--                     [(\"cnt_4xx\", \"Number of responses with 4xx status\")
+--                     ,(\"cnt_5xx\", \"Number of responses with 5xx status\")
+--                     ,(\"cnt_uptime\", \"Nginx master uptime\")
+--                     ,(\"cnt_uptime_reload\", \"Nginx master uptime after reload\")
+--                     ,(\"hst_request_time\", \"Request duration\")
+--                     ]
+--                 , __/pcScale1000/__ = [\"hst_request_time_sum\"]
+--                 }';
+--
+--     haskell_var_empty_on_error $hs_prom_metrics;
+--
+--     counters_survive_reload on;
+--
+--     server {
+--         listen       8010;
+--         server_name  __/main/__;
+--         error_log    \/tmp\/nginx-test-haskell-error.log;
+--         access_log   \/tmp\/nginx-test-haskell-access.log;
+--
+--         counter $cnt_4xx inc $inc_cnt_4xx;
+--         counter $cnt_5xx inc $inc_cnt_5xx;
+--
+--         \# cache $request_time and $bytes_sent
+--         haskell_run ! $hs_request_time $request_time;
+--         haskell_run ! $hs_bytes_sent $bytes_sent;
+--
+--         histogram $hst_request_time 11 $request_time_bucket;
+--         haskell_run __/scale1000/__ $hs_request_time_scaled $hs_request_time;
+--         counter $hst_request_time_sum inc $hs_request_time_scaled;
+--
+--         histogram $hst_bytes_sent 6 $bytes_sent_bucket;
+--         counter $hst_bytes_sent_sum inc $hs_bytes_sent;
+--
+--         location \/ {
+--             echo_sleep 0.5;
+--             echo Ok;
+--         }
+--
+--         location \/1 {
+--             echo_sleep 1.0;
+--             echo Ok;
+--         }
+--
+--         location \/404 {
+--             return 404;
+--         }
+--     }
+--
+--     server {
+--         listen       8020;
+--         server_name  stats;
+--
+--         location \/ {
+--             haskell_run __/toPrometheusMetrics/__ $hs_prom_metrics
+--                     '[\"__/main/__\"
+--                       ,__/$cnt_collection/__
+--                       ,__/$cnt_histograms/__
+--                       ,{\"cnt_uptime\": $cnt_uptime
+--                        ,\"cnt_uptime_reload\": $cnt_uptime_reload
+--                        }
+--                      ]';
+--
+--             if ($hs_prom_metrics = \'\') {
+--                 return 503;
+--             }
+--
+--             echo -n $hs_prom_metrics;
+--         }
+--
+--         location \/counters {
+--             echo $cnt_collection;
+--         }
+--
+--         location \/histograms {
+--             echo $cnt_histograms;
+--         }
+--
+--         location \/uptime {
+--             echo "$cnt_uptime ($cnt_uptime_reload)";
+--         }
+--     }
+-- }
+-- @
+--
+-- Type /PrometheusConf/ contains fields /pcMetrics/ and /pcScale1000/. The
+-- latter is a map from metrics names to help messages: this can be used to
+-- bind small descriptions to the metrics as /nginx-custom-counters-module/
+-- does not provide such functionality. Setting descriptions to counters is
+-- optional. Field /pcScale1000/ contains a list of counters that were scaled
+-- with /scale1000/ and must be converted back.
+--
+-- Handler /toPrometheusMetrics/ expects 4 fields: the name of the
+-- /counter set id/: in our example there is only one counter set /main/,
+-- predefined variables /cnt_collection/ and /cnt_histograms/ from
+-- /nginx-custom-counters-module/, and a list of additional counters: in our
+-- example there are two additional counters /cnt_uptime/ and
+-- /cnt_uptime_reload/ which are also defined in
+-- /nginx-custom-counters-module/.
+--
+-- To fulfill histogram description in Prometheus, the /sum/ value must be
+-- provided. Histogram sums are not supported in /nginx-custom-counters-module/,
+-- and therefore they must be declared in separate counters. In this example
+-- there are two histograms collecting request durations and sent bytes:
+-- accordingly, there are two sum counters: /hst_request_time_sum/ and
+-- /hst_bytes_sent_sum/. As request durations may last milliseconds while being
+-- shown in seconds, they must be scaled with /scale1000/.
+--
+-- To further ensure histogram validity, it is important to have the last bucket
+-- in a histogram labeled as /\"+Inf\"/. This is achieved automatically when
+-- the number of range boundaries in directive /map_to_range_index/ is less by
+-- one than the number in the corresponding histogram declaration: in this
+-- example, the map for /request_time_bucket/ has 10 range boundaries while
+-- histogram /hst_request_time/ has 11 buckets, the map for /bytes_sent_bucket/
+-- has 5 range boundaries while histogram /hst_bytes_sent/ has 6 buckets.
+--
+-- ==== A simple test
+--
+-- Let's look at the metrics right after starting Nginx.
+--
+-- > $ curl -s 'http://localhost:8020/'
+-- > # HELP cnt_4xx Number of responses with 4xx status
+-- > # TYPE cnt_4xx counter
+-- > cnt_4xx 0.0
+-- > # HELP cnt_5xx Number of responses with 5xx status
+-- > # TYPE cnt_5xx counter
+-- > cnt_5xx 0.0
+-- > # HELP cnt_uptime Nginx master uptime
+-- > # TYPE cnt_uptime counter
+-- > cnt_uptime 8.0
+-- > # HELP cnt_uptime_reload Nginx master uptime after reload
+-- > # TYPE cnt_uptime_reload counter
+-- > cnt_uptime_reload 8.0
+-- > # HELP hst_bytes_sent 
+-- > # TYPE hst_bytes_sent histogram
+-- > hst_bytes_sent_bucket{le="0"} 0
+-- > hst_bytes_sent_bucket{le="10"} 0
+-- > hst_bytes_sent_bucket{le="100"} 0
+-- > hst_bytes_sent_bucket{le="1000"} 0
+-- > hst_bytes_sent_bucket{le="10000"} 0
+-- > hst_bytes_sent_bucket{le="+Inf"} 0
+-- > hst_bytes_sent_count 0
+-- > hst_bytes_sent_sum 0.0
+-- > # HELP hst_bytes_sent_err 
+-- > # TYPE hst_bytes_sent_err counter
+-- > hst_bytes_sent_err 0.0
+-- > # HELP hst_request_time Request duration
+-- > # TYPE hst_request_time histogram
+-- > hst_request_time_bucket{le="0.005"} 0
+-- > hst_request_time_bucket{le="0.01"} 0
+-- > hst_request_time_bucket{le="0.05"} 0
+-- > hst_request_time_bucket{le="0.1"} 0
+-- > hst_request_time_bucket{le="0.5"} 0
+-- > hst_request_time_bucket{le="1.0"} 0
+-- > hst_request_time_bucket{le="5.0"} 0
+-- > hst_request_time_bucket{le="10.0"} 0
+-- > hst_request_time_bucket{le="30.0"} 0
+-- > hst_request_time_bucket{le="60.0"} 0
+-- > hst_request_time_bucket{le="+Inf"} 0
+-- > hst_request_time_count 0
+-- > hst_request_time_sum 0.0
+-- > # HELP hst_request_time_err 
+-- > # TYPE hst_request_time_err counter
+-- > hst_request_time_err 0.0
+--
+-- Run some requests and look at the metrics again.
+--
+-- > $ for in in {1..20} ; do curl -D- 'http://localhost:8010/' & done
+-- >   ...
+-- > $ for in in {1..30} ; do curl -D- 'http://localhost:8010/1' & done
+-- >   ...
+-- > $ curl 'http://127.0.0.1:8010/404'
+-- >   ...
+--
+-- > $ curl -s 'http://localhost:8020/'
+-- > # HELP cnt_4xx Number of responses with 4xx status
+-- > # TYPE cnt_4xx counter
+-- > cnt_4xx 1.0
+-- > # HELP cnt_5xx Number of responses with 5xx status
+-- > # TYPE cnt_5xx counter
+-- > cnt_5xx 0.0
+-- > # HELP cnt_uptime Nginx master uptime
+-- > # TYPE cnt_uptime counter
+-- > cnt_uptime 371.0
+-- > # HELP cnt_uptime_reload Nginx master uptime after reload
+-- > # TYPE cnt_uptime_reload counter
+-- > cnt_uptime_reload 371.0
+-- > # HELP hst_bytes_sent 
+-- > # TYPE hst_bytes_sent histogram
+-- > hst_bytes_sent_bucket{le="0"} 0
+-- > hst_bytes_sent_bucket{le="10"} 0
+-- > hst_bytes_sent_bucket{le="100"} 0
+-- > hst_bytes_sent_bucket{le="1000"} 51
+-- > hst_bytes_sent_bucket{le="10000"} 51
+-- > hst_bytes_sent_bucket{le="+Inf"} 51
+-- > hst_bytes_sent_count 51
+-- > hst_bytes_sent_sum 9458.0
+-- > # HELP hst_bytes_sent_err 
+-- > # TYPE hst_bytes_sent_err counter
+-- > hst_bytes_sent_err 0.0
+-- > # HELP hst_request_time Request duration
+-- > # TYPE hst_request_time histogram
+-- > hst_request_time_bucket{le="0.005"} 1
+-- > hst_request_time_bucket{le="0.01"} 1
+-- > hst_request_time_bucket{le="0.05"} 1
+-- > hst_request_time_bucket{le="0.1"} 1
+-- > hst_request_time_bucket{le="0.5"} 13
+-- > hst_request_time_bucket{le="1.0"} 44
+-- > hst_request_time_bucket{le="5.0"} 51
+-- > hst_request_time_bucket{le="10.0"} 51
+-- > hst_request_time_bucket{le="30.0"} 51
+-- > hst_request_time_bucket{le="60.0"} 51
+-- > hst_request_time_bucket{le="+Inf"} 51
+-- > hst_request_time_count 51
+-- > hst_request_time_sum 40.006
+-- > # HELP hst_request_time_err 
+-- > # TYPE hst_request_time_err counter
+-- > hst_request_time_err 0.0
 
 prometheusConf :: PrometheusConf -> Bool -> IO L.ByteString
 prometheusConf = ignitionService $ \a -> do
-    atomicWriteIORef conf a
+    atomicWriteIORef conf $ Just a
     return ""
 
 ngxExportSimpleServiceTyped
     'prometheusConf ''PrometheusConf SingleShotService
 
-toPrometheusMetrics' :: AllMetrtics -> IO PrometheusMetrics
-toPrometheusMetrics' (srv, cnts, hs, ocnts) = do
-    PrometheusConf {..} <- readIORef conf
+toPrometheusMetrics' :: PrometheusConf -> AllMetrtics -> PrometheusMetrics
+toPrometheusMetrics' PrometheusConf {..} (srv, cnts, hs, ocnts) =
     let toValues = M.mapWithKey
             (\k v -> (if k `elem` pcScale1000
                           then (/ 1000)
@@ -110,10 +404,10 @@ toPrometheusMetrics' (srv, cnts, hs, ocnts) = do
                              (\k -> toHistogram cntsH' k . range) hs''
                      in (M.map Histogram cntsH'', M.map Counter cntsC')
         cntsA = cntsH `M.union` cntsC `M.union` M.map Counter (toValues ocnts)
-    return $ M.mapWithKey (\k v -> case M.lookup k pcMetrics of
-                                        Nothing -> ("", v)
-                                        Just h -> (h, v)
-                           ) cntsA
+    in M.mapWithKey (\k v -> case M.lookup k pcMetrics of
+                                 Nothing -> ("", v)
+                                 Just h -> (h, v)
+                    ) cntsA
     where labeledRange = M.union . M.filter (not . T.null) . range
           hCounter (ks, ts) k = const $
               k `M.member` ts ||
@@ -161,33 +455,50 @@ showPrometheusMetrics = L.fromStrict . T.encodeUtf8 . M.foldlWithKey
                            then (T.concat [t, c, " ", T.pack $ show v, "\n"]
                                 ,n
                                 )
-                           else
-                                let v' = round v :: Word64
-                                in if k `T.append` "_cnt" == c
-                                       then (T.concat [t, k, "_count "
-                                                      ,T.pack $ show v', "\n"
-                                                      ]
-                                            ,n
-                                            )
-                                        else a
+                           else if k `T.append` "_cnt" == c
+                                    then (T.concat [t, k, "_count "
+                                                   ,T.pack $
+                                                       show (round v :: Word64)
+                                                   ,"\n"
+                                                   ]
+                                         ,n
+                                         )
+                                     else a
                   else let n' = n + v
                        in (T.concat [t, k, "_bucket{le=\"", l, "\"} "
-                                    ,T.pack $ show (round n' :: Word64), "\n"
+                                    ,T.pack $ show (round n' :: Word64)
+                                    ,"\n"
                                     ]
                           ,n'
                           )
 
 toPrometheusMetrics :: ByteString -> IO L.ByteString
 toPrometheusMetrics v = do
-    let v' = fromJust $ readFromByteStringAsJSON @AllMetrtics v
-    showPrometheusMetrics <$> toPrometheusMetrics' v'
+    let cs = fromJust $ readFromByteStringAsJSON @AllMetrtics v
+    pc <- readIORef conf
+    return $ case pc of
+        Just c -> showPrometheusMetrics $ toPrometheusMetrics' c cs
+        Nothing -> ""
 
 ngxExportIOYY 'toPrometheusMetrics
 
-scale :: Int -> Double -> Int
+-- | Multiplies a floating point value by a factor.
+--
+-- Returns an integer value as the result of rounding the scaled floating point
+-- value.
+scale
+    :: Int          -- ^ Factor
+    -> Double       -- ^ Floating point value
+    -> Int
 scale n = round . (fromIntegral n *)
 
-scale1000 :: ByteString -> L.ByteString
+-- | Multiplies a floating point value by /1000/.
+--
+-- The floating point value gets read from a 'ByteString'. Throws an exception
+-- on conversion failure which results in returning an empty string.
+scale1000
+    :: ByteString   -- ^ Floating point value
+    -> L.ByteString
 scale1000 v = let v' = fromJust $ readFromByteString @Double v
               in C8L.pack $ show $ scale 1000 v'
 
