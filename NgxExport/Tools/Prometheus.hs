@@ -212,11 +212,11 @@ conf = unsafePerformIO $ newIORef Nothing
 --         location \/ {
 --             haskell_run __/toPrometheusMetrics/__ $hs_prom_metrics
 --                     '[\"__/main/__\"
---                       ,__/$cnt_collection/__
---                       ,__/$cnt_histograms/__
---                       ,{\"cnt_uptime\": $cnt_uptime
---                        ,\"cnt_uptime_reload\": $cnt_uptime_reload
---                        }
+--                      ,__/$cnt_collection/__
+--                      ,__/$cnt_histograms/__
+--                      ,{\"cnt_uptime\": $cnt_uptime
+--                       ,\"cnt_uptime_reload\": $cnt_uptime_reload
+--                       }
 --                      ]';
 --
 --             if ($hs_prom_metrics = \'\') {
