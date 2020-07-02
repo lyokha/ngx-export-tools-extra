@@ -1,3 +1,6 @@
+More extra tools for Nginx Haskell module
+=========================================
+
 [![Hackage](https://img.shields.io/hackage/v/ngx-export-tools-extra.svg?label=hackage%20%7C%20ngx-export-tools-extra)](https://hackage.haskell.org/package/ngx-export-tools-extra)
 
 This package contains a collection of Haskell modules with more extra tools for
