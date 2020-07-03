@@ -490,10 +490,12 @@ http {
                 { pcMetrics = fromList
                     [("cnt_4xx", "Number of responses with 4xx status")
                     ,("cnt_5xx", "Number of responses with 5xx status")
+                    ,("cnt_stub_status_active", "Active requests")
                     ,("cnt_uptime", "Nginx master uptime")
                     ,("cnt_uptime_reload", "Nginx master uptime after reload")
                     ,("hst_request_time", "Request duration")
                     ]
+                , pcGauges = ["cnt_stub_status_active"]
                 , pcScale1000 = ["hst_request_time_sum"]
                 }';
 
@@ -545,7 +547,8 @@ http {
                     '["main"
                      ,$cnt_collection
                      ,$cnt_histograms
-                     ,{"cnt_uptime": $cnt_uptime
+                     ,{"cnt_stub_status_active": $cnt_stub_status_active
+                      ,"cnt_uptime": $cnt_uptime
                       ,"cnt_uptime_reload": $cnt_uptime_reload
                       }
                      ]';
@@ -566,22 +569,24 @@ http {
         }
 
         location /uptime {
-            echo "$cnt_uptime ($cnt_uptime_reload)";
+            echo "Uptime (after reload): $cnt_uptime ($cnt_uptime_reload)";
         }
     }
 }
 ```
 
-Type *PrometheusConf* contains fields *pcMetrics* and *pcScale1000*. The
-former is a map from metrics names to help messages: this can be used to
-bind small descriptions to the metrics as *nginx-custom-counters-module*
-does not provide such functionality. Setting descriptions to counters is
-optional. Field *pcScale1000* contains a list of counters that were scaled
-with *scale1000* and must be converted back.
+Type *PrometheusConf* contains fields *pcMetrics*, *pcGauges*, and
+*pcScale1000*. Field *pcMetrics* is a map from metrics names to help
+messages: this can be used to bind small descriptions to the metrics as
+*nginx-custom-counters-module* does not provide such functionality. Setting
+descriptions to counters is optional. Field *pcGauges* lists counters that
+must be regarded as gauges: the number of currently active requests is
+obviously a gauge. Field *pcScale1000* contains a list of counters that were
+scaled with *scale1000* and must be converted back.
 
 Handler *toPrometheusMetrics* expects 4 fields: the name of the
-*counter set id*: in our example there is only one counter set *main*,
-predefined variables *cnt_collection* and *cnt_histograms* from
+*counter set identifier*: in our example there is only one counter set
+*main*, predefined variables *cnt_collection* and *cnt_histograms* from
 *nginx-custom-counters-module*, and a list of additional counters: in our
 example there are two additional counters *cnt_uptime* and
 *cnt_uptime_reload* which are also defined in
@@ -590,8 +595,8 @@ example there are two additional counters *cnt_uptime* and
 To fulfill histogram description in Prometheus, the *sum* value must be
 provided. Histogram sums are not supported in *nginx-custom-counters-module*,
 and therefore they must be declared in separate counters. In this example
-there are two histograms collecting request durations and sent bytes:
-accordingly, there are two sum counters: *hst_request_time_sum* and
+there are two histograms collecting request durations and the number of sent
+bytes: accordingly, there are two sum counters: *hst_request_time_sum* and
 *hst_bytes_sent_sum*. As request durations may last milliseconds while being
 shown in seconds, they must be scaled with *scale1000*.
 
@@ -615,6 +620,9 @@ cnt_4xx 0.0
 # HELP cnt_5xx Number of responses with 5xx status
 # TYPE cnt_5xx counter
 cnt_5xx 0.0
+# HELP cnt_stub_status_active Active requests
+# TYPE cnt_stub_status_active gauge
+cnt_stub_status_active 1.0
 # HELP cnt_uptime Nginx master uptime
 # TYPE cnt_uptime counter
 cnt_uptime 8.0
@@ -673,6 +681,9 @@ cnt_4xx 1.0
 # HELP cnt_5xx Number of responses with 5xx status
 # TYPE cnt_5xx counter
 cnt_5xx 0.0
+# HELP cnt_stub_status_active Active requests
+# TYPE cnt_stub_status_active gauge
+cnt_stub_status_active 1.0
 # HELP cnt_uptime Nginx master uptime
 # TYPE cnt_uptime counter
 cnt_uptime 371.0

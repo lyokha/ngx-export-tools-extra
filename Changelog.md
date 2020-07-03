@@ -1,3 +1,7 @@
+### 0.5.1.0
+
+- Added gauge metrics type to Prometheus counters.
+
 ### 0.5.0.0
 
 - Added module *NgxExport.Tools.Prometheus* to convert custom counters from
