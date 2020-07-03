@@ -256,10 +256,10 @@ conf = unsafePerformIO $ newIORef Nothing
 -- scaled with /scale1000/ and must be converted back.
 --
 -- Handler /toPrometheusMetrics/ expects 4 fields: the name of the
--- /counter set identifier/: in our example there is only one counter set
--- /main/, predefined variables /cnt_collection/ and /cnt_histograms/ from
--- /nginx-custom-counters-module/, and a list of additional counters: in our
--- example there are two additional counters /cnt_uptime/ and
+-- /counter set identifier/ &#8212; in our example there is only one counter
+-- set /main/, predefined variables /cnt_collection/ and /cnt_histograms/ from
+-- /nginx-custom-counters-module/, and a list of additional counters &#8212; in
+-- our example there are two additional counters /cnt_uptime/ and
 -- /cnt_uptime_reload/ which are also defined in
 -- /nginx-custom-counters-module/.
 --
@@ -267,9 +267,9 @@ conf = unsafePerformIO $ newIORef Nothing
 -- provided. Histogram sums are not supported in /nginx-custom-counters-module/,
 -- and therefore they must be declared in separate counters. In this example
 -- there are two histograms collecting request durations and the number of sent
--- bytes: accordingly, there are two sum counters: /hst_request_time_sum/ and
--- /hst_bytes_sent_sum/. As request durations may last milliseconds while being
--- shown in seconds, they must be scaled with /scale1000/.
+-- bytes, and accordingly, there are two sum counters: /hst_request_time_sum/
+-- and /hst_bytes_sent_sum/. As request durations may last milliseconds while
+-- being shown in seconds, they must be scaled with /scale1000/.
 --
 -- To further ensure histogram validity, it is important to have the last bucket
 -- in a histogram labeled as /\"+Inf\"/. This is achieved automatically when
