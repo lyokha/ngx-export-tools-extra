@@ -588,8 +588,8 @@ Handler *toPrometheusMetrics* expects 4 fields: the name of the
 *counter set identifier* &mdash; in our example there is only one counter
 set *main*, predefined variables *cnt_collection* and *cnt_histograms* from
 *nginx-custom-counters-module*, and a list of additional counters &mdash; in
-our example there are two additional counters *cnt_uptime* and
-*cnt_uptime_reload* which are also defined in
+our example there are three additional counters *cnt_stub_status_active*,
+*cnt_uptime*, and *cnt_uptime_reload* which are also defined in
 *nginx-custom-counters-module*.
 
 To fulfill histogram description in Prometheus, the *sum* value must be
