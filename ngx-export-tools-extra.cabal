@@ -43,6 +43,7 @@ library
                           , case-insensitive
                           , containers
                           , unordered-containers
+                          , array
                           , enclosed-exceptions
                           , snap-core
                           , snap-server

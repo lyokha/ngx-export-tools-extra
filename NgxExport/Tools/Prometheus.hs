@@ -18,12 +18,15 @@
 
 
 module NgxExport.Tools.Prometheus (
-    -- *Exporters
+    -- * Exporters
     -- $exporters
 
-    -- *Utilities
+    -- * Utilities
+    -- *** Scaling functions
                                    scale
                                   ,scale1000
+    -- *** Converting lists of values to counters
+    -- $convertingListsOfValuesToCounters
                                   ) where
 
 import           NgxExport
@@ -32,6 +35,7 @@ import           NgxExport.Tools
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import           Data.ByteString (ByteString)
+import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString.Lazy.Char8 as C8L
 import           Data.IORef
@@ -40,8 +44,14 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import           Data.Aeson
 import           Data.Maybe
+import           Data.Function
+import           Data.List
+import           Data.Char
 import           Data.Word
+import           Data.Array.ST hiding (range)
 import           Control.Arrow
+import           Control.Monad
+import           Control.Monad.ST
 import           System.IO.Unsafe
 import           GHC.Generics
 import           Safe
@@ -523,4 +533,43 @@ scale1000 v = let v' = fromJust $ readFromByteString @Double v
               in C8L.pack $ show $ scale 1000 v'
 
 ngxExportYY 'scale1000
+
+-- $convertingListsOfValuesToCounters
+--
+-- This module has limited support for extracting data from lists of values.
+-- Normally, variables from Nginx upstream module such as /upstream_status/,
+-- /upstream_response_time/ and others contain lists of values separated with
+-- commas and semicolons.
+
+extractValues :: ByteString -> [ByteString]
+extractValues = filter ((&&) <$> not . C8.null <*> isDigit . C8.head)
+                . C8.splitWith ((&&) <$> not . isDigit <*> (/= '.'))
+
+statusLayout :: ByteString -> L.ByteString
+statusLayout = C8L.pack . intercalate "," . map show . statuses
+    where statuses s = runST $ do
+              a <- newArray bs 0 :: ST s (STUArray s Int Int)
+              mapM_ (uncurry $ writeStatus a) $ toPairs s
+              getElems a
+          toPairs = map (subtract (ord '0') . ord . C8.head . head &&& length)
+                    . groupBy ((==) `on` C8.head)
+                    . sort
+                    . extractValues
+          writeStatus a i = when (i >= lb && i <= ub) . writeArray a i
+          bs@(lb, ub) = (2, 5)
+
+ngxExportYY 'statusLayout
+
+cumulativeValue' :: (Num a, Read a) => ByteString -> a
+cumulativeValue' = foldr ((+) . (read . C8.unpack)) 0 . extractValues
+
+cumulativeValue :: ByteString -> L.ByteString
+cumulativeValue = C8L.pack . show . cumulativeValue' @Int
+
+ngxExportYY 'cumulativeValue
+
+cumulativeFPValue :: ByteString -> L.ByteString
+cumulativeFPValue = C8L.pack . show . cumulativeValue' @Double
+
+ngxExportYY 'cumulativeFPValue
 
