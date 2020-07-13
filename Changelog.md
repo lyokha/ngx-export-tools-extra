@@ -1,3 +1,7 @@
+### 0.5.2.0
+
+- Added handlers to extract data from lists of values in the Prometheus module.
+
 ### 0.5.1.0
 
 - Added gauge metrics type to Prometheus counters.

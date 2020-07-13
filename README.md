@@ -731,7 +731,7 @@ lists of values. Normally, variables from Nginx upstream module such as
 separated by commas and semicolons. With handler *statusLayout*, numbers of
 *2xx*, *3xx*, *4xx* and *5xx* responses from backends can be collected in a
 comma-separated list. Handlers *cumulativeValue* and *cumulativeFPValue* can be
-used to count cumulative integer and floating point values from lists of
+used to count cumulative integer and floating point numbers from lists of
 values.
 
 Let's add checking upstream statuses and cumulative response times from all

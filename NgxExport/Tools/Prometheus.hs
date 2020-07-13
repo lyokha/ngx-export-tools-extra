@@ -543,7 +543,7 @@ ngxExportYY 'scale1000
 -- /3xx/, /4xx/ and /5xx/ responses from backends can be collected in a
 -- comma-separated list. Handlers __/cumulativeValue/__ and
 -- __/cumulativeFPValue/__ can be used to count cumulative integer and floating
--- point values from lists of values.
+-- point numbers from lists of values.
 --
 -- Let's add checking upstream statuses and cumulative response times from all
 -- servers in an upstream into the original file /nginx.conf/ from the previous
