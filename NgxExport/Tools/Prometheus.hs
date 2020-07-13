@@ -343,9 +343,9 @@ conf = unsafePerformIO $ newIORef Nothing
 --
 -- Run some requests and look at the metrics again.
 --
--- > $ for in in {1..20} ; do curl -D- 'http://localhost:8010/' & done
+-- > $ for i in {1..20} ; do curl -D- 'http://localhost:8010/' & done
 -- >   ...
--- > $ for in in {1..30} ; do curl -D- 'http://localhost:8010/1' & done
+-- > $ for i in {1..30} ; do curl -D- 'http://localhost:8010/1' & done
 -- >   ...
 -- > $ curl 'http://127.0.0.1:8010/404'
 -- >   ...
@@ -538,8 +538,237 @@ ngxExportYY 'scale1000
 --
 -- This module has limited support for extracting data from lists of values.
 -- Normally, variables from Nginx upstream module such as /upstream_status/,
--- /upstream_response_time/ and others contain lists of values separated with
--- commas and semicolons.
+-- /upstream_response_time/ and others contain lists of values separated by
+-- commas and semicolons. With handler __/statusLayout/__, we can collect
+-- numbers of /2xx/, /3xx/, /4xx/ and /5xx/ responses from backends separated by
+-- commas. Handlers __/cumulativeValue/__ and __/cumulativeFPValue/__ can be
+-- used to count cumulative integer and floating point values from lists of
+-- values.
+--
+-- Let's add checking upstream statuses and cumulative response times from all
+-- servers in an upstream into the original file /nginx.conf/ from the previous
+-- example.
+--
+-- ==== File /nginx.conf/: checking upstream statuses and response times
+-- @
+--     upstream backends {
+--         server 127.0.0.1:8030 max_fails=0;
+--         server 127.0.0.1:8040 max_fails=0;
+--     }
+-- @
+-- @
+--     server {
+--         listen       8030;
+--         server_name  backend1;
+--
+--         location \/ {
+--             echo_sleep 0.5;
+--             echo_status 404;
+--             echo \"Backend1 Ok\";
+--         }
+--     }
+--
+--     server {
+--         listen       8040;
+--         server_name  backend2;
+--
+--         location \/ {
+--             echo_status 504;
+--             echo \"Backend2 Ok\";
+--         }
+--     }
+-- @
+--
+-- Here we added upstream /backends/ with two virtual servers that will play
+-- the role of backends. One of them will wait for half a second and return
+-- HTTP status /404/, while the other will return HTTP status /504/ immediately.
+-- Both servers are tagged with /max_fails=0/ to prevent blacklisting them.
+--
+-- We also have to add counters and mappings.
+--
+-- @
+--     map $hs_upstream_status $inc_cnt_u_4xx {
+--         default                               0;
+--         \'~^(?:(?:\\d+),){2}(?P\<m_status\>\\d+)\'  $m_status;
+--     }
+--
+--     map $hs_upstream_status $inc_cnt_u_5xx {
+--         default                               0;
+--         \'~^(?:(?:\\d+),){3}(?P\<m_status\>\\d+)\'  $m_status;
+--     }
+--
+--     map_to_range_index $hs_u_response_time $u_response_time_bucket
+--         0.005
+--         0.01
+--         0.05
+--         0.1
+--         0.5
+--         1.0
+--         5.0
+--         10.0
+--         30.0
+--         60.0;
+-- @
+-- @
+--         haskell_run __/statusLayout/__ $hs_upstream_status $upstream_status;
+--         counter $__/cnt_u_4xx/__ inc $inc_cnt_u_4xx;
+--         counter $__/cnt_u_5xx/__ inc $inc_cnt_u_5xx;
+--
+--         haskell_run ! $hs_u_response_times $upstream_response_time;
+--         haskell_run __/cumulativeFPValue/__ $hs_u_response_time $hs_u_response_times;
+--
+--         histogram $__/hst_u_response_time/__ 11 $u_response_time_bucket;
+--         haskell_run scale1000 $hs_u_response_time_scaled $hs_u_response_time;
+--         counter $__/hst_u_response_time_sum/__ inc $hs_u_response_time_scaled;
+-- @
+--
+-- So many new variables require a bigger hash table to store them.
+--
+-- @
+--     variables_hash_max_size 4096;
+-- @
+--
+-- And finally, we have to update counters declarations in
+-- /simpleService_prometheusConf/ and add  location /\/backends/ in the main
+-- server.
+--
+-- @
+--     haskell_run___/service simpleService_prometheusConf/__ $hs_prometheus_conf
+--             \'__/PrometheusConf/__
+--                 { __/pcMetrics/__ = fromList
+--                     [(\"cnt_4xx\", \"Number of responses with 4xx status\")
+--                     ,(\"cnt_5xx\", \"Number of responses with 5xx status\")
+--                     ,(\"__/cnt_u_4xx/__\"
+--                      ,\"Number of responses from upstreams with 4xx status\")
+--                     ,(\"__/cnt_u_5xx/__\"
+--                      ,\"Number of responses from upstreams with 5xx status\")
+--                     ,(\"cnt_stub_status_active\", \"Active requests\")
+--                     ,(\"cnt_uptime\", \"Nginx master uptime\")
+--                     ,(\"cnt_uptime_reload\", \"Nginx master uptime after reload\")
+--                     ,(\"hst_request_time\", \"Request duration\")
+--                     ,(\"__/hst_u_response_time/__\"
+--                      ,\"Response time from all servers in a single upstream\")
+--                     ]
+--                 , __/pcGauges/__ = [\"cnt_stub_status_active\"]
+--                 , __/pcScale1000/__ = [\"hst_request_time_sum\"
+--                                 ,\"__/hst_u_response_time_sum/__\"
+--                                 ]
+--                 }\';
+-- @
+-- @
+--         location \/backends {
+--             error_page 404 \@status404;
+--             proxy_intercept_errors on;
+--             proxy_pass http:\/\/backends;
+--         }
+--
+--         location \@status404 {
+--             echo_sleep 0.2;
+--             echo \"Caught 404\";
+--         }
+-- @
+--
+-- We are going to additionally increase response time by /0.2/ seconds when a
+-- backend server responds with HTTP status /404/.
+--
+-- ==== A simple test
+--
+-- After restart of Nginx.
+--
+-- > $ for i in {1..20} ; do curl -D- 'http://localhost:8010/backends' & done
+-- >   ...
+--
+-- > $ curl -s 'http://127.0.0.1:8020/metrics'
+-- > # HELP cnt_4xx Number of responses with 4xx status
+-- > # TYPE cnt_4xx counter
+-- > cnt_4xx 11.0
+-- > # HELP cnt_5xx Number of responses with 5xx status
+-- > # TYPE cnt_5xx counter
+-- > cnt_5xx 9.0
+-- > # HELP cnt_stub_status_active Active requests
+-- > # TYPE cnt_stub_status_active gauge
+-- > cnt_stub_status_active 1.0
+-- > # HELP cnt_u_4xx Number of responses from upstreams with 4xx status
+-- > # TYPE cnt_u_4xx counter
+-- > cnt_u_4xx 11.0
+-- > # HELP cnt_u_5xx Number of responses from upstreams with 5xx status
+-- > # TYPE cnt_u_5xx counter
+-- > cnt_u_5xx 9.0
+-- > # HELP cnt_uptime Nginx master uptime
+-- > # TYPE cnt_uptime counter
+-- > cnt_uptime 63.0
+-- > # HELP cnt_uptime_reload Nginx master uptime after reload
+-- > # TYPE cnt_uptime_reload counter
+-- > cnt_uptime_reload 63.0
+-- > # HELP hst_bytes_sent
+-- > # TYPE hst_bytes_sent histogram
+-- > hst_bytes_sent_bucket{le="0"} 0
+-- > hst_bytes_sent_bucket{le="10"} 0
+-- > hst_bytes_sent_bucket{le="100"} 0
+-- > hst_bytes_sent_bucket{le="1000"} 20
+-- > hst_bytes_sent_bucket{le="10000"} 20
+-- > hst_bytes_sent_bucket{le="+Inf"} 20
+-- > hst_bytes_sent_count 20
+-- > hst_bytes_sent_sum 4032.0
+-- > # HELP hst_bytes_sent_err
+-- > # TYPE hst_bytes_sent_err counter
+-- > hst_bytes_sent_err 0.0
+-- > # HELP hst_request_time Request duration
+-- > # TYPE hst_request_time histogram
+-- > hst_request_time_bucket{le="0.005"} 9
+-- > hst_request_time_bucket{le="0.01"} 9
+-- > hst_request_time_bucket{le="0.05"} 9
+-- > hst_request_time_bucket{le="0.1"} 9
+-- > hst_request_time_bucket{le="0.5"} 9
+-- > hst_request_time_bucket{le="1.0"} 20
+-- > hst_request_time_bucket{le="5.0"} 20
+-- > hst_request_time_bucket{le="10.0"} 20
+-- > hst_request_time_bucket{le="30.0"} 20
+-- > hst_request_time_bucket{le="60.0"} 20
+-- > hst_request_time_bucket{le="+Inf"} 20
+-- > hst_request_time_count 20
+-- > hst_request_time_sum 7.721
+-- > # HELP hst_request_time_err
+-- > # TYPE hst_request_time_err counter
+-- > hst_request_time_err 0.0
+-- > # HELP hst_u_response_time Response time from all servers in a single upstream
+-- > # TYPE hst_u_response_time histogram
+-- > hst_u_response_time_bucket{le="0.005"} 9
+-- > hst_u_response_time_bucket{le="0.01"} 9
+-- > hst_u_response_time_bucket{le="0.05"} 9
+-- > hst_u_response_time_bucket{le="0.1"} 9
+-- > hst_u_response_time_bucket{le="0.5"} 13
+-- > hst_u_response_time_bucket{le="1.0"} 20
+-- > hst_u_response_time_bucket{le="5.0"} 20
+-- > hst_u_response_time_bucket{le="10.0"} 20
+-- > hst_u_response_time_bucket{le="30.0"} 20
+-- > hst_u_response_time_bucket{le="60.0"} 20
+-- > hst_u_response_time_bucket{le="+Inf"} 20
+-- > hst_u_response_time_count 20
+-- > hst_u_response_time_sum 5.519
+-- > # HELP hst_u_response_time_err
+-- > # TYPE hst_u_response_time_err counter
+-- > hst_u_response_time_err 0.0
+--
+-- Counters look good. Numbers of visiting backend servers are almost equal (11
+-- and 9), the sum of cumulative response times from backends is approximately 5
+-- seconds, while the sum of all requests durations is approximately 7 seconds
+-- which corresponds to 11 visits to location /\@status404/ and the sleep time
+-- /0.2/ seconds that was added there. Notice that upstream response times will
+-- be updated on entering /any/ location in the main server as the histogram and
+-- its sum counter were declared on the server level. To update the histogram on
+-- entering location /\/backends/ only, it is possible to move the declarations
+-- inside this location, however in this case there will be no updates in
+-- location /\@status404/ as there is no way to declare the same histogram more
+-- than once in a single counter set. Another solution would be putting line
+--
+-- @
+--             set $u_response_time_bucket unavailable;
+-- @
+--
+-- into all other locations of the main server (i.e. /\//, /\/1/, and /\/404/):
+-- in this case only counter /hst_u_response_time_err/ will be updated when
+-- entering these locations.
 
 extractValues :: ByteString -> [ByteString]
 extractValues = filter ((&&) <$> not . C8.null <*> isDigit . C8.head)
