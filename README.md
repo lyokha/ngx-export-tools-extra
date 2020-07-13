@@ -728,9 +728,9 @@ hst_request_time_err 0.0
 Module *NgxExport.Tools.Prometheus* has limited support for extracting data from
 lists of values. Normally, variables from Nginx upstream module such as
 *upstream_status*, *upstream_response_time* and others contain lists of values
-separated by commas and semicolons. With handler *statusLayout*, we can collect
-numbers of *2xx*, *3xx*, *4xx* and *5xx* responses from backends separated by
-commas. Handlers *cumulativeValue* and *cumulativeFPValue* can be
+separated by commas and semicolons. With handler *statusLayout*, numbers of
+*2xx*, *3xx*, *4xx* and *5xx* responses from backends can be collected in a
+comma-separated list. Handlers *cumulativeValue* and *cumulativeFPValue* can be
 used to count cumulative integer and floating point values from lists of
 values.
 
@@ -961,7 +961,7 @@ than once in a single counter set. Another solution would be putting line
             set $u_response_time_bucket unavailable;
 ```
 
-into all other locations of the main server (i.e. */*, */1, and */404*):
+into all other locations of the main server (i.e. */*, */1*, and */404*):
 in this case only counter *hst_u_response_time_err* will be updated when
 entering these locations.
 

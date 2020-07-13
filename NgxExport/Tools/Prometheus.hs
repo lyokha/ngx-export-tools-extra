@@ -539,11 +539,11 @@ ngxExportYY 'scale1000
 -- This module has limited support for extracting data from lists of values.
 -- Normally, variables from Nginx upstream module such as /upstream_status/,
 -- /upstream_response_time/ and others contain lists of values separated by
--- commas and semicolons. With handler __/statusLayout/__, we can collect
--- numbers of /2xx/, /3xx/, /4xx/ and /5xx/ responses from backends separated by
--- commas. Handlers __/cumulativeValue/__ and __/cumulativeFPValue/__ can be
--- used to count cumulative integer and floating point values from lists of
--- values.
+-- commas and semicolons. With handler __/statusLayout/__, numbers of /2xx/,
+-- /3xx/, /4xx/ and /5xx/ responses from backends can be collected in a
+-- comma-separated list. Handlers __/cumulativeValue/__ and
+-- __/cumulativeFPValue/__ can be used to count cumulative integer and floating
+-- point values from lists of values.
 --
 -- Let's add checking upstream statuses and cumulative response times from all
 -- servers in an upstream into the original file /nginx.conf/ from the previous
