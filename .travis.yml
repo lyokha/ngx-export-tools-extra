@@ -1,0 +1,108 @@
+sudo: false
+language: c
+
+matrix:
+  include:
+    - env: CABALVER=head GHCVER=head
+      addons:
+        apt:
+          packages: [cabal-install-head, ghc-head]
+          sources: [hvr-ghc]
+    - env: CABALVER=head GHCVER=8.10.1
+      addons:
+        apt:
+          packages: [cabal-install-head, ghc-8.10.1]
+          sources: [hvr-ghc]
+    - env: CABALVER=head GHCVER=8.8.3
+      addons:
+        apt:
+          packages: [cabal-install-head, ghc-8.8.3]
+          sources: [hvr-ghc]
+    - env: CABALVER=head GHCVER=8.6.5
+      addons:
+        apt:
+          packages: [cabal-install-head, ghc-8.6.5]
+          sources: [hvr-ghc]
+    - env: CABALVER=head GHCVER=8.4.4
+      addons:
+        apt:
+          packages: [cabal-install-head, ghc-8.4.4]
+          sources: [hvr-ghc]
+    - env: CABALVER=head GHCVER=8.2.2
+      addons:
+        apt:
+          packages: [cabal-install-head, ghc-8.2.2]
+          sources: [hvr-ghc]
+    - env: BUILD_EXPERIMENTAL_EDE=yes CABALVER=head GHCVER=head
+      addons:
+        apt:
+          packages: [cabal-install-head, ghc-head]
+          sources: [hvr-ghc]
+    - env: BUILD_EXPERIMENTAL_EDE=yes CABALVER=head GHCVER=8.10.1
+      addons:
+        apt:
+          packages: [cabal-install-head, ghc-8.10.1]
+          sources: [hvr-ghc]
+    - env: BUILD_EXPERIMENTAL_EDE=yes CABALVER=head GHCVER=8.8.3
+      addons:
+        apt:
+          packages: [cabal-install-head, ghc-8.8.3]
+          sources: [hvr-ghc]
+    - env: BUILD_EXPERIMENTAL_EDE=yes CABALVER=head GHCVER=8.6.5
+      addons:
+        apt:
+          packages: [cabal-install-head, ghc-8.6.5]
+          sources: [hvr-ghc]
+    - env: BUILD_EXPERIMENTAL_EDE=yes CABALVER=head GHCVER=8.4.4
+      addons:
+        apt:
+          packages: [cabal-install-head, ghc-8.4.4]
+          sources: [hvr-ghc]
+    - env: BUILD_EXPERIMENTAL_EDE=yes CABALVER=head GHCVER=8.2.2
+      addons:
+        apt:
+          packages: [cabal-install-head, ghc-8.2.2]
+          sources: [hvr-ghc]
+  allow_failures:
+    - env: CABALVER=head GHCVER=head
+    - env: BUILD_EXPERIMENTAL_EDE=yes CABALVER=head GHCVER=head
+
+before_install:
+  - export PATH=/opt/ghc/$GHCVER/bin:/opt/cabal/$CABALVER/bin:$PATH
+
+install:
+  - |
+    set -e
+    cabal --version
+    echo "$(ghc --version) "`
+        `"[$(ghc --print-project-git-commit-id 2>/dev/null || echo '?')]"
+    travis_retry cabal v1-update
+    if [ "$BUILD_EXPERIMENTAL_EDE" = yes ]
+    then
+        git clone https://github.com/brendanhay/ede.git ede.git
+        cd ede.git
+        cabal v1-configure
+        cabal v1-build
+        cabal v2-sdist --builddir=dist
+        SRC_TGZ=$(cabal info . | awk '{print $2; exit}').tar.gz &&
+            (cd dist/sdist && cabal v1-install --force-reinstalls "$SRC_TGZ")
+        cd -
+    fi
+    cabal v1-install --only-dependencies
+    set +e
+
+script:
+  - |
+    set -e
+    if [ "$BUILD_EXPERIMENTAL_EDE" = yes ]
+    then
+        cabal v1-configure -f EDE -f ExperimentalEDE
+    else
+        cabal v1-configure
+    fi
+    cabal v1-build
+    cabal v2-sdist --builddir=dist
+    SRC_TGZ=$(cabal info . | awk '{print $2; exit}').tar.gz &&
+        (cd dist/sdist && cabal v1-install --force-reinstalls "$SRC_TGZ")
+    set +e
+
