@@ -3,54 +3,54 @@ language: c
 
 matrix:
   include:
-    #- env: CABALVER=head GHCVER=head
-      #addons:
-        #apt:
-          #packages: [cabal-install-head, ghc-head]
-          #sources: [hvr-ghc]
-    #- env: CABALVER=head GHCVER=8.10.1
-      #addons:
-        #apt:
-          #packages: [cabal-install-head, ghc-8.10.1]
-          #sources: [hvr-ghc]
-    #- env: CABALVER=head GHCVER=8.8.3
-      #addons:
-        #apt:
-          #packages: [cabal-install-head, ghc-8.8.3]
-          #sources: [hvr-ghc]
-    #- env: CABALVER=head GHCVER=8.6.5
-      #addons:
-        #apt:
-          #packages: [cabal-install-head, ghc-8.6.5]
-          #sources: [hvr-ghc]
-    #- env: CABALVER=head GHCVER=8.4.4
-      #addons:
-        #apt:
-          #packages: [cabal-install-head, ghc-8.4.4]
-          #sources: [hvr-ghc]
-    #- env: CABALVER=head GHCVER=8.2.2
-      #addons:
-        #apt:
-          #packages: [cabal-install-head, ghc-8.2.2]
-          #sources: [hvr-ghc]
-    #- env: BUILD_EXPERIMENTAL_EDE=yes CABALVER=head GHCVER=head
-      #addons:
-        #apt:
-          #packages: [cabal-install-head, ghc-head]
-          #sources: [hvr-ghc]
-    - env: BUILD_EXPERIMENTAL_EDE=yes CABALVER=head GHCVER=8.10.1
+    - env: CABALVER=3.2 GHCVER=head
       addons:
         apt:
-          packages: [cabal-install-head, ghc-8.10.1]
+          packages: [cabal-install-3.2, ghc-head]
           sources: [hvr-ghc]
-    #- env: BUILD_EXPERIMENTAL_EDE=yes CABALVER=head GHCVER=8.8.3
-      #addons:
-        #apt:
-          #packages: [cabal-install-head, ghc-8.8.3]
-          #sources: [hvr-ghc]
-  #allow_failures:
-    #- env: CABALVER=head GHCVER=head
-    #- env: BUILD_EXPERIMENTAL_EDE=yes CABALVER=head GHCVER=head
+    - env: CABALVER=3.2 GHCVER=8.10.1
+      addons:
+        apt:
+          packages: [cabal-install-3.2, ghc-8.10.1]
+          sources: [hvr-ghc]
+    - env: CABALVER=3.2 GHCVER=8.8.3
+      addons:
+        apt:
+          packages: [cabal-install-3.2, ghc-8.8.3]
+          sources: [hvr-ghc]
+    - env: CABALVER=3.2 GHCVER=8.6.5
+      addons:
+        apt:
+          packages: [cabal-install-3.2, ghc-8.6.5]
+          sources: [hvr-ghc]
+    - env: CABALVER=3.2 GHCVER=8.4.4
+      addons:
+        apt:
+          packages: [cabal-install-3.2, ghc-8.4.4]
+          sources: [hvr-ghc]
+    - env: CABALVER=3.2 GHCVER=8.2.2
+      addons:
+        apt:
+          packages: [cabal-install-3.2, ghc-8.2.2]
+          sources: [hvr-ghc]
+    - env: BUILD_EXPERIMENTAL_EDE=yes CABALVER=3.2 GHCVER=head
+      addons:
+        apt:
+          packages: [cabal-install-3.2, ghc-head]
+          sources: [hvr-ghc]
+    - env: BUILD_EXPERIMENTAL_EDE=yes CABALVER=3.2 GHCVER=8.10.1
+      addons:
+        apt:
+          packages: [cabal-install-3.2, ghc-8.10.1]
+          sources: [hvr-ghc]
+    - env: BUILD_EXPERIMENTAL_EDE=yes CABALVER=3.2 GHCVER=8.8.3
+      addons:
+        apt:
+          packages: [cabal-install-3.2, ghc-8.8.3]
+          sources: [hvr-ghc]
+  allow_failures:
+    - env: CABALVER=3.2 GHCVER=head
+    - env: BUILD_EXPERIMENTAL_EDE=yes CABALVER=3.2 GHCVER=head
 
 before_install:
   - export PATH=/opt/ghc/$GHCVER/bin:/opt/cabal/$CABALVER/bin:$PATH
@@ -71,7 +71,7 @@ install:
         cabal v1-build
         cabal v2-sdist --builddir=dist
         SRC_TGZ=$(cabal info . | awk '{print $2; exit}').tar.gz &&
-            (cd dist/sdist && tar tvf "$SRC_TGZ" && cabal v1-install --force-reinstalls "$SRC_TGZ")
+            (cd dist/sdist && cabal v1-install --force-reinstalls "$SRC_TGZ")
         cd -
     fi
     cabal v1-install --only-dependencies
