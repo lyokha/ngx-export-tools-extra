@@ -81,6 +81,7 @@ install:
     then
         git clone https://github.com/brendanhay/ede.git ede.git
         cd ede.git
+        cabal v1-install --only-dependencies
         cabal v1-configure
         cabal v1-build
         cabal v2-sdist --builddir=dist
