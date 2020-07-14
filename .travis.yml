@@ -1,7 +1,7 @@
-sudo: false
+os: linux
 language: c
 
-matrix:
+jobs:
   include:
     - env: CABALVER=3.2 GHCVER=head
       addons:
