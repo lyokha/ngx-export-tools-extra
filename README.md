@@ -813,7 +813,16 @@ We also have to add counters and mappings.
         histogram $hst_u_response_time 11 $u_response_time_bucket;
         haskell_run scale1000 $hs_u_response_time_scaled $hs_u_response_time;
         counter $hst_u_response_time_sum inc $hs_u_response_time_scaled;
+
+        counter $hst_u_response_time_00 undo;
+        counter $hst_u_response_time_cnt undo;
 ```
+
+Notice that the first bucket *hst_u_response_time_00* and the total count
+value *hst_u_response_time_cnt* of histogram *hst_u_response_time* were
+temporarily disabled to not count visiting unrelated locations (i.e. */*,
+*/1*, and */404*): the two counters will be later re-enabled in locations
+related to proxying requests.
 
 So many new variables require a bigger hash table to store them.
 
@@ -822,7 +831,7 @@ So many new variables require a bigger hash table to store them.
 ```
 
 And finally, we have to update counters declarations in
-*simpleService_prometheusConf* and add  location */backends* in the main
+*simpleService_prometheusConf* and add location */backends* in the main
 server.
 
 ```nginx
@@ -851,19 +860,24 @@ server.
 
 ```nginx
         location /backends {
+            counter $hst_u_response_time_00 inc $inc_hst_u_response_time_00;
+            counter $hst_u_response_time_cnt inc $inc_hst_u_response_time_cnt;
             error_page 404 @status404;
             proxy_intercept_errors on;
             proxy_pass http://backends;
         }
 
         location @status404 {
+            counter $hst_u_response_time_00 inc $inc_hst_u_response_time_00;
+            counter $hst_u_response_time_cnt inc $inc_hst_u_response_time_cnt;
             echo_sleep 0.2;
             echo "Caught 404";
         }
 ```
 
 We are going to additionally increase response time by *0.2* seconds when a
-backend server responds with HTTP status *404*.
+backend server responds with HTTP status *404*, and this is why location
+*@status404* was added.
 
 Let's restart Nginx and run a simple test.
 
@@ -950,21 +964,7 @@ Counters look good. Numbers of visiting backend servers are almost equal (11
 and 9), the sum of cumulative response times from backends is approximately 5
 seconds, while the sum of all requests durations is approximately 7 seconds
 which corresponds to 11 visits to location *@status404* and the sleep time
-*0.2* seconds that was added there. Notice that upstream response times will
-be updated on entering *any* location in the main server as the histogram and
-its sum counter were declared on the server level. To update the histogram on
-entering location *backends* only, it is possible to move the declarations
-inside this location, however in this case there will be no updates in
-location *@status404* as there is no way to declare the same histogram more
-than once in a single counter set. Another solution would be putting line
-
-```nginx
-            set $u_response_time_bucket unavailable;
-```
-
-into all other locations of the main server (i.e. */*, */1*, and */404*):
-in this case only counter *hst_u_response_time_err* will be updated when
-entering these locations.
+*0.2* seconds that was added there.
 
 #### Module *NgxExport.Tools.Subrequest*
 
