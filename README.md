@@ -456,13 +456,13 @@ http {
     sendfile            on;
 
     map $status $inc_cnt_4xx {
-        default                0;
-        '~^4(?:\d){2}'         1;
+        default         0;
+        '~^4(?:\d){2}'  1;
     }
 
     map $status $inc_cnt_5xx {
-        default                0;
-        '~^5(?:\d){2}'         1;
+        default         0;
+        '~^5(?:\d){2}'  1;
     }
 
     map_to_range_index $hs_request_time $request_time_bucket
