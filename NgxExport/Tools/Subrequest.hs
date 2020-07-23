@@ -44,7 +44,9 @@ import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString.Lazy.Char8 as C8L
 import qualified Data.Text.Encoding as T
 import qualified Data.Binary as Binary
-import           Data.CaseInsensitive (mk, original)
+import           Data.HashSet (HashSet)
+import qualified Data.HashSet as HS
+import           Data.CaseInsensitive (FoldCase (foldCase), mk, original)
 import           Data.Aeson
 import           Data.Maybe
 import           Control.Arrow
@@ -546,4 +548,36 @@ extractBodyFromFullResponse =
     (\(_, _, a) -> a) . (Binary.decode @FullResponse) . L.fromStrict
 
 ngxExportYY 'extractBodyFromFullResponse
+
+defaultClearedResponseHeaders :: HashSet HeaderName
+defaultClearedResponseHeaders = HS.fromList $
+    map mk ["Content-Type"
+           ,"Content-Length"
+           ,"Transfer-Encoding"
+           ,"Connection"
+           ,"Keep-Alive"
+           ,"Last-Modified"
+           ,"Date"
+           ,"Server"
+           ,"X-Pad"
+           ]
+
+contentFromFullResponse :: HashSet HeaderName -> Bool -> ByteString ->
+    ContentHandlerResult
+contentFromFullResponse clearedResponseHeaders clearXAccel v =
+    let (st, hs, b) = Binary.decode @FullResponse $ L.fromStrict v
+        hs' = map (first mk) hs
+        ct = L.toStrict $ fromMaybe "application/octet-stream" $
+            lookup (mk "Content-Type") hs'
+        hs'' = filter (\(n, _) -> not $
+                          mk n `HS.member` clearedResponseHeaders ||
+                              clearXAccel &&
+                                  foldCase "X-Accel-" `B.isPrefixOf` foldCase n
+                      ) hs
+    in (b, ct, st, map (second L.toStrict) hs'')
+
+fromFullResponse :: ByteString -> ContentHandlerResult
+fromFullResponse = contentFromFullResponse defaultClearedResponseHeaders True
+
+ngxExportHandler 'fromFullResponse
 
