@@ -29,6 +29,10 @@ module NgxExport.Tools.Subrequest (
                                   ,extractStatusFromFullResponse
                                   ,extractHeaderFromFullResponse
                                   ,extractBodyFromFullResponse
+    -- * Forwarding full response data to the client
+    -- $forwardingFullResponse
+                                  ,notForwardableResponseHeaders
+                                  ,contentFromFullResponse
                                   ) where
 
 import           NgxExport
@@ -221,10 +225,10 @@ instance FromJSON SubrequestConf where
         return SubrequestConf {..}
         where maybeEmpty = fmap $ maybe "" T.encodeUtf8
 
-subrequest :: (Response L.ByteString -> L.ByteString) -> SubrequestConf ->
-    IO L.ByteString
-subrequest fromResponse SubrequestConf {..} = do
-    req <- parseUrlThrow srUri
+subrequest :: (Response L.ByteString -> L.ByteString) ->
+    (String -> IO Request) -> SubrequestConf -> IO L.ByteString
+subrequest fromResponse parseUrlF SubrequestConf {..} = do
+    req <- parseUrlF srUri
     let req' = if B.null srMethod
                    then req
                    else req { method = srMethod }
@@ -246,12 +250,12 @@ subrequest fromResponse SubrequestConf {..} = do
           setTimeout _ = undefined
 
 subrequestBody :: SubrequestConf -> IO L.ByteString
-subrequestBody = subrequest responseBody
+subrequestBody = subrequest responseBody parseUrlThrow
 
 type FullResponse = (Int, [(ByteString, L.ByteString)], L.ByteString)
 
 subrequestFull :: SubrequestConf -> IO L.ByteString
-subrequestFull = handleAll . subrequest buildResponse
+subrequestFull = handleAll . subrequest buildResponse parseRequest
     where handleAll = handle $ \e -> return $ Binary.encode @FullResponse $
               case fromException e of
                   Just (HttpExceptionRequest _ c) ->
@@ -475,7 +479,8 @@ ngxExportAsyncIOYY 'makeSubrequestWithRead
 -- The same as 'makeSubrequest' except it returns a binary encoded response data
 -- whose parts must be extracted by handlers made of
 -- 'extractStatusFromFullResponse', 'extractHeaderFromFullResponse', and
--- 'extractBodyFromFullResponse'. Exported on the Nginx level by handler
+-- 'extractBodyFromFullResponse'. It also does not throw errors when HTTP status
+-- of the response is not /2xx/. Exported on the Nginx level by handler
 -- /makeSubrequestFull/.
 makeSubrequestFull
     :: ByteString       -- ^ Subrequest configuration
@@ -491,7 +496,8 @@ ngxExportAsyncIOYY 'makeSubrequestFull
 -- The same as 'makeSubrequestWithRead' except it returns a binary encoded
 -- response data whose parts must be extracted by handlers made of
 -- 'extractStatusFromFullResponse', 'extractHeaderFromFullResponse', and
--- 'extractBodyFromFullResponse'. Exported on the Nginx level by handler
+-- 'extractBodyFromFullResponse'. It also does not throw errors when HTTP status
+-- of the response is not /2xx/. Exported on the Nginx level by handler
 -- /makeSubrequestFullWithRead/.
 makeSubrequestFullWithRead
     :: ByteString       -- ^ Subrequest configuration
@@ -549,35 +555,88 @@ extractBodyFromFullResponse =
 
 ngxExportYY 'extractBodyFromFullResponse
 
-defaultClearedResponseHeaders :: HashSet HeaderName
-defaultClearedResponseHeaders = HS.fromList $
-    map mk ["Content-Type"
+-- $forwardingFullResponse
+--
+-- Data encoded in the full response can be translated to 'ContentHandlerResult'
+-- and forwarded downstream to the client in directive /haskell_content/.
+-- Handler __/fromFullResponse/__ performs such a translation. Not all response
+-- headers are allowed being forwarded downstream, and thus the handler deletes
+-- response headers with names listed in set 'notForwardableResponseHeaders' as
+-- well as all headers with names starting with /X-Accel-/ before sending the
+-- response to the client. The set of not forwardable response headers can be
+-- customized in function 'contentFromFullResponse'.
+--
+-- Let's forward responses in location /\/full/ when argument /proxy/ in the
+-- client request's URI is equal to /yes/.
+--
+-- ==== File /nginx.conf/: forward responses from location /\/full/
+-- @
+--             if ($arg_proxy = yes) {
+--                 haskell_content fromFullResponse $hs_subrequest;
+--                 break;
+--             }
+-- @
+--
+-- ==== A simple test
+--
+-- > $ curl -D- 'http://localhost:8010/full/?a=Value&p=8020&proxy=yes'
+-- > HTTP/1.1 200 OK
+-- > Server: nginx/1.17.9
+-- > Date: Fri, 24 Jul 2020 13:14:33 GMT
+-- > Content-Type: application/octet-stream
+-- > Content-Length: 37
+-- > Connection: keep-alive
+-- > Subrequest-Header: This is response from subrequest
+-- >
+-- > In backend, Custom-Header is 'Value'
+
+-- | Default set of not forwardable response headers.
+--
+-- HTTP response headers that won't be forwarded to the client in handler
+-- /fromFullResponse/. The set contains /Connection/, /Content-Length/, /Date/,
+-- /Keep-Alive/, /Last-Modified/, /Server/, /Transfer-Encoding/, and
+-- /Content-Type/ headers (the latter gets reset in the handler's result value).
+-- If this set is not satisfactory, then handler /fromFullResponse/ must be
+-- replaced with a custom handler based on 'contentFromFullResponse' with a
+-- customized set of not forwardable response headers.
+notForwardableResponseHeaders :: HashSet HeaderName
+notForwardableResponseHeaders = HS.fromList $
+    map mk ["Connection"
            ,"Content-Length"
-           ,"Transfer-Encoding"
-           ,"Connection"
+           ,"Content-Type"
+           ,"Date"
            ,"Keep-Alive"
            ,"Last-Modified"
-           ,"Date"
            ,"Server"
+           ,"Transfer-Encoding"
            ,"X-Pad"
            ]
 
-contentFromFullResponse :: HashSet HeaderName -> Bool -> ByteString ->
-    ContentHandlerResult
-contentFromFullResponse clearedResponseHeaders clearXAccel v =
+-- | Translates encoded response to 'ContentHandlerResult'.
+--
+-- The translated data can be forwarded to the client by a simple handler based
+-- on this function in directive /haskell_content/. Handler /fromFullResponse/
+-- forwards the response to the client after deleting headers listed in set
+-- 'notForwardableResponseHeaders' and headers with names starting with
+-- /X-Accel-/.
+contentFromFullResponse
+    :: HashSet HeaderName   -- ^ Set of not forwardable response headers
+    -> Bool                 -- ^ Do not forward /X-Accel-.../ response headers
+    -> ByteString           -- ^ Encoded HTTP response
+    -> ContentHandlerResult
+contentFromFullResponse headersToDelete deleteXAccel v =
     let (st, hs, b) = Binary.decode @FullResponse $ L.fromStrict v
         hs' = map (first mk) hs
-        ct = L.toStrict $ fromMaybe "application/octet-stream" $
-            lookup (mk "Content-Type") hs'
+        ct = L.toStrict $ fromMaybe "" $ lookup (mk "Content-Type") hs'
         hs'' = filter (\(n, _) -> not $
-                          mk n `HS.member` clearedResponseHeaders ||
-                              clearXAccel &&
+                          mk n `HS.member` headersToDelete ||
+                              deleteXAccel &&
                                   foldCase "X-Accel-" `B.isPrefixOf` foldCase n
                       ) hs
     in (b, ct, st, map (second L.toStrict) hs'')
 
 fromFullResponse :: ByteString -> ContentHandlerResult
-fromFullResponse = contentFromFullResponse defaultClearedResponseHeaders True
+fromFullResponse = contentFromFullResponse notForwardableResponseHeaders True
 
 ngxExportHandler 'fromFullResponse
 

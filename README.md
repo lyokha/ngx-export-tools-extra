@@ -1256,6 +1256,44 @@ Backend unavailable
 
 Good. There is no server listening on port 8021.
 
+---
+
+Data encoded in the full response can be translated to *ContentHandlerResult*
+and forwarded downstream to the client in directive *haskell_content*.
+Handler *fromFullResponse* performs such a translation. Not all response
+headers are allowed being forwarded downstream, and thus the handler deletes
+response headers with names listed in set *notForwardableResponseHeaders* as
+well as all headers with names starting with *X-Accel-* before sending the
+response to the client. The set of not forwardable response headers can be
+customized in function *contentFromFullResponse*.
+
+Let's forward responses in location */full* when argument *proxy* in the
+client request's URI is equal to *yes*.
+
+###### File *nginx.conf*: forward responses from location */full*
+
+```nginx
+            if ($arg_proxy = yes) {
+                haskell_content fromFullResponse $hs_subrequest;
+                break;
+            }
+```
+
+###### A simple test
+
+```ShellSession
+$ curl -D- 'http://localhost:8010/full/?a=Value&p=8020&proxy=yes'
+HTTP/1.1 200 OK
+Server: nginx/1.17.9
+Date: Fri, 24 Jul 2020 13:14:33 GMT
+Content-Type: application/octet-stream
+Content-Length: 37
+Connection: keep-alive
+Subrequest-Header: This is response from subrequest
+
+In backend, Custom-Header is 'Value'
+```
+
 #### Building and installation
 
 ##### Configure and build

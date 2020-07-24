@@ -1,3 +1,10 @@
+### 0.5.3.0
+
+- Handlers *makeSubrequestFull* and *makeSubrequestFullWithRead* no longer throw
+  errors on responses with HTTP statuses other than *2xx*.
+- Implemented forwarding responses downstream to the client with function
+  *contentFromFullResponse* and content handler *fromFullResponse*.
+
 ### 0.5.2.0
 
 - Added handlers to extract data from lists of values in the Prometheus module.
