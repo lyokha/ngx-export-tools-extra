@@ -225,10 +225,11 @@ instance FromJSON SubrequestConf where
         return SubrequestConf {..}
         where maybeEmpty = fmap $ maybe "" T.encodeUtf8
 
-subrequest :: (Response L.ByteString -> L.ByteString) ->
-    (String -> IO Request) -> SubrequestConf -> IO L.ByteString
-subrequest fromResponse parseUrlF SubrequestConf {..} = do
-    req <- parseUrlF srUri
+subrequest :: (String -> IO Request) ->
+    (Response L.ByteString -> L.ByteString) -> SubrequestConf ->
+    IO L.ByteString
+subrequest parseRequestF buildResponseF SubrequestConf {..} = do
+    req <- parseRequestF srUri
     let req' = if B.null srMethod
                    then req
                    else req { method = srMethod }
@@ -242,7 +243,7 @@ subrequest fromResponse parseUrlF SubrequestConf {..} = do
                       then req'''
                       else req''' { responseTimeout =
                                         setTimeout srResponseTimeout }
-    fromResponse <$> httpLbs req'''' httpManager
+    buildResponseF <$> httpLbs req'''' httpManager
     where setTimeout (ResponseTimeout v)
               | t == 0 = responseTimeoutNone
               | otherwise = responseTimeoutMicro $ t * 1e6
@@ -250,12 +251,12 @@ subrequest fromResponse parseUrlF SubrequestConf {..} = do
           setTimeout _ = undefined
 
 subrequestBody :: SubrequestConf -> IO L.ByteString
-subrequestBody = subrequest responseBody parseUrlThrow
+subrequestBody = subrequest parseUrlThrow responseBody
 
 type FullResponse = (Int, [(ByteString, L.ByteString)], L.ByteString)
 
 subrequestFull :: SubrequestConf -> IO L.ByteString
-subrequestFull = handleAll . subrequest buildResponse parseRequest
+subrequestFull = handleAll . subrequest parseRequest buildResponse
     where handleAll = handle $ \e -> return $ Binary.encode @FullResponse $
               case fromException e of
                   Just (HttpExceptionRequest _ c) ->
