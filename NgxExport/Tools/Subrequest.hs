@@ -263,8 +263,6 @@ subrequestFull = handleAll . subrequest parseRequest buildResponse
               case fromException e of
                   Just (HttpExceptionRequest _ c) ->
                       case c of
-                          StatusCodeException r _ ->
-                              (0, statusCode $ responseStatus r, [], "")
                           Network.HTTP.Client.ResponseTimeout -> response502
                           ConnectionTimeout -> response502
                           ConnectionFailure _ -> response502
