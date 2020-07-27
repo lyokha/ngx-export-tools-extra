@@ -1,3 +1,8 @@
+### 0.5.4.0
+
+- Added handler *extractRequestStatusFromFullResponse* to retrieve completion
+  status of a subrequest.
+
 ### 0.5.3.0
 
 - Handlers *makeSubrequestFull* and *makeSubrequestFullWithRead* no longer throw

@@ -1128,7 +1128,11 @@ variables directly as they are binary encoded values. Instead, the response
 status, headers and the body must be extracted using handlers
 *extractStatusFromFullResponse*, *extractHeaderFromFullResponse*,
 and *extractBodyFromFullResponse* which are based on functions of the
-same name.
+same name. Handler *extractRequestStatusFromFullResponse* and the
+corresponding function can be used to extract the request status: *0* means
+that the request was completed without technical errors, *1* means that the
+request failed due to connection errors including timeouts, and *2* means
+that the request failed due to other errors.
 
 Let's extend our example with these handlers.
 

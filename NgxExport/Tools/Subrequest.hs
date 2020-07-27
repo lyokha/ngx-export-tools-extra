@@ -26,6 +26,7 @@ module NgxExport.Tools.Subrequest (
     -- $gettingFullResponse
                                   ,makeSubrequestFull
                                   ,makeSubrequestFullWithRead
+                                  ,extractRequestStatusFromFullResponse
                                   ,extractStatusFromFullResponse
                                   ,extractHeaderFromFullResponse
                                   ,extractBodyFromFullResponse
@@ -53,6 +54,7 @@ import qualified Data.HashSet as HS
 import           Data.CaseInsensitive (FoldCase (foldCase), mk, original)
 import           Data.Aeson
 import           Data.Maybe
+import           Data.Word
 import           Control.Arrow
 import           Control.Exception
 import           System.IO.Unsafe
@@ -253,7 +255,7 @@ subrequest parseRequestF buildResponseF SubrequestConf {..} = do
 subrequestBody :: SubrequestConf -> IO L.ByteString
 subrequestBody = subrequest parseUrlThrow responseBody
 
-type FullResponse = (Int, [(ByteString, L.ByteString)], L.ByteString)
+type FullResponse = (Word8, Int, [(ByteString, ByteString)], L.ByteString)
 
 subrequestFull :: SubrequestConf -> IO L.ByteString
 subrequestFull = handleAll . subrequest parseRequest buildResponse
@@ -262,19 +264,19 @@ subrequestFull = handleAll . subrequest parseRequest buildResponse
                   Just (HttpExceptionRequest _ c) ->
                       case c of
                           StatusCodeException r _ ->
-                              (statusCode $ responseStatus r, [], "")
+                              (0, statusCode $ responseStatus r, [], "")
                           Network.HTTP.Client.ResponseTimeout -> response502
                           ConnectionTimeout -> response502
                           ConnectionFailure _ -> response502
                           _ -> response500
                   _ -> response500
-          response500 = (500, [], "")
-          response502 = (502, [], "")
+          response500 = (2, 500, [], "")
+          response502 = (1, 502, [], "")
           buildResponse r =
               let status = statusCode $ responseStatus r
                   headers = map (first original) $ responseHeaders r
                   body = responseBody r
-              in Binary.encode (status, headers, body)
+              in Binary.encode @FullResponse (0, status, headers, body)
 
 httpManager :: Manager
 httpManager = unsafePerformIO $ newManager defaultManagerSettings
@@ -357,7 +359,11 @@ ngxExportAsyncIOYY 'makeSubrequestWithRead
 -- status, headers and the body must be extracted using handlers
 -- __/extractStatusFromFullResponse/__, __/extractHeaderFromFullResponse/__,
 -- and __/extractBodyFromFullResponse/__ which are based on functions of the
--- same name.
+-- same name. Handler __/extractRequestStatusFromFullResponse/__ and the
+-- corresponding function can be used to extract the request status: /0/ means
+-- that the request was completed without technical errors, /1/ means that the
+-- request failed due to connection errors including timeouts, and /2/ means
+-- that the request failed due to other errors.
 --
 -- Let's extend our example with these handlers.
 --
@@ -479,16 +485,17 @@ ngxExportAsyncIOYY 'makeSubrequestWithRead
 --
 -- The same as 'makeSubrequest' except it returns a binary encoded response data
 -- whose parts must be extracted by handlers made of
--- 'extractStatusFromFullResponse', 'extractHeaderFromFullResponse', and
--- 'extractBodyFromFullResponse'. It also does not throw errors when HTTP status
--- of the response is not /2xx/. Exported on the Nginx level by handler
--- /makeSubrequestFull/.
+-- 'extractRequestStatusFromFullResponse', 'extractStatusFromFullResponse',
+-- 'extractHeaderFromFullResponse', and 'extractBodyFromFullResponse'. It also
+-- does not throw errors when HTTP status of the response is not /2xx/.
+-- Exported on the Nginx level by handler /makeSubrequestFull/.
 makeSubrequestFull
     :: ByteString       -- ^ Subrequest configuration
     -> IO L.ByteString
 makeSubrequestFull =
-    maybe (return $ Binary.encode @FullResponse (400, [], "")) subrequestFull .
-        readFromByteStringAsJSON @SubrequestConf
+    maybe (return $ Binary.encode @FullResponse (2, 400, [], ""))
+        subrequestFull .
+            readFromByteStringAsJSON @SubrequestConf
 
 ngxExportAsyncIOYY 'makeSubrequestFull
 
@@ -496,18 +503,38 @@ ngxExportAsyncIOYY 'makeSubrequestFull
 --
 -- The same as 'makeSubrequestWithRead' except it returns a binary encoded
 -- response data whose parts must be extracted by handlers made of
--- 'extractStatusFromFullResponse', 'extractHeaderFromFullResponse', and
--- 'extractBodyFromFullResponse'. It also does not throw errors when HTTP status
--- of the response is not /2xx/. Exported on the Nginx level by handler
--- /makeSubrequestFullWithRead/.
+-- 'extractRequestStatusFromFullResponse', 'extractStatusFromFullResponse',
+-- 'extractHeaderFromFullResponse', and 'extractBodyFromFullResponse'. It also
+-- does not throw errors when HTTP status of the response is not /2xx/.
+-- Exported on the Nginx level by handler /makeSubrequestFullWithRead/.
 makeSubrequestFullWithRead
     :: ByteString       -- ^ Subrequest configuration
     -> IO L.ByteString
 makeSubrequestFullWithRead =
-    maybe (return $ Binary.encode @FullResponse (400, [], "")) subrequestFull .
-        readFromByteString @SubrequestConf
+    maybe (return $ Binary.encode @FullResponse (2, 400, [], ""))
+        subrequestFull .
+            readFromByteString @SubrequestConf
 
 ngxExportAsyncIOYY 'makeSubrequestFullWithRead
+
+-- | Extracts the request status from an encoded response.
+--
+-- Must be used to extract response data encoded by 'makeSubrequestFull' or
+-- 'makeSubrequestFullWithRead'. Exported on the Nginx level by handler
+-- /extractRequestStatusFromFullResponse/.
+--
+-- The request status may be one of the following values:
+--
+-- - /0/ &#8212; the request was completed without technical errors,
+-- - /1/ &#8212; the request failed due to connection errors including timeouts,
+-- - /2/ &#8212; the request failed due to other errors.
+extractRequestStatusFromFullResponse
+    :: ByteString       -- ^ Encoded HTTP response
+    -> L.ByteString
+extractRequestStatusFromFullResponse = C8L.pack . show .
+    (\(a, _, _, _) -> a) . (Binary.decode @FullResponse) . L.fromStrict
+
+ngxExportYY 'extractRequestStatusFromFullResponse
 
 -- | Extracts the HTTP status from an encoded response.
 --
@@ -518,7 +545,7 @@ extractStatusFromFullResponse
     :: ByteString       -- ^ Encoded HTTP response
     -> L.ByteString
 extractStatusFromFullResponse = C8L.pack . show .
-    (\(a, _, _) -> a) . (Binary.decode @FullResponse) . L.fromStrict
+    (\(_, a, _, _) -> a) . (Binary.decode @FullResponse) . L.fromStrict
 
 ngxExportYY 'extractStatusFromFullResponse
 
@@ -537,9 +564,9 @@ extractHeaderFromFullResponse
     -> L.ByteString
 extractHeaderFromFullResponse v =
     let (h, b) = mk *** C8.tail $ C8.break ('|' ==) v
-        hs = (\(_, a, _) -> map (first mk) a) $
+        hs = (\(_, _, a, _) -> map (first mk) a) $
             Binary.decode @FullResponse $ L.fromStrict b
-    in fromMaybe L.empty $ lookup h hs
+    in maybe "" L.fromStrict $ lookup h hs
 
 ngxExportYY 'extractHeaderFromFullResponse
 
@@ -552,7 +579,7 @@ extractBodyFromFullResponse
     :: ByteString       -- ^ Encoded HTTP response
     -> L.ByteString
 extractBodyFromFullResponse =
-    (\(_, _, a) -> a) . (Binary.decode @FullResponse) . L.fromStrict
+    (\(_, _, _, a) -> a) . (Binary.decode @FullResponse) . L.fromStrict
 
 ngxExportYY 'extractBodyFromFullResponse
 
@@ -626,15 +653,15 @@ contentFromFullResponse
     -> ByteString           -- ^ Encoded HTTP response
     -> ContentHandlerResult
 contentFromFullResponse headersToDelete deleteXAccel v =
-    let (st, hs, b) = Binary.decode @FullResponse $ L.fromStrict v
+    let (_, st, hs, b) = Binary.decode @FullResponse $ L.fromStrict v
         hs' = map (first mk) hs
-        ct = L.toStrict $ fromMaybe "" $ lookup (mk "Content-Type") hs'
+        ct = fromMaybe "" $ lookup (mk "Content-Type") hs'
         hs'' = filter (\(n, _) -> not $
                           mk n `HS.member` headersToDelete ||
                               deleteXAccel &&
                                   foldCase "X-Accel-" `B.isPrefixOf` foldCase n
                       ) hs
-    in (b, ct, st, map (second L.toStrict) hs'')
+    in (b, ct, st, hs'')
 
 fromFullResponse :: ByteString -> ContentHandlerResult
 fromFullResponse = contentFromFullResponse notForwardableResponseHeaders True
