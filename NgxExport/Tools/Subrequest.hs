@@ -38,6 +38,7 @@ module NgxExport.Tools.Subrequest (
 
 import           NgxExport
 import           NgxExport.Tools
+import           NgxExport.Tools.Subrequest.Internal ()
 
 import           Network.HTTP.Client hiding (ResponseTimeout)
 import qualified Network.HTTP.Client (HttpExceptionContent (ResponseTimeout))
@@ -51,7 +52,7 @@ import qualified Data.Text.Encoding as T
 import qualified Data.Binary as Binary
 import           Data.HashSet (HashSet)
 import qualified Data.HashSet as HS
-import           Data.CaseInsensitive (FoldCase (foldCase), mk, original)
+import           Data.CaseInsensitive hiding (map)
 import           Data.Aeson
 import           Data.Maybe
 import           Data.Word
@@ -255,7 +256,7 @@ subrequest parseRequestF buildResponseF SubrequestConf {..} = do
 subrequestBody :: SubrequestConf -> IO L.ByteString
 subrequestBody = subrequest parseUrlThrow responseBody
 
-type FullResponse = (Word8, Int, [(ByteString, ByteString)], L.ByteString)
+type FullResponse = (Word8, Int, ResponseHeaders, L.ByteString)
 
 subrequestFull :: SubrequestConf -> IO L.ByteString
 subrequestFull = handleAll . subrequest parseRequest buildResponse
@@ -272,7 +273,7 @@ subrequestFull = handleAll . subrequest parseRequest buildResponse
           response502 = (1, 502, [], "")
           buildResponse r =
               let status = statusCode $ responseStatus r
-                  headers = map (first original) $ responseHeaders r
+                  headers = responseHeaders r
                   body = responseBody r
               in Binary.encode @FullResponse (0, status, headers, body)
 
@@ -562,8 +563,7 @@ extractHeaderFromFullResponse
     -> L.ByteString
 extractHeaderFromFullResponse v =
     let (h, b) = mk *** C8.tail $ C8.break ('|' ==) v
-        hs = (\(_, _, a, _) -> map (first mk) a) $
-            Binary.decode @FullResponse $ L.fromStrict b
+        (_, _, hs, _) = Binary.decode @FullResponse $ L.fromStrict b
     in maybe "" L.fromStrict $ lookup h hs
 
 ngxExportYY 'extractHeaderFromFullResponse
@@ -652,14 +652,14 @@ contentFromFullResponse
     -> ContentHandlerResult
 contentFromFullResponse headersToDelete deleteXAccel v =
     let (_, st, hs, b) = Binary.decode @FullResponse $ L.fromStrict v
-        hs' = map (first mk) hs
-        ct = fromMaybe "" $ lookup (mk "Content-Type") hs'
-        hs'' = filter (\(n, _) -> not $
-                          mk n `HS.member` headersToDelete ||
-                              deleteXAccel &&
-                                  foldCase "X-Accel-" `B.isPrefixOf` foldCase n
-                      ) hs
-    in (b, ct, st, hs'')
+        ct = fromMaybe "" $ lookup (mk "Content-Type") hs
+        hs' = map (first original) $
+            filter (\(n, _) -> not $
+                        n `HS.member` headersToDelete ||
+                            deleteXAccel &&
+                                foldCase "X-Accel-" `B.isPrefixOf` foldedCase n
+                   ) hs
+    in (b, ct, st, hs')
 
 fromFullResponse :: ByteString -> ContentHandlerResult
 fromFullResponse = contentFromFullResponse notForwardableResponseHeaders True

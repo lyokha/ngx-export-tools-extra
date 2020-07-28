@@ -66,6 +66,8 @@ library
                           , NgxExport.Tools.Prometheus
                           , NgxExport.Tools.Subrequest
 
+  other-modules:            NgxExport.Tools.Subrequest.Internal
+
   if flag(EDE)
     exposed-modules:        NgxExport.Tools.EDE
 
