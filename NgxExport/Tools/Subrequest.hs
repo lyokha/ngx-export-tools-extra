@@ -651,16 +651,15 @@ contentFromFullResponse
     -> ContentHandlerResult
 contentFromFullResponse headersToDelete deleteXAccel v =
     let (_, st, hs, b) = Binary.decode @FullResponse $ L.fromStrict v
-        ct = fromMaybe "" $ lookup (mk "Content-Type") $ map (first mk) hs
-        hs' = filter
-            (\(n, _) -> let n' = mk n
-                            n'' = foldedCase n'
-                        in not $
-                            n' `HS.member` headersToDelete ||
-                                deleteXAccel &&
-                                    foldCase "X-Accel-" `B.isPrefixOf` n''
-            ) hs
-    in (b, ct, st, hs')
+        hs' = map (first mk) hs
+        ct = fromMaybe "" $ lookup (mk "Content-Type") hs'
+        hs'' = filter
+            (\(n, _) -> not $
+                n `HS.member` headersToDelete ||
+                    deleteXAccel &&
+                        foldCase "X-Accel-" `B.isPrefixOf` foldedCase n
+            ) hs'
+    in (b, ct, st, map (first original) hs'')
 
 fromFullResponse :: ByteString -> ContentHandlerResult
 fromFullResponse = contentFromFullResponse notForwardableResponseHeaders True
