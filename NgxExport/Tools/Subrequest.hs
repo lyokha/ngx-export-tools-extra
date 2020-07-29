@@ -38,7 +38,6 @@ module NgxExport.Tools.Subrequest (
 
 import           NgxExport
 import           NgxExport.Tools
-import           NgxExport.Tools.Subrequest.Internal ()
 
 import           Network.HTTP.Client hiding (ResponseTimeout)
 import qualified Network.HTTP.Client (HttpExceptionContent (ResponseTimeout))
@@ -256,7 +255,7 @@ subrequest parseRequestF buildResponseF SubrequestConf {..} = do
 subrequestBody :: SubrequestConf -> IO L.ByteString
 subrequestBody = subrequest parseUrlThrow responseBody
 
-type FullResponse = (Word8, Int, ResponseHeaders, L.ByteString)
+type FullResponse = (Word8, Int, [(ByteString, ByteString)], L.ByteString)
 
 subrequestFull :: SubrequestConf -> IO L.ByteString
 subrequestFull = handleAll . subrequest parseRequest buildResponse
@@ -273,7 +272,7 @@ subrequestFull = handleAll . subrequest parseRequest buildResponse
           response502 = (1, 502, [], "")
           buildResponse r =
               let status = statusCode $ responseStatus r
-                  headers = responseHeaders r
+                  headers = map (first original) $ responseHeaders r
                   body = responseBody r
               in Binary.encode @FullResponse (0, status, headers, body)
 
@@ -564,7 +563,7 @@ extractHeaderFromFullResponse
 extractHeaderFromFullResponse v =
     let (h, b) = mk *** C8.tail $ C8.break ('|' ==) v
         (_, _, hs, _) = Binary.decode @FullResponse $ L.fromStrict b
-    in maybe "" L.fromStrict $ lookup h hs
+    in maybe "" L.fromStrict $ lookup h $ map (first mk) hs
 
 ngxExportYY 'extractHeaderFromFullResponse
 
@@ -652,13 +651,15 @@ contentFromFullResponse
     -> ContentHandlerResult
 contentFromFullResponse headersToDelete deleteXAccel v =
     let (_, st, hs, b) = Binary.decode @FullResponse $ L.fromStrict v
-        ct = fromMaybe "" $ lookup (mk "Content-Type") hs
-        hs' = map (first original) $
-            filter (\(n, _) -> not $
-                        n `HS.member` headersToDelete ||
-                            deleteXAccel &&
-                                foldCase "X-Accel-" `B.isPrefixOf` foldedCase n
-                   ) hs
+        ct = fromMaybe "" $ lookup (mk "Content-Type") $ map (first mk) hs
+        hs' = filter
+            (\(n, _) -> let n' = mk n
+                            n'' = foldedCase n'
+                        in not $
+                            n' `HS.member` headersToDelete ||
+                                deleteXAccel &&
+                                    foldCase "X-Accel-" `B.isPrefixOf` n''
+            ) hs
     in (b, ct, st, hs')
 
 fromFullResponse :: ByteString -> ContentHandlerResult
