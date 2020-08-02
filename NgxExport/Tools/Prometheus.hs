@@ -43,7 +43,8 @@ import qualified Data.ByteString.Lazy.Char8 as C8L
 import           Data.IORef
 import           Data.Text (Text)
 import qualified Data.Text as T
-import qualified Data.Text.Encoding as T
+import qualified Data.Text.Lazy as TL
+import qualified Data.Text.Lazy.Encoding as TL
 import           Data.Aeson
 import           Data.Maybe
 import           Data.Function
@@ -481,42 +482,52 @@ toPrometheusMetrics' PrometheusConf {..} (srv, cnts, hs, ocnts) =
               in ranges `M.union` sums
 
 showPrometheusMetrics :: PrometheusMetrics -> L.ByteString
-showPrometheusMetrics = L.fromStrict . T.encodeUtf8 . M.foldlWithKey
-    (\a k (h, m) -> T.concat [a, "# HELP ", k, " ", h, "\n"
-                             ,   "# TYPE ", k, " ", showType m, "\n"
-                             ,case m of
-                                  Counter v ->
-                                      T.concat [k, " ", T.pack $ show v, "\n"]
-                                  Gauge v ->
-                                      T.concat [k, " ", T.pack $ show v, "\n"]
-                                  Histogram h' -> fst $
-                                      M.foldlWithKey (showHistogram k)
-                                          ("", 0.0) h'
-                             ]
+showPrometheusMetrics = TL.encodeUtf8 . M.foldlWithKey
+    (\a k (h, m) ->
+        let k' = TL.fromStrict k
+        in TL.concat [a, "# HELP ", k', " ", TL.fromStrict h, "\n"
+                     ,   "# TYPE ", k', " ", showType m, "\n"
+                     ,case m of
+                          Counter v -> TL.concat
+                              [k', " ", TL.pack $ show v, "\n"]
+                          Gauge v -> TL.concat
+                              [k', " ", TL.pack $ show v, "\n"]
+                          Histogram h' -> fst $
+                              M.foldlWithKey (showHistogram k k') ("", 0.0) h'
+                     ]
     ) ""
     where showType (Counter _) = "counter"
           showType (Gauge _) = "gauge"
           showType (Histogram _) = "histogram"
-          showHistogram k a@(t, n) c (l, v) =
+          showHistogram k k' a@(t, n) c (l, v) =
               if T.null l
                   then if k `T.append` "_sum" == c
-                           then (T.concat [t, c, " ", T.pack $ show v, "\n"]
+                           then (TL.concat [t
+                                           ,TL.fromStrict c
+                                           ," "
+                                           ,TL.pack $ show v
+                                           ,"\n"
+                                           ]
                                 ,n
                                 )
                            else if k `T.append` "_cnt" == c
-                                    then (T.concat [t, k, "_count "
-                                                   ,T.pack $
-                                                       show (round v :: Word64)
-                                                   ,"\n"
-                                                   ]
+                                    then (TL.concat [t
+                                                    ,k'
+                                                    ,"_count "
+                                                    ,TL.pack $
+                                                        show (round v :: Word64)
+                                                    ,"\n"
+                                                    ]
                                          ,n
                                          )
                                      else a
                   else let n' = n + v
-                       in (T.concat [t, k, "_bucket{le=\"", l, "\"} "
-                                    ,T.pack $ show (round n' :: Word64)
-                                    ,"\n"
-                                    ]
+                       in (TL.concat [t
+                                     ,k'
+                                     ,"_bucket{le=\"", TL.fromStrict l, "\"} "
+                                     ,TL.pack $ show (round n' :: Word64)
+                                     ,"\n"
+                                     ]
                           ,n'
                           )
 
