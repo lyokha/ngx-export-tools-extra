@@ -416,12 +416,14 @@ User id: user1, options: WyJvcDEiLCJvcDIiXQ==, path: %2Fopt%2Fusers
 
 This module is aimed to convert custom counters from
 [nginx-custom-counters-module](https://github.com/lyokha/nginx-custom-counters-module)
-to Prometheus metrics. For this, it exposes three exporters:
+to Prometheus metrics. For this, it exposes four exporters:
 *prometheusConf* which is an *ignitionService* in terms of module
 *NgxExport.Tools*, *toPrometheusMetrics* to convert *custom counters* to
-Prometheus metrics, and *scale1000*: a small utility to convert small
-floating point numbers to integers by multiplying them by *1000* (this fits
-well for dealing with request durations, for instance).
+Prometheus metrics, *prometheusMetrics* which is a content handler aiming
+to return Prometheus metrics to the client, and a handy utility
+*scale1000* to convert small floating point numbers to integers by
+multiplying them by *1000* (which fits well for dealing with request
+durations).
 
 The module makes use of a few custom data types which are not exported while
 still needed when writing Nginx configurations. In the following example they
@@ -558,6 +560,8 @@ http {
                 return 503;
             }
 
+            default_type "text/plain; version=0.0.4; charset=utf-8";
+
             echo -n $hs_prom_metrics;
         }
 
@@ -608,6 +612,24 @@ one than the number in the corresponding histogram declaration: in this
 example, the map for *request_time_bucket* has 10 range boundaries while
 histogram *hst_request_time* has 11 buckets, the map for *bytes_sent_bucket*
 has 5 range boundaries while histogram *hst_bytes_sent* has 6 buckets.
+
+Notice that the variable handler *toPrometheusMetrics* and directive *echo*
+in location */* can be replaced with a single content handler
+*prometheusMetrics* like in the following block.
+
+```nginx
+        location / {
+            haskell_async_content prometheusMetrics
+                    '["main"
+                     ,$cnt_collection
+                     ,$cnt_histograms
+                     ,{"cnt_stub_status_active": $cnt_stub_status_active
+                      ,"cnt_uptime": $cnt_uptime
+                      ,"cnt_uptime_reload": $cnt_uptime_reload
+                      }
+                     ]';
+        }
+```
 
 ###### A simple test
 

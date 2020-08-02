@@ -1,5 +1,5 @@
 {-# LANGUAGE TemplateHaskell, DeriveGeneric, RecordWildCards #-}
-{-# LANGUAGE TypeApplications, TupleSections, OverloadedStrings #-}
+{-# LANGUAGE TypeApplications, TupleSections, OverloadedStrings, MagicHash #-}
 
 -----------------------------------------------------------------------------
 -- |
@@ -35,6 +35,8 @@ import           NgxExport.Tools
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import           Data.ByteString (ByteString)
+import           Data.ByteString.Unsafe (unsafePackAddressLen)
+import           Data.ByteString.Internal (accursedUnutterablePerformIO)
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString.Lazy.Char8 as C8L
@@ -100,12 +102,14 @@ conf = unsafePerformIO $ newIORef Nothing
 --
 -- This module is aimed to convert custom counters from
 -- [nginx-custom-counters-module](https://github.com/lyokha/nginx-custom-counters-module)
--- to Prometheus metrics. For this, it exposes three exporters:
+-- to Prometheus metrics. For this, it exposes four exporters:
 -- __/prometheusConf/__ which is an 'ignitionService' in terms of module
 -- "NgxExport.Tools", __/toPrometheusMetrics/__ to convert /custom counters/ to
--- Prometheus metrics, and __/scale1000/__: a small utility to convert small
--- floating point numbers to integers by multiplying them by /1000/ (this fits
--- well for dealing with request durations, for instance).
+-- Prometheus metrics, __/prometheusMetrics/__ which is a content handler aiming
+-- to return Prometheus metrics to the client, and a handy utility
+-- __/scale1000/__ to convert small floating point numbers to integers by
+-- multiplying them by /1000/ (which fits well for dealing with request
+-- durations).
 --
 -- The module makes use of a few custom data types which are not exported while
 -- still needed when writing Nginx configurations. In the following example they
@@ -238,6 +242,8 @@ conf = unsafePerformIO $ newIORef Nothing
 --                 return 503;
 --             }
 --
+--             default_type \"text/plain; version=0.0.4; charset=utf-8\";
+--
 --             echo -n $hs_prom_metrics;
 --         }
 --
@@ -288,6 +294,24 @@ conf = unsafePerformIO $ newIORef Nothing
 -- example, the map for /request_time_bucket/ has 10 range boundaries while
 -- histogram /hst_request_time/ has 11 buckets, the map for /bytes_sent_bucket/
 -- has 5 range boundaries while histogram /hst_bytes_sent/ has 6 buckets.
+--
+-- Notice that the variable handler /toPrometheusMetrics/ and directive /echo/
+-- in location /\// can be replaced with a single content handler
+-- /prometheusMetrics/ like in the following block.
+--
+-- @
+--         location \/ {
+--             haskell_async_content __/prometheusMetrics/__
+--                     '[\"__/main/__\"
+--                      ,$__/cnt_collection/__
+--                      ,$__/cnt_histograms/__
+--                      ,{\"cnt_stub_status_active\": $cnt_stub_status_active
+--                       ,\"cnt_uptime\": $cnt_uptime
+--                       ,\"cnt_uptime_reload\": $cnt_uptime_reload
+--                       }
+--                      ]';
+--         }
+-- @
 --
 -- ==== A simple test
 --
@@ -428,10 +452,7 @@ toPrometheusMetrics' PrometheusConf {..} (srv, cnts, hs, ocnts) =
                      in (M.map Histogram cntsH'', M.mapWithKey cType cntsC')
         cntsA = cntsH `M.union` cntsC `M.union`
             M.mapWithKey cType (toValues ocnts)
-    in M.mapWithKey (\k v -> case M.lookup k pcMetrics of
-                                 Nothing -> ("", v)
-                                 Just h -> (h, v)
-                    ) cntsA
+    in M.mapWithKey (\k -> (fromMaybe "" (M.lookup k pcMetrics),)) cntsA
     where labeledRange = M.union . M.filter (not . T.null) . range
           hCounter (ks, ts) k = const $
               k `M.member` ts ||
@@ -448,10 +469,7 @@ toPrometheusMetrics' PrometheusConf {..} (srv, cnts, hs, ocnts) =
                           else Counter v
           toHistogram cs hk rs =
               let ranges = M.mapWithKey
-                      (\k l -> case M.lookup k cs of
-                                   Just v -> (l, v)
-                                   Nothing -> (l, 0.0)
-                      ) rs
+                      (\k -> (, fromMaybe 0.0 (M.lookup k cs))) rs
                   sums = let v1 = hk `T.append` "_sum"
                              v2 = hk `T.append` "_cnt"
                              withZeroLabel = return . ("",)
@@ -506,11 +524,16 @@ toPrometheusMetrics :: ByteString -> IO L.ByteString
 toPrometheusMetrics v = do
     let cs = fromJust $ readFromByteStringAsJSON @AllMetrtics v
     pc <- readIORef conf
-    return $ case pc of
-        Just c -> showPrometheusMetrics $ toPrometheusMetrics' c cs
-        Nothing -> ""
+    return $ maybe "" (showPrometheusMetrics . flip toPrometheusMetrics' cs) pc
 
 ngxExportIOYY 'toPrometheusMetrics
+
+prometheusMetrics :: ByteString -> IO ContentHandlerResult
+prometheusMetrics = fmap (, text_plain , 200, []) . toPrometheusMetrics
+    where text_plain = pack 40 "text/plain; version=0.0.4; charset=utf-8"#
+          pack l s = accursedUnutterablePerformIO $ unsafePackAddressLen l s
+
+ngxExportAsyncHandler 'prometheusMetrics
 
 -- | Multiplies a floating point value by a factor.
 --
