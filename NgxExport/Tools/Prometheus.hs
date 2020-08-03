@@ -1,5 +1,5 @@
 {-# LANGUAGE TemplateHaskell, DeriveGeneric, RecordWildCards #-}
-{-# LANGUAGE TypeApplications, TupleSections, OverloadedStrings, MagicHash #-}
+{-# LANGUAGE TypeApplications, TupleSections, OverloadedStrings #-}
 
 -----------------------------------------------------------------------------
 -- |
@@ -35,8 +35,6 @@ import           NgxExport.Tools
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import           Data.ByteString (ByteString)
-import           Data.ByteString.Unsafe (unsafePackAddressLen)
-import           Data.ByteString.Internal (accursedUnutterablePerformIO)
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString.Lazy.Char8 as C8L
@@ -539,10 +537,11 @@ toPrometheusMetrics v = do
 
 ngxExportIOYY 'toPrometheusMetrics
 
+text_plain :: ByteString
+text_plain = "text/plain; version=0.0.4; charset=utf-8"
+
 prometheusMetrics :: ByteString -> IO ContentHandlerResult
 prometheusMetrics = fmap (, text_plain , 200, []) . toPrometheusMetrics
-    where text_plain = pack 40 "text/plain; version=0.0.4; charset=utf-8"#
-          pack l s = accursedUnutterablePerformIO $ unsafePackAddressLen l s
 
 ngxExportAsyncHandler 'prometheusMetrics
 

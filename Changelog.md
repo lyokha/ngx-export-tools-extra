@@ -1,3 +1,8 @@
+### 0.5.5.0
+
+- Added content handler *prometheusMetrics*.
+- Using lazy text for encoding Prometheus metrics.
+
 ### 0.5.4.0
 
 - Added handler *extractRequestStatusFromFullResponse* to retrieve completion
