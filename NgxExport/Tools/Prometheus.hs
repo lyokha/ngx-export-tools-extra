@@ -541,7 +541,7 @@ text_plain :: ByteString
 text_plain = "text/plain; version=0.0.4; charset=utf-8"
 
 prometheusMetrics :: ByteString -> IO ContentHandlerResult
-prometheusMetrics = fmap (, text_plain , 200, []) . toPrometheusMetrics
+prometheusMetrics = fmap (, text_plain, 200, []) . toPrometheusMetrics
 
 ngxExportAsyncHandler 'prometheusMetrics
 
