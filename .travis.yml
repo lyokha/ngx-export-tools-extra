@@ -8,15 +8,15 @@ jobs:
         apt:
           packages: [cabal-install-3.2, ghc-head]
           sources: [hvr-ghc]
-    - env: CABALVER=3.2 GHCVER=8.10.1
+    - env: CABALVER=3.2 GHCVER=8.10.2
       addons:
         apt:
-          packages: [cabal-install-3.2, ghc-8.10.1]
+          packages: [cabal-install-3.2, ghc-8.10.2]
           sources: [hvr-ghc]
-    - env: CABALVER=3.2 GHCVER=8.8.3
+    - env: CABALVER=3.2 GHCVER=8.8.4
       addons:
         apt:
-          packages: [cabal-install-3.2, ghc-8.8.3]
+          packages: [cabal-install-3.2, ghc-8.8.4]
           sources: [hvr-ghc]
     - env: CABALVER=3.2 GHCVER=8.6.5
       addons:
@@ -38,15 +38,15 @@ jobs:
         apt:
           packages: [cabal-install-3.2, ghc-head]
           sources: [hvr-ghc]
-    - env: BUILD_EXPERIMENTAL_EDE=yes CABALVER=3.2 GHCVER=8.10.1
+    - env: BUILD_EXPERIMENTAL_EDE=yes CABALVER=3.2 GHCVER=8.10.2
       addons:
         apt:
-          packages: [cabal-install-3.2, ghc-8.10.1]
+          packages: [cabal-install-3.2, ghc-8.10.2]
           sources: [hvr-ghc]
-    - env: BUILD_EXPERIMENTAL_EDE=yes CABALVER=3.2 GHCVER=8.8.3
+    - env: BUILD_EXPERIMENTAL_EDE=yes CABALVER=3.2 GHCVER=8.8.4
       addons:
         apt:
-          packages: [cabal-install-3.2, ghc-8.8.3]
+          packages: [cabal-install-3.2, ghc-8.8.4]
           sources: [hvr-ghc]
   allow_failures:
     - env: CABALVER=3.2 GHCVER=head
