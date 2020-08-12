@@ -537,11 +537,11 @@ toPrometheusMetrics v = do
 
 ngxExportIOYY 'toPrometheusMetrics
 
-text_plain :: ByteString
-text_plain = "text/plain; version=0.0.4; charset=utf-8"
+textPlain :: ByteString
+textPlain = "text/plain; version=0.0.4; charset=utf-8"
 
 prometheusMetrics :: ByteString -> IO ContentHandlerResult
-prometheusMetrics = fmap (, text_plain, 200, []) . toPrometheusMetrics
+prometheusMetrics = fmap (, textPlain, 200, []) . toPrometheusMetrics
 
 ngxExportAsyncHandler 'prometheusMetrics
 
@@ -647,22 +647,20 @@ ngxExportYY 'scale1000
 --         counter $__/cnt_u_4xx/__ inc $inc_cnt_u_4xx;
 --         counter $__/cnt_u_5xx/__ inc $inc_cnt_u_5xx;
 --
+--         \# cache $upstream_response_time
 --         haskell_run ! $hs_u_response_times $upstream_response_time;
---         haskell_run __/cumulativeFPValue/__ $hs_u_response_time $hs_u_response_times;
 --
 --         histogram $__/hst_u_response_time/__ 11 $u_response_time_bucket;
---         haskell_run scale1000 $hs_u_response_time_scaled $hs_u_response_time;
---         counter $__/hst_u_response_time_sum/__ inc $hs_u_response_time_scaled;
---
---         counter $__/hst_u_response_time_00/__ undo;
---         counter $__/hst_u_response_time_cnt/__ undo;
+--         histogram $__/hst_u_response_time/__ undo;
+--         haskell_run __/cumulativeFPValue/__ $hs_u_response_time $hs_u_response_times;
+--         haskell_run __/scale1000/__ $hs_u_response_time_scaled $hs_u_response_time;
 -- @
 --
--- Notice that the first bucket /hst_u_response_time_00/ and the total count
--- value /hst_u_response_time_cnt/ of histogram /hst_u_response_time/ were
--- temporarily disabled to not count visiting unrelated locations (i.e. /\//,
--- /\/1/, and /\/404/): the two counters will be later re-enabled in locations
--- related to proxying requests.
+-- Notice that histogram /hst_u_response_time/ was disabled on this level to
+-- not count visiting unrelated locations (i.e. /\//, /\/1/, and /\/404/): the
+-- histogram will be re-enabled later in locations related to proxying requests.
+-- The sum counter will also be declared inside the proxying locations and take
+-- the value of /hs_u_response_time_scaled/ as the input value.
 --
 -- So many new variables require a bigger hash table to store them.
 --
@@ -699,16 +697,16 @@ ngxExportYY 'scale1000
 -- @
 -- @
 --         location \/backends {
---             counter $__/hst_u_response_time_00/__ inc $inc_hst_u_response_time_00;
---             counter $__/hst_u_response_time_cnt/__ inc $inc_hst_u_response_time_cnt;
+--             histogram $__/hst_u_response_time/__ reuse;
+--             counter $__/hst_u_response_time_sum/__ inc $hs_u_response_time_scaled;
 --             error_page 404 \@status404;
 --             proxy_intercept_errors on;
 --             proxy_pass http:\/\/backends;
 --         }
 --
 --         location \@status404 {
---             counter $__/hst_u_response_time_00/__ inc $inc_hst_u_response_time_00;
---             counter $__/hst_u_response_time_cnt/__ inc $inc_hst_u_response_time_cnt;
+--             histogram $__/hst_u_response_time/__ reuse;
+--             counter $__/hst_u_response_time_sum/__ inc $hs_u_response_time_scaled;
 --             echo_sleep 0.2;
 --             echo \"Caught 404\";
 --         }
@@ -725,7 +723,7 @@ ngxExportYY 'scale1000
 -- > $ for i in {1..20} ; do curl -D- 'http://localhost:8010/backends' & done
 -- >   ...
 --
--- > $ curl -s 'http://127.0.0.1:8020/metrics'
+-- > $ curl -s 'http://127.0.0.1:8020/'
 -- > # HELP cnt_4xx Number of responses with 4xx status
 -- > # TYPE cnt_4xx counter
 -- > cnt_4xx 11.0

@@ -829,22 +829,20 @@ We also have to add counters and mappings.
         counter $cnt_u_4xx inc $inc_cnt_u_4xx;
         counter $cnt_u_5xx inc $inc_cnt_u_5xx;
 
+        # cache $upstream_response_time
         haskell_run ! $hs_u_response_times $upstream_response_time;
-        haskell_run cumulativeFPValue $hs_u_response_time $hs_u_response_times;
 
         histogram $hst_u_response_time 11 $u_response_time_bucket;
+        histogram $hst_u_response_time undo;
+        haskell_run cumulativeFPValue $hs_u_response_time $hs_u_response_times;
         haskell_run scale1000 $hs_u_response_time_scaled $hs_u_response_time;
-        counter $hst_u_response_time_sum inc $hs_u_response_time_scaled;
-
-        counter $hst_u_response_time_00 undo;
-        counter $hst_u_response_time_cnt undo;
 ```
 
-Notice that the first bucket *hst_u_response_time_00* and the total count
-value *hst_u_response_time_cnt* of histogram *hst_u_response_time* were
-temporarily disabled to not count visiting unrelated locations (i.e. */*,
-*/1*, and */404*): the two counters will be later re-enabled in locations
-related to proxying requests.
+Notice that histogram *hst_u_response_time* was disabled on this level to
+not count visiting unrelated locations (i.e. */*, */1*, and */404*): the
+histogram will be re-enabled later in locations related to proxying requests.
+The sum counter will also be declared inside the proxying locations and take
+the value of *hs_u_response_time_scaled* as the input value.
 
 So many new variables require a bigger hash table to store them.
 
@@ -882,16 +880,16 @@ server.
 
 ```nginx
         location /backends {
-            counter $hst_u_response_time_00 inc $inc_hst_u_response_time_00;
-            counter $hst_u_response_time_cnt inc $inc_hst_u_response_time_cnt;
+            histogram $hst_u_response_time reuse;
+            counter $hst_u_response_time_sum inc $hs_u_response_time_scaled;
             error_page 404 @status404;
             proxy_intercept_errors on;
             proxy_pass http://backends;
         }
 
         location @status404 {
-            counter $hst_u_response_time_00 inc $inc_hst_u_response_time_00;
-            counter $hst_u_response_time_cnt inc $inc_hst_u_response_time_cnt;
+            histogram $hst_u_response_time reuse;
+            counter $hst_u_response_time_sum inc $hs_u_response_time_scaled;
             echo_sleep 0.2;
             echo "Caught 404";
         }
@@ -901,6 +899,8 @@ We are going to additionally increase response time by *0.2* seconds when a
 backend server responds with HTTP status *404*, and this is why location
 *@status404* was added.
 
+###### A simple test
+
 Let's restart Nginx and run a simple test.
 
 ```ShellSession
@@ -909,7 +909,7 @@ $ for i in {1..20} ; do curl -D- 'http://localhost:8010/backends' & done
 ```
 
 ```ShellSession
-$ curl -s 'http://127.0.0.1:8020/metrics'
+$ curl -s 'http://127.0.0.1:8020/'
 # HELP cnt_4xx Number of responses with 4xx status
 # TYPE cnt_4xx counter
 cnt_4xx 11.0
