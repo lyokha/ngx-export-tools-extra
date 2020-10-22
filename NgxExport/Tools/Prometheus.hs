@@ -61,9 +61,10 @@ type ServerName = Text
 type MetricsName = Text
 type MetricsHelp = Text
 type MetricsLabel = Text
+type MetricsAnnotation = Text
 type CounterValue = Word64
 type MetricsData = Map MetricsName CounterValue
-type HistogramData = Map MetricsName (MetricsLabel, Double)
+type HistogramData = Map MetricsName (MetricsLabel, MetricsRole, Double)
 type MetricsToLabelMap = Map MetricsName MetricsLabel
 
 data PrometheusConf =
@@ -87,11 +88,15 @@ type AllOtherCounters = MetricsData
 type AllMetrtics =
     (ServerName, AllCounters, AllHistogramsLayout, AllOtherCounters)
 
-data MetricsType = Counter Double
-                 | Gauge Double
-                 | Histogram HistogramData
+data MetricsType = Counter Double MetricsAnnotation
+                 | Gauge Double MetricsAnnotation
+                 | Histogram HistogramData MetricsAnnotation
 
-type PrometheusMetrics = Map MetricsName (MetricsHelp, MetricsType)
+data MetricsRole = HistogramBucket
+                 | HistogramSum
+                 | HistogramCount deriving Eq
+
+type PrometheusMetrics = Map MetricsName (MetricsHelp, [MetricsType])
 
 conf :: IORef (Maybe PrometheusConf)
 conf = unsafePerformIO $ newIORef Nothing
@@ -439,18 +444,25 @@ toPrometheusMetrics' PrometheusConf {..} (srv, cnts, hs, ocnts) =
             )
         cnts' = maybe M.empty toValues $ M.lookup srv cnts
         hs' = M.lookup srv hs
-        (cntsH, cntsC) =
+        (cntsH, cntsC, cntsG) =
             if maybe True M.null hs'
-                then (M.empty, M.mapWithKey cType cnts')
+                then let (cntsG', cntsC') = M.partitionWithKey gCounter cnts'
+                     in (M.empty, cntsC', cntsG')
                 else let hs'' = fromJust hs'
                          rs = M.keys &&& M.foldr labeledRange M.empty $ hs''
-                         cntsH' = M.filterWithKey (hCounter rs) cnts'
-                         cntsC' = cnts' `M.difference` cntsH'
+                         (cntsH', (cntsG', cntsC')) =
+                             second (M.partitionWithKey gCounter) $
+                             M.partitionWithKey (hCounter rs) cnts'
                          cntsH'' = M.mapWithKey
                              (\k -> toHistogram cntsH' k . range) hs''
-                     in (M.map Histogram cntsH'', M.mapWithKey cType cntsC')
-        cntsA = cntsH `M.union` cntsC `M.union`
-            M.mapWithKey cType (toValues ocnts)
+                     in (cntsH'', cntsC', cntsG')
+        (cntsOC, cntsOG) = M.partitionWithKey gCounter $ toValues ocnts
+        -- the _err counters from the Nginx custom counters module will be
+        -- automatically deleted in such ordering of unions, but only if there
+        -- are custom labels (i.e. annotations) for the given histogram
+        cntsA = collect Histogram cntsH
+                `M.union` collect Counter (cntsC `M.union` cntsOC)
+                `M.union` collect Gauge (cntsG `M.union` cntsOG)
     in M.mapWithKey (\k -> (fromMaybe "" (M.lookup k pcMetrics),)) cntsA
     where labeledRange = M.union . M.filter (not . T.null) . range
           hCounter (ks, ts) k = const $
@@ -463,66 +475,100 @@ toPrometheusMetrics' PrometheusConf {..} (srv, cnts, hs, ocnts) =
                                      in ((k == v1 || k == v2) :)
                                 ) [] ks
                       )
-          cType k v = if k `elem` pcGauges
-                          then Gauge v
-                          else Counter v
+          gCounter = const . flip elem pcGauges
           toHistogram cs hk rs =
               let ranges = M.mapWithKey
-                      (\k -> (, fromMaybe 0.0 (M.lookup k cs))) rs
+                      (\k ->
+                          (, HistogramBucket, fromMaybe 0.0 (M.lookup k cs))
+                      ) rs
                   sums = let v1 = hk `T.append` "_sum"
                              v2 = hk `T.append` "_cnt"
-                             withZeroLabel = return . ("",)
+                             withZeroLabel r = return . ("", r,)
                          in M.fromList $
                              map (second fromJust) $ filter (isJust . snd)
-                                 [(v1, M.lookup v1 cs >>= withZeroLabel)
-                                 ,(v2, M.lookup v2 cs >>= withZeroLabel)
+                                 [(v1, M.lookup v1 cs >>=
+                                     withZeroLabel HistogramSum
+                                  )
+                                 ,(v2, M.lookup v2 cs >>=
+                                     withZeroLabel HistogramCount
+                                  )
                                  ]
               in ranges `M.union` sums
+          collect cType =
+              M.fromAscList
+              . map ((fst . head) &&& map (uncurry cType . snd))
+              . groupBy ((==) `on` fst)
+              . map (\(k, v) ->
+                        let (k', a) =
+                                second (\a' ->
+                                            if T.null a'
+                                                then ""
+                                                else T.map
+                                                     (\c ->
+                                                         if c == '(' || c == ')'
+                                                             then '"'
+                                                             else c
+                                                     ) $ T.tail a'
+                                       ) $ T.breakOn "@" k
+                        in (k', (v, a))
+                    )
+              . M.toList
 
 showPrometheusMetrics :: PrometheusMetrics -> L.ByteString
 showPrometheusMetrics = TL.encodeUtf8 . M.foldlWithKey
-    (\a k (h, m) ->
+    (\a k (h, ms) ->
         let k' = TL.fromStrict k
         in TL.concat [a, "# HELP ", k', " ", TL.fromStrict h, "\n"
-                     ,   "# TYPE ", k', " ", showType m, "\n"
-                     ,case m of
-                          Counter v -> TL.concat
-                              [k', " ", TL.pack $ show v, "\n"]
-                          Gauge v -> TL.concat
-                              [k', " ", TL.pack $ show v, "\n"]
-                          Histogram h' -> fst $
-                              M.foldlWithKey (showHistogram k k') ("", 0.0) h'
+                     ,   "# TYPE ", k', " ", showType $ head ms, "\n"
+                     ,foldl (showCounter k') "" ms
                      ]
     ) ""
-    where showType (Counter _) = "counter"
-          showType (Gauge _) = "gauge"
-          showType (Histogram _) = "histogram"
-          showHistogram k k' a@(t, n) c (l, v) =
+    where showType (Counter _ _) = "counter"
+          showType (Gauge _ _) = "gauge"
+          showType (Histogram _ _) = "histogram"
+          showCounter k a m =
+              TL.concat [a
+                        ,case m of
+                            Counter v anno -> TL.concat
+                                [k, showAnno anno, " ", TL.pack $ show v, "\n"]
+                            Gauge v anno -> TL.concat
+                                [k, showAnno anno, " ", TL.pack $ show v, "\n"]
+                            Histogram h' anno -> fst $
+                                M.foldlWithKey (showHistogram k anno)
+                                    ("", 0.0) h'
+                        ]
+          showAnno x = let x' = TL.fromStrict x
+                       in if TL.null x'
+                              then x'
+                              else TL.concat ["{", x', "}"]
+          showAnnoH x = let x' = TL.fromStrict x
+                        in if TL.null x'
+                               then x'
+                               else TL.concat [",", x']
+          showHistogram k anno a@(t, n) _ (l, r, v) =
               if T.null l
-                  then if k `T.append` "_sum" == c
-                           then (TL.concat [t
-                                           ,TL.fromStrict c
-                                           ," "
-                                           ,TL.pack $ show v
-                                           ,"\n"
-                                           ]
-                                ,n
-                                )
-                           else if k `T.append` "_cnt" == c
-                                    then (TL.concat [t
-                                                    ,k'
-                                                    ,"_count "
-                                                    ,TL.pack $
-                                                        show (round v :: Word64)
-                                                    ,"\n"
-                                                    ]
-                                         ,n
-                                         )
-                                     else a
+                  then case r of
+                      HistogramSum ->
+                          (TL.concat [t, k, "_sum"
+                                     ,showAnno anno, " "
+                                     ,TL.pack $ show v
+                                     ,"\n"
+                                     ]
+                          ,n
+                          )
+                      HistogramCount ->
+                          (TL.concat [t, k, "_count"
+                                     ,showAnno anno, " "
+                                     ,TL.pack $ show (round v :: Word64)
+                                     ,"\n"
+                                     ]
+                          ,n
+                          )
+                      _  -> a
                   else let n' = n + v
-                       in (TL.concat [t
-                                     ,k'
-                                     ,"_bucket{le=\"", TL.fromStrict l, "\"} "
+                       in (TL.concat [t, k
+                                     ,"_bucket{le=\"", TL.fromStrict l, "\""
+                                     ,showAnnoH anno, "} "
                                      ,TL.pack $ show (round n' :: Word64)
                                      ,"\n"
                                      ]
