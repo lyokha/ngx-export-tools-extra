@@ -27,6 +27,9 @@ module NgxExport.Tools.Prometheus (
                                   ,scale1000
     -- *** Converting lists of values to counters
     -- $convertingListsOfValuesToCounters
+
+    -- * Parameterization of metrics with custom labels
+    -- $parameterization
                                   ) where
 
 import           NgxExport
@@ -878,4 +881,178 @@ cumulativeFPValue :: ByteString -> L.ByteString
 cumulativeFPValue = C8L.pack . show . cumulativeValue' @Double
 
 ngxExportYY 'cumulativeFPValue
+
+-- $parameterization
+--
+-- In the previous examples we used many counters which served similar purposes.
+-- For example, counters /cnt_4xx/, /cnt_5xx/, /cnt_u_4xx/, and /cnt_u_5xx/ all
+-- counted response statuses in different conditions: particularly, the 2 former
+-- counters counted /4xx/ and /5xx/ response statuses sent to clients, while the
+-- latter 2 counters counted /4xx/ and /5xx/ response statuses received from the
+-- upstreams. It looks like they could be shown as a single compound counter
+-- parameterized by the value and the origin. We also had two histograms
+-- /hst_request_time/ and /hst_u_response_time/ which could be combined in a
+-- single entity parameterized by the scope (the time of the whole request
+-- against the time spent in the upstream).
+--
+-- Fortunately, Prometheus provides a mechanism to make such custom
+-- parameterizations by using metrics /labels/. This module supports the
+-- parameterization with labels by expecting special /annotations/ attached to
+-- the names of the counters.
+--
+-- Let's parameterize the status counters and the request times as it was
+-- proposed at the beginning of this section.
+--
+-- ==== File /nginx.conf/: changes related to counters annotations
+-- @
+--     haskell_run_service simpleService_prometheusConf $hs_prometheus_conf
+--             \'PrometheusConf
+--                 { pcMetrics = fromList
+--                     [(\"__/cnt_status/__\", \"Number of responses with given status\")
+--                     ,(\"cnt_stub_status_active\", \"Active requests\")
+--                     ,(\"cnt_uptime\", \"Nginx master uptime\")
+--                     ,(\"cnt_uptime_reload\", \"Nginx master uptime after reload\")
+--                     ,(\"__/hst_request_time/__\", \"Request duration\")
+--                     ]
+--                 , pcGauges = [\"cnt_stub_status_active\"]
+--                 , pcScale1000 = [\"__/hst_request_time\@scope=(total)_sum/__\"
+--                                 ,\"__/hst_request_time\@scope=(in_upstreams)_sum/__\"
+--                                 ]
+--                 }\';
+-- 
+-- @
+-- @
+--         counter $__/cnt_status\@value=(4xx),from=(response)/__ inc $inc_cnt_4xx;
+--         counter $__/cnt_status\@value=(5xx),from=(response)/__ inc $inc_cnt_5xx;
+-- 
+--         haskell_run statusLayout $hs_upstream_status $upstream_status;
+--         counter $__/cnt_status\@value=(4xx),from=(upstream)/__ inc $inc_cnt_u_4xx;
+--         counter $__/cnt_status\@value=(5xx),from=(upstream)/__ inc $inc_cnt_u_5xx;
+-- 
+--         # cache $request_time and $bytes_sent
+--         haskell_run ! $hs_request_time $request_time;
+--         haskell_run ! $hs_bytes_sent $bytes_sent;
+-- 
+--         histogram $__/hst_request_time\@scope=(total)/__ 11 $request_time_bucket;
+--         haskell_run__/ scale1000 $hs_request_time_scaled $hs_request_time;
+--         counter $hst_request_time\@scope=(total)_sum inc $hs_request_time_scaled;
+-- 
+--         histogram $hst_bytes_sent 6 $bytes_sent_bucket;
+--         counter $hst_bytes_sent_sum inc $hs_bytes_sent;
+-- 
+--         # cache $upstream_response_time
+--         haskell_run ! $hs_u_response_times $upstream_response_time;
+-- 
+--         histogram $__/hst_request_time\@scope=(in_upstreams)/__ 11
+--                 $u_response_time_bucket;
+--         histogram $__/hst_request_time\@scope=(in_upstreams)/__ undo;
+--         haskell_run cumulativeFPValue $hs_u_response_time $hs_u_response_times;
+--         haskell_run scale1000 $hs_u_response_time_scaled $hs_u_response_time;
+-- 
+--         location \/ {
+--             echo_sleep 0.5;
+--             echo Ok;
+--         }
+-- 
+--         location \/1 {
+--             echo_sleep 1.0;
+--             echo Ok;
+--         }
+-- 
+--         location \/404 {
+--             return 404;
+--         }
+-- 
+--         location \/backends {
+--             histogram $__/hst_request_time\@scope=(in_upstreams)/__ reuse;
+--             counter $__/hst_request_time\@scope=(in_upstreams)_sum/__ inc
+--                     $hs_u_response_time_scaled;
+--             error_page 404 \@status404;
+--             proxy_intercept_errors on;
+--             proxy_pass http:\/\/backends;
+--         }
+-- 
+--         location \@status404 {
+--             histogram $__/hst_request_time\@scope=(in_upstreams)/__ reuse;
+--             counter $__/hst_request_time\@scope=(in_upstreams)_sum/__ inc
+--                     $hs_u_response_time_scaled;
+--             echo_sleep 0.2;
+--             echo \"Caught 404\";
+--         }
+-- @
+--
+-- Notice that the 4 status counters are combined into a compound counter
+-- /cnt_status/ whose name gets annotated by a tail starting with __/\@/__.
+-- This annotation will be put in the list of labels of the Prometheus metrics
+-- with symbols __/(/__ and __/)/__ replaced with __/\"/__ but without any
+-- further validation. The request time histograms and the corresponding sum
+-- counters are annotated in a similar way.
+--
+-- ==== A simple test
+--
+-- > $ curl 'http://127.0.0.1:8010/404'
+-- >   ...
+-- > $ for i in {1..20} ; do curl -D- 'http://localhost:8010/backends' & done
+-- >   ...
+--
+-- > $curl -s 'http://localhost:8020/' 
+-- > # HELP cnt_status Number of responses with given status
+-- > # TYPE cnt_status counter
+-- > cnt_status{value="4xx",from="response"} 11.0
+-- > cnt_status{value="4xx",from="upstream"} 10.0
+-- > cnt_status{value="5xx",from="response"} 10.0
+-- > cnt_status{value="5xx",from="upstream"} 10.0
+-- > # HELP cnt_stub_status_active Active requests
+-- > # TYPE cnt_stub_status_active counter
+-- > cnt_stub_status_active 1.0
+-- > # HELP cnt_uptime Nginx master uptime
+-- > # TYPE cnt_uptime gauge
+-- > cnt_uptime 70.0
+-- > # HELP cnt_uptime_reload Nginx master uptime after reload
+-- > # TYPE cnt_uptime_reload gauge
+-- > cnt_uptime_reload 70.0
+-- > # HELP hst_bytes_sent 
+-- > # TYPE hst_bytes_sent histogram
+-- > hst_bytes_sent_bucket{le="0"} 0
+-- > hst_bytes_sent_bucket{le="10"} 0
+-- > hst_bytes_sent_bucket{le="100"} 0
+-- > hst_bytes_sent_bucket{le="1000"} 21
+-- > hst_bytes_sent_bucket{le="10000"} 21
+-- > hst_bytes_sent_bucket{le="+Inf"} 21
+-- > hst_bytes_sent_count 21
+-- > hst_bytes_sent_sum 4348.0
+-- > # HELP hst_bytes_sent_err 
+-- > # TYPE hst_bytes_sent_err counter
+-- > hst_bytes_sent_err 0.0
+-- > # HELP hst_request_time Request duration
+-- > # TYPE hst_request_time histogram
+-- > hst_request_time_bucket{le="0.005",scope="in_upstreams"} 10
+-- > hst_request_time_bucket{le="0.01",scope="in_upstreams"} 10
+-- > hst_request_time_bucket{le="0.05",scope="in_upstreams"} 10
+-- > hst_request_time_bucket{le="0.1",scope="in_upstreams"} 10
+-- > hst_request_time_bucket{le="0.5",scope="in_upstreams"} 14
+-- > hst_request_time_bucket{le="1.0",scope="in_upstreams"} 20
+-- > hst_request_time_bucket{le="5.0",scope="in_upstreams"} 20
+-- > hst_request_time_bucket{le="10.0",scope="in_upstreams"} 20
+-- > hst_request_time_bucket{le="30.0",scope="in_upstreams"} 20
+-- > hst_request_time_bucket{le="60.0",scope="in_upstreams"} 20
+-- > hst_request_time_bucket{le="+Inf",scope="in_upstreams"} 20
+-- > hst_request_time_count{scope="in_upstreams"} 20
+-- > hst_request_time_sum{scope="in_upstreams"} 5.012
+-- > hst_request_time_bucket{le="0.005",scope="total"} 11
+-- > hst_request_time_bucket{le="0.01",scope="total"} 11
+-- > hst_request_time_bucket{le="0.05",scope="total"} 11
+-- > hst_request_time_bucket{le="0.1",scope="total"} 11
+-- > hst_request_time_bucket{le="0.5",scope="total"} 11
+-- > hst_request_time_bucket{le="1.0",scope="total"} 21
+-- > hst_request_time_bucket{le="5.0",scope="total"} 21
+-- > hst_request_time_bucket{le="10.0",scope="total"} 21
+-- > hst_request_time_bucket{le="30.0",scope="total"} 21
+-- > hst_request_time_bucket{le="60.0",scope="total"} 21
+-- > hst_request_time_bucket{le="+Inf",scope="total"} 21
+-- > hst_request_time_count{scope="total"} 21
+-- > hst_request_time_sum{scope="total"} 7.02
+--
+-- Notice that the histogram error counter from /nginx-custom-counters-module/
+-- is not shown in annotated histograms.
 

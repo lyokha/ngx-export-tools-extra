@@ -1,3 +1,9 @@
+### 0.5.6.0
+
+- Added labeled parameterization for all supported types of metrics by using
+  annotated counters from
+  [*nginx-custom-counters-module*](https://github.com/lyokha/nginx-custom-counters-module).
+
 ### 0.5.5.0
 
 - Added content handler *prometheusMetrics*.
