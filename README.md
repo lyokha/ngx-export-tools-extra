@@ -991,18 +991,18 @@ which corresponds to 11 visits to location *@status404* and the sleep time
 ---
 
 In the previous examples we used many counters which served similar purposes.
-For example, counters *cnt_4xx*, *cnt_5xx*, *cnt_u_4xx*, and *cnt_u_5xx* all
+For example, counters *cnt_4xx*, *cnt_5xx*, *cnt_u_4xx*, and *cnt_u_5xx*
 counted response statuses in different conditions: particularly, the 2 former
 counters counted *4xx* and *5xx* response statuses sent to clients, while the
 latter 2 counters counted *4xx* and *5xx* response statuses received from the
-upstreams. It looks like they could be shown as a single compound counter
-parameterized by the value and the origin. We also had two histograms
-*hst_request_time* and *hst_u_response_time* which could be combined in a
-single entity parameterized by the scope (the time of the whole request
-against the time spent in the upstream).
+upstream. It feels that they could be shown as a single compound counter
+parameterized by the range of values and the origin. We also had two
+histograms *hst_request_time* and *hst_u_response_time* which could also be
+combined in a single entity parameterized by the scope (the time of the whole
+request against the time spent in the upstream).
 
 Fortunately, Prometheus provides a mechanism to make such custom
-parameterizations by using metrics *labels*. This module supports the
+parameterizations by using *labels* in metrics. This module supports the
 parameterization with labels by expecting special *annotations* attached to
 the names of the counters.
 
@@ -1088,12 +1088,13 @@ proposed at the beginning of this section.
         }
 ```
 
-Notice that the 4 status counters are combined into a compound counter
-*cnt_status* whose name gets annotated by a tail starting with *@*.
-This annotation will be put in the list of labels of the Prometheus metrics
-with symbols *(* and *)* replaced with *"* but without any
-further validation. The request time histograms and the corresponding sum
-counters are annotated in a similar way.
+Notice that the 4 status counters were combined into a compound counter
+*cnt_status* whose name was annotated by a tail starting with *@*. This
+annotation gets put in the list of labels of the Prometheus metrics with
+symbols *(* and *)* replaced by *"* without any further validation. The
+request time histograms and the corresponding sum counters were annotated in
+a similar way. Annotations in histogram sum counters must be put between the
+base name of the counter and the suffix *_sum*.
 
 ###### A simple test
 
@@ -1164,8 +1165,8 @@ hst_request_time_count{scope="total"} 21
 hst_request_time_sum{scope="total"} 7.02
 ```
 
-Notice that the histogram error counter from *nginx-custom-counters-module*
-is not shown in annotated histograms.
+Notice that the histogram error counters from *nginx-custom-counters-module*
+are not shown in annotated histograms.
 
 #### Module *NgxExport.Tools.Subrequest*
 
