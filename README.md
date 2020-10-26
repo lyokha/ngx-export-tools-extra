@@ -1114,13 +1114,13 @@ cnt_status{value="4xx",from="upstream"} 10.0
 cnt_status{value="5xx",from="response"} 10.0
 cnt_status{value="5xx",from="upstream"} 10.0
 # HELP cnt_stub_status_active Active requests
-# TYPE cnt_stub_status_active counter
+# TYPE cnt_stub_status_active gauge
 cnt_stub_status_active 1.0
 # HELP cnt_uptime Nginx master uptime
-# TYPE cnt_uptime gauge
+# TYPE cnt_uptime counter
 cnt_uptime 70.0
 # HELP cnt_uptime_reload Nginx master uptime after reload
-# TYPE cnt_uptime_reload gauge
+# TYPE cnt_uptime_reload counter
 cnt_uptime_reload 70.0
 # HELP hst_bytes_sent 
 # TYPE hst_bytes_sent histogram

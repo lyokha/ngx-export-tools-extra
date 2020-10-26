@@ -1,3 +1,7 @@
+### 0.5.6.2
+
+- Fixed wrong partitioning of gauges and counters from *special* counters.
+
 ### 0.5.6.0
 
 - Added labeled parameterization for all supported types of metrics by using

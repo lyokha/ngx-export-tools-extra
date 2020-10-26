@@ -459,7 +459,7 @@ toPrometheusMetrics' PrometheusConf {..} (srv, cnts, hs, ocnts) =
                          cntsH'' = M.mapWithKey
                              (\k -> toHistogram cntsH' k . range) hs''
                      in (cntsH'', cntsC', cntsG')
-        (cntsOC, cntsOG) = M.partitionWithKey gCounter $ toValues ocnts
+        (cntsOG, cntsOC) = M.partitionWithKey gCounter $ toValues ocnts
         -- the _err counters from the Nginx custom counters module will be
         -- automatically deleted in such ordering of unions, but only if there
         -- are custom labels (i.e. annotations) for the given histogram
@@ -1004,13 +1004,13 @@ ngxExportYY 'cumulativeFPValue
 -- > cnt_status{value="5xx",from="response"} 10.0
 -- > cnt_status{value="5xx",from="upstream"} 10.0
 -- > # HELP cnt_stub_status_active Active requests
--- > # TYPE cnt_stub_status_active counter
+-- > # TYPE cnt_stub_status_active gauge
 -- > cnt_stub_status_active 1.0
 -- > # HELP cnt_uptime Nginx master uptime
--- > # TYPE cnt_uptime gauge
+-- > # TYPE cnt_uptime counter
 -- > cnt_uptime 70.0
 -- > # HELP cnt_uptime_reload Nginx master uptime after reload
--- > # TYPE cnt_uptime_reload gauge
+-- > # TYPE cnt_uptime_reload counter
 -- > cnt_uptime_reload 70.0
 -- > # HELP hst_bytes_sent 
 -- > # TYPE hst_bytes_sent histogram
