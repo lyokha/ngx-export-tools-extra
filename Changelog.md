@@ -1,3 +1,7 @@
+### 0.5.7.0
+
+- Show histogram *error* counters in parameterized Prometheus metrics.
+
 ### 0.5.6.2
 
 - Fixed wrong partitioning of gauges and counters from *special* counters.

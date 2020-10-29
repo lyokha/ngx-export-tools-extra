@@ -460,12 +460,10 @@ toPrometheusMetrics' PrometheusConf {..} (srv, cnts, hs, ocnts) =
                              (\k -> toHistogram cntsH' k . range) hs''
                      in (cntsH'', cntsC', cntsG')
         (cntsOG, cntsOC) = M.partitionWithKey gCounter $ toValues ocnts
-        -- the _err counters from the Nginx custom counters module will be
-        -- automatically deleted in such ordering of unions, but only if there
-        -- are custom labels (i.e. annotations) for the given histogram
-        cntsA = collect Histogram cntsH
-                `M.union` collect Counter (cntsC `M.union` cntsOC)
-                `M.union` collect Gauge (cntsG `M.union` cntsOG)
+        cntsA = collect Histogram id cntsH
+                `M.union` collect Counter renameErrCounter
+                    (cntsC `M.union` cntsOC)
+                `M.union` collect Gauge id (cntsG `M.union` cntsOG)
     in M.mapWithKey (\k -> (fromMaybe "" (M.lookup k pcMetrics),)) cntsA
     where labeledRange = M.union . M.filter (not . T.null) . range
           hCounter (ks, ts) k = const $
@@ -497,7 +495,7 @@ toPrometheusMetrics' PrometheusConf {..} (srv, cnts, hs, ocnts) =
                                   )
                                  ]
               in ranges `M.union` sums
-          collect cType =
+          collect cType renameErrCounterF =
               M.fromAscList
               . map ((fst . head) &&& map (uncurry cType . snd))
               . groupBy ((==) `on` fst)
@@ -516,6 +514,15 @@ toPrometheusMetrics' PrometheusConf {..} (srv, cnts, hs, ocnts) =
                         in (k', (v, a))
                     )
               . M.toList
+              . M.mapKeys renameErrCounterF
+          renameErrCounter k =
+              let s = "_err"
+                  (b, (a, e)) =
+                      second (\v -> if s `T.isSuffixOf` v
+                                        then (fromJust $ T.stripSuffix s v, s)
+                                        else (v, "")
+                             ) $ T.breakOn "@" k
+              in T.concat [b, e, a]
 
 showPrometheusMetrics :: PrometheusMetrics -> L.ByteString
 showPrometheusMetrics = TL.encodeUtf8 . M.foldlWithKey
@@ -996,7 +1003,7 @@ ngxExportYY 'cumulativeFPValue
 -- > $ for i in {1..20} ; do curl -D- 'http://localhost:8010/backends' & done
 -- >   ...
 --
--- > $curl -s 'http://localhost:8020/' 
+-- > $ curl -s 'http://localhost:8020/' 
 -- > # HELP cnt_status Number of responses with given status
 -- > # TYPE cnt_status counter
 -- > cnt_status{value="4xx",from="response"} 11.0
@@ -1053,7 +1060,7 @@ ngxExportYY 'cumulativeFPValue
 -- > hst_request_time_bucket{le="+Inf",scope="total"} 21
 -- > hst_request_time_count{scope="total"} 21
 -- > hst_request_time_sum{scope="total"} 7.02
---
--- Notice that the histogram error counters from /nginx-custom-counters-module/
--- are not shown in annotated histograms.
-
+-- > # HELP hst_request_time_err 
+-- > # TYPE hst_request_time_err counter
+-- > hst_request_time_err{scope="in_upstreams"} 0.0
+-- > hst_request_time_err{scope="total"} 0.0

@@ -1106,7 +1106,7 @@ $ for i in {1..20} ; do curl -D- 'http://localhost:8010/backends' & done
 ```
 
 ```ShellSession
-$curl -s 'http://localhost:8020/' 
+$ curl -s 'http://localhost:8020/' 
 # HELP cnt_status Number of responses with given status
 # TYPE cnt_status counter
 cnt_status{value="4xx",from="response"} 11.0
@@ -1163,10 +1163,11 @@ hst_request_time_bucket{le="60.0",scope="total"} 21
 hst_request_time_bucket{le="+Inf",scope="total"} 21
 hst_request_time_count{scope="total"} 21
 hst_request_time_sum{scope="total"} 7.02
+# HELP hst_request_time_err 
+# TYPE hst_request_time_err counter
+hst_request_time_err{scope="in_upstreams"} 0.0
+hst_request_time_err{scope="total"} 0.0
 ```
-
-Notice that the histogram error counters from *nginx-custom-counters-module*
-are not shown in annotated histograms.
 
 #### Module *NgxExport.Tools.Subrequest*
 
