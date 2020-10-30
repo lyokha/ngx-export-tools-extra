@@ -518,10 +518,8 @@ toPrometheusMetrics' PrometheusConf {..} (srv, cnts, hs, ocnts) =
           renameErrCounter k =
               let s = "_err"
                   (b, (a, e)) =
-                      second (\v -> if s `T.isSuffixOf` v
-                                        then (fromJust $ T.stripSuffix s v, s)
-                                        else (v, "")
-                             ) $ T.breakOn "@" k
+                      second (\v -> maybe (v, "") (, s) $ T.stripSuffix s v) $
+                          T.breakOn "@" k
               in T.concat [b, e, a]
 
 showPrometheusMetrics :: PrometheusMetrics -> L.ByteString
