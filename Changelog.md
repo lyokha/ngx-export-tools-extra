@@ -1,3 +1,7 @@
+### 0.5.8.0
+
+- Using *Data.HashSet* for *pcGauges* and *pcScale1000* in Prometheus metrics.
+
 ### 0.5.7.0
 
 - Show histogram *error* counters in parameterized Prometheus metrics.

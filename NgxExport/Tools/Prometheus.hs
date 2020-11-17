@@ -37,6 +37,8 @@ import           NgxExport.Tools
 
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
+import           Data.HashSet (HashSet)
+import qualified Data.HashSet as HS
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as L
@@ -72,8 +74,8 @@ type MetricsToLabelMap = Map MetricsName MetricsLabel
 
 data PrometheusConf =
     PrometheusConf { pcMetrics :: Map MetricsName MetricsHelp
-                   , pcGauges :: [MetricsName]
-                   , pcScale1000 :: [MetricsName]
+                   , pcGauges :: HashSet MetricsName
+                   , pcScale1000 :: HashSet MetricsName
                    } deriving Read
 
 data HistogramLayout =
@@ -187,8 +189,10 @@ conf = unsafePerformIO $ newIORef Nothing
 --                     ,(\"cnt_uptime_reload\", \"Nginx master uptime after reload\")
 --                     ,(\"hst_request_time\", \"Request duration\")
 --                     ]
---                 , __/pcGauges/__ = [\"cnt_stub_status_active\"]
---                 , __/pcScale1000/__ = [\"hst_request_time_sum\"]
+--                 , __/pcGauges/__ = fromList
+--                     [\"cnt_stub_status_active\"]
+--                 , __/pcScale1000/__ = fromList
+--                     [\"hst_request_time_sum\"]
 --                 }';
 --
 --     haskell_var_empty_on_error $hs_prom_metrics;
@@ -440,7 +444,7 @@ ngxExportSimpleServiceTyped
 toPrometheusMetrics' :: PrometheusConf -> AllMetrtics -> PrometheusMetrics
 toPrometheusMetrics' PrometheusConf {..} (srv, cnts, hs, ocnts) =
     let toValues = M.mapWithKey
-            (\k v -> (if k `elem` pcScale1000
+            (\k v -> (if k `HS.member` pcScale1000
                           then (/ 1000)
                           else id
                      ) $ fromIntegral v
@@ -476,7 +480,7 @@ toPrometheusMetrics' PrometheusConf {..} (srv, cnts, hs, ocnts) =
                                      in ((k == v1 || k == v2) :)
                                 ) [] ks
                       )
-          gCounter = const . flip elem pcGauges
+          gCounter = const . flip HS.member pcGauges
           toHistogram cs hk rs =
               let ranges = M.mapWithKey
                       (\k ->
@@ -743,10 +747,12 @@ ngxExportYY 'scale1000
 --                     ,(\"__/hst_u_response_time/__\"
 --                      ,\"Response time from all servers in a single upstream\")
 --                     ]
---                 , __/pcGauges/__ = [\"cnt_stub_status_active\"]
---                 , __/pcScale1000/__ = [\"hst_request_time_sum\"
---                                 ,\"__/hst_u_response_time_sum/__\"
---                                 ]
+--                 , __/pcGauges/__ = fromList
+--                     [\"cnt_stub_status_active\"]
+--                 , __/pcScale1000/__ = fromList
+--                     [\"hst_request_time_sum\"
+--                     ,\"__/hst_u_response_time_sum/__\"
+--                     ]
 --                 }\';
 -- @
 -- @
@@ -919,10 +925,12 @@ ngxExportYY 'cumulativeFPValue
 --                     ,(\"cnt_uptime_reload\", \"Nginx master uptime after reload\")
 --                     ,(\"__/hst_request_time/__\", \"Request duration\")
 --                     ]
---                 , pcGauges = [\"cnt_stub_status_active\"]
---                 , pcScale1000 = [\"__/hst_request_time\@scope=(total)_sum/__\"
---                                 ,\"__/hst_request_time\@scope=(in_upstreams)_sum/__\"
---                                 ]
+--                 , pcGauges = fromList
+--                     [\"cnt_stub_status_active\"]
+--                 , pcScale1000 = fromList
+--                     [\"__/hst_request_time@\scope=(total)_sum/__\"
+--                     ,\"__/hst_request_time\@scope=(in_upstreams)_sum/__\"
+--                     ]
 --                 }\';
 -- 
 -- @

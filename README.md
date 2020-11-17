@@ -498,8 +498,10 @@ http {
                     ,("cnt_uptime_reload", "Nginx master uptime after reload")
                     ,("hst_request_time", "Request duration")
                     ]
-                , pcGauges = ["cnt_stub_status_active"]
-                , pcScale1000 = ["hst_request_time_sum"]
+                , pcGauges = fromList
+                    ["cnt_stub_status_active"]
+                , pcScale1000 = fromList
+                    ["hst_request_time_sum"]
                 }';
 
     haskell_var_empty_on_error $hs_prom_metrics;
@@ -871,10 +873,12 @@ server.
                     ,("hst_u_response_time"
                      ,"Response time from all servers in a single upstream")
                     ]
-                , pcGauges = ["cnt_stub_status_active"]
-                , pcScale1000 = ["hst_request_time_sum"
-                                ,"hst_u_response_time_sum"
-                                ]
+                , pcGauges = fromList
+                    ["cnt_stub_status_active"]
+                , pcScale1000 = fromList
+                    ["hst_request_time_sum"
+                    ,"hst_u_response_time_sum"
+                    ]
                 }';
 ```
 
@@ -1021,10 +1025,12 @@ proposed at the beginning of this section.
                     ,("cnt_uptime_reload", "Nginx master uptime after reload")
                     ,("hst_request_time", "Request duration")
                     ]
-                , pcGauges = ["cnt_stub_status_active"]
-                , pcScale1000 = ["hst_request_time@scope=(total)_sum"
-                                ,"hst_request_time@scope=(in_upstreams)_sum"
-                                ]
+                , pcGauges = fromList
+                    ["cnt_stub_status_active"]
+                , pcScale1000 = fromList
+                    ["hst_request_time@scope=(total)_sum"
+                    ,"hst_request_time@scope=(in_upstreams)_sum"
+                    ]
                 }';
 ```
 
