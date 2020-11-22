@@ -1241,8 +1241,9 @@ http {
 
         location / {
             haskell_run_async makeSubrequest $hs_subrequest
-                    '{"uri": "http://127.0.0.1:8010/proxy",
-                      "headers": [["Custom-Header", "$arg_a"]]}';
+                    '{"uri": "http://127.0.0.1:8010/proxy"
+                     ,"headers": [["Custom-Header", "$arg_a"]]
+                     }';
 
             if ($hs_subrequest = '') {
                 echo_status 404;
@@ -1326,6 +1327,72 @@ Failed to perform subrequest
 
 ---
 
+Making HTTP subrequests to the own Nginx service via the loopback interface
+(e.g. via *127.0.0.1*) has disadvantages of being neither very fast (if
+compared with various types of local data communication channels) nor very
+secure. Unix domain sockets is a better alternative in this sense. This
+module has support for them by providing configuration service
+*simpleService_configureUDS* where path to the socket can be set, and an
+extra field *srUseUDS* in data *SubrequestConf*.
+
+To extend the previous example for using with Unix domain sockets, the
+following declarations should be added.
+
+###### File *nginx.conf*: configuring the Unix domain socket
+
+```nginx
+    haskell_run_service simpleService_configureUDS $hs_service_uds
+            'UDSConf {udsPath = "/tmp/backend.sock"}';
+```
+
+*UDSConf* is an opaque type containing only one field *udsPath* with the path
+to the socket.
+
+###### File *nginx.conf*: new location */uds* in server *main*
+
+```nginx
+        location /uds {
+            haskell_run_async makeSubrequest $hs_subrequest
+                    '{"uri": "http://backend_proxy/"
+                     ,"headers": [["Custom-Header", "$arg_a"]]
+                     ,"useUDS": true
+                     }';
+
+            if ($hs_subrequest = '') {
+                echo_status 404;
+                echo "Failed to perform subrequest";
+                break;
+            }
+
+            echo -n $hs_subrequest;
+        }
+```
+
+###### File *nginx.conf*: new virtual server *backend_proxy*
+
+```nginx
+    server {
+        listen       unix:/tmp/backend.sock;
+        server_name  backend_proxy;
+
+        location / {
+            proxy_pass http://backend;
+        }
+    }
+```
+
+The server listens on the Unix domain socket with the path configured in
+service *simpleService_configureUDS*.
+
+###### A simple test
+
+```ShellSession
+$ curl 'http://localhost:8010/uds?a=Value'
+In backend, Custom-Header is 'Value'
+```
+
+---
+
 Handlers *makeSubrequest* and *makeSubrequestWithRead* return response body
 of subrequests skipping the response status and headers. To retrieve full
 data from a response, use another pair of asynchronous variable handlers and
@@ -1353,8 +1420,9 @@ going to use exported handlers only.
 ```nginx
         location /full {
             haskell_run_async makeSubrequestFull $hs_subrequest
-                    '{"uri": "http://127.0.0.1:$arg_p/proxy",
-                      "headers": [["Custom-Header", "$arg_a"]]}';
+                    '{"uri": "http://127.0.0.1:$arg_p/proxy"
+                     ,"headers": [["Custom-Header", "$arg_a"]]
+                     }';
 
             haskell_run extractStatusFromFullResponse $hs_subrequest_status
                     $hs_subrequest;

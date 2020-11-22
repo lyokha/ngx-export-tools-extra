@@ -1,3 +1,7 @@
+### 0.5.9.0
+
+- Allow Unix domain sockets in configurations of internal HTTP subrequests.
+
 ### 0.5.8.0
 
 - Using *Data.HashSet* for *pcGauges* and *pcScale1000* in Prometheus metrics.

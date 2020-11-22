@@ -22,6 +22,9 @@ module NgxExport.Tools.Subrequest (
     -- $makingHTTPSubrequests
                                    makeSubrequest
                                   ,makeSubrequestWithRead
+    -- * Internal HTTP subrequests via Unix domain sockets
+    -- $internalHTTPSubrequests
+
     -- * Getting full response data from HTTP subrequests
     -- $gettingFullResponse
                                   ,makeSubrequestFull
@@ -42,11 +45,14 @@ import           NgxExport.Tools
 import           Network.HTTP.Client hiding (ResponseTimeout)
 import qualified Network.HTTP.Client (HttpExceptionContent (ResponseTimeout))
 import           Network.HTTP.Types
+import qualified Network.Socket as S
+import qualified Network.Socket.ByteString as S
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString.Lazy.Char8 as C8L
+import           Data.IORef
 import qualified Data.Text.Encoding as T
 import qualified Data.Binary as Binary
 import           Data.HashSet (HashSet)
@@ -123,8 +129,9 @@ import           System.IO.Unsafe
 --
 --         location \/ {
 --             haskell_run_async __/makeSubrequest/__ $hs_subrequest
---                     \'{\"uri\": \"http:\/\/127.0.0.1:8010\/proxy\",
---                       \"headers\": [[\"Custom-Header\", \"$arg_a\"]]}\';
+--                     \'{\"uri\": \"http:\/\/127.0.0.1:8010\/proxy\"
+--                      ,\"headers\": [[\"Custom-Header\", \"$arg_a\"]]
+--                      }\';
 --
 --             if ($hs_subrequest = \'\') {
 --                 echo_status 404;
@@ -204,6 +211,10 @@ data SubrequestParseError = SubrequestParseError deriving Show
 
 instance Exception SubrequestParseError
 
+data UDSNotConfiguredError = UDSNotConfiguredError deriving Show
+
+instance Exception UDSNotConfiguredError
+
 data ResponseTimeout = ResponseTimeoutDefault
                      | ResponseTimeout TimeInterval deriving (Eq, Read)
 
@@ -213,6 +224,7 @@ data SubrequestConf =
                    , srBody            :: ByteString
                    , srHeaders         :: RequestHeaders
                    , srResponseTimeout :: ResponseTimeout
+                   , srUseUDS          :: Bool
                    } deriving Read
 
 instance FromJSON SubrequestConf where
@@ -224,6 +236,7 @@ instance FromJSON SubrequestConf where
             o .:? "headers" .!= []
         srResponseTimeout <- maybe ResponseTimeoutDefault ResponseTimeout <$>
             o .:? "timeout"
+        srUseUDS <- fromMaybe False <$> o .:? "useUDS"
         return SubrequestConf {..}
         where maybeEmpty = fmap $ maybe "" T.encodeUtf8
 
@@ -231,6 +244,10 @@ subrequest :: (String -> IO Request) ->
     (Response L.ByteString -> L.ByteString) -> SubrequestConf ->
     IO L.ByteString
 subrequest parseRequestF buildResponseF SubrequestConf {..} = do
+    man <- if srUseUDS
+               then fromMaybe (throw UDSNotConfiguredError) <$>
+                        readIORef httpUDSManager
+               else return httpManager
     req <- parseRequestF srUri
     let req' = if B.null srMethod
                    then req
@@ -245,7 +262,7 @@ subrequest parseRequestF buildResponseF SubrequestConf {..} = do
                       then req'''
                       else req''' { responseTimeout =
                                         setTimeout srResponseTimeout }
-    buildResponseF <$> httpLbs req'''' httpManager
+    buildResponseF <$> httpLbs req'''' man
     where setTimeout (ResponseTimeout v)
               | t == 0 = responseTimeoutNone
               | otherwise = responseTimeoutMicro $ t * 1e6
@@ -280,6 +297,10 @@ httpManager :: Manager
 httpManager = unsafePerformIO $ newManager defaultManagerSettings
 {-# NOINLINE httpManager #-}
 
+httpUDSManager :: IORef (Maybe Manager)
+httpUDSManager = unsafePerformIO $ newIORef Nothing
+{-# NOINLINE httpUDSManager #-}
+
 -- | Makes an HTTP request.
 --
 -- This is the core function of the /makeSubrequest/ handler. From perspective
@@ -301,8 +322,9 @@ httpManager = unsafePerformIO $ newManager defaultManagerSettings
 --
 -- > {"uri": "http://127.0.0.1/subreq", "method": "POST", "body": "some value"}
 --
--- > {"uri": "http://127.0.0.1/subreq",
--- >     "headers": [["Header1", "Value1"], ["Header2", "Value2"]]}
+-- > {"uri": "http://127.0.0.1/subreq"
+-- > ,"headers": [["Header1", "Value1"], ["Header2", "Value2"]]
+-- > }
 --
 -- Returns the response body if HTTP status of the response is /2xx/, otherwise
 -- throws an error. To avoid leakage of error messages into variable handlers,
@@ -330,6 +352,7 @@ ngxExportAsyncIOYY 'makeSubrequest
 -- >                , srBody = ""
 -- >                , srHeaders = [("Header1", "Value1"), ("Header2", "Value2")]
 -- >                , srResponseTimeout = ResponseTimeout (Sec 10)
+-- >                , srUseUDS = False
 -- >                }
 --
 -- Notice that unlike JSON parsing, fields of /SubrequestConf/ are not
@@ -343,6 +366,82 @@ makeSubrequestWithRead =
         readFromByteString @SubrequestConf
 
 ngxExportAsyncIOYY 'makeSubrequestWithRead
+
+newtype UDSConf = UDSConf { udsPath :: FilePath } deriving Read
+
+configureUDS :: UDSConf -> Bool -> IO L.ByteString
+configureUDS = ignitionService $ \UDSConf {..} -> do
+    man <- newManager defaultManagerSettings
+               { managerRawConnection = return $ openUDS udsPath }
+    writeIORef httpUDSManager $ Just man
+    return ""
+    where openUDS path _ _ _  = do
+              s <- S.socket S.AF_UNIX S.Stream S.defaultProtocol
+              S.connect s (S.SockAddrUnix path)
+              makeConnection (S.recv s 4096) (S.sendAll s) (S.close s)
+
+ngxExportSimpleServiceTyped 'configureUDS ''UDSConf SingleShotService
+
+-- $internalHTTPSubrequests
+--
+-- Making HTTP subrequests to the own Nginx service via the loopback interface
+-- (e.g. via /127.0.0.1/) has disadvantages of being neither very fast (if
+-- compared with various types of local data communication channels) nor very
+-- secure. Unix domain sockets is a better alternative in this sense. This
+-- module has support for them by providing configuration service
+-- __/simpleService_configureUDS/__ where path to the socket can be set, and an
+-- extra field /srUseUDS/ in data /SubrequestConf/.
+--
+-- To extend the previous example for using with Unix domain sockets, the
+-- following declarations should be added.
+--
+-- ==== File /nginx.conf/: configuring the Unix domain socket
+-- @
+--     haskell_run_service __/simpleService_configureUDS/__ $hs_service_uds
+--             \'__/UDSConf/__ {__/udsPath/__ = \"\/tmp\/backend.sock\"}\';
+-- @
+--
+-- /UDSConf/ is an opaque type containing only one field /udsPath/ with the path
+-- to the socket.
+--
+-- ==== File /nginx.conf/: new location /\/uds/ in server /main/
+-- @
+--         location \/uds {
+--             haskell_run_async __/makeSubrequest/__ $hs_subrequest
+--                     \'{\"uri\": \"http:\/\/backend_proxy\/\"
+--                      ,\"headers\": [[\"Custom-Header\", \"$arg_a\"]]
+--                      ,\"__/useUDS/__\": __/true/__
+--                      }\';
+--
+--             if ($hs_subrequest = \'\') {
+--                 echo_status 404;
+--                 echo \"Failed to perform subrequest\";
+--                 break;
+--             }
+--
+--             echo -n $hs_subrequest;
+--         }
+-- @
+--
+-- ==== File /nginx.conf/: new virtual server /backend_proxy/
+-- @
+--     server {
+--         listen       unix:\/tmp\/backend.sock;
+--         server_name  backend_proxy;
+--
+--         location \/ {
+--             proxy_pass http:\/\/backend;
+--         }
+--     }
+-- @
+--
+-- The server listens on the Unix domain socket with the path configured in
+-- service /simpleService_configureUDS/.
+--
+-- ==== A simple test
+--
+-- > $ curl 'http://localhost:8010/uds?a=Value'
+-- > In backend, Custom-Header is 'Value'
 
 -- $gettingFullResponse
 --
@@ -372,8 +471,9 @@ ngxExportAsyncIOYY 'makeSubrequestWithRead
 -- @
 --         location \/full {
 --             haskell_run_async __/makeSubrequestFull/__ $hs_subrequest
---                     \'{\"uri\": \"http:\/\/127.0.0.1:$arg_p\/proxy\",
---                       \"headers\": [[\"Custom-Header\", \"$arg_a\"]]}\';
+--                     \'{\"uri\": \"http:\/\/127.0.0.1:$arg_p\/proxy\"
+--                      ,\"headers\": [[\"Custom-Header\", \"$arg_a\"]]
+--                      }\';
 --
 --             haskell_run __/extractStatusFromFullResponse/__ $hs_subrequest_status
 --                     $hs_subrequest;

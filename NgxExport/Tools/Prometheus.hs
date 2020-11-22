@@ -435,7 +435,7 @@ conf = unsafePerformIO $ newIORef Nothing
 
 prometheusConf :: PrometheusConf -> Bool -> IO L.ByteString
 prometheusConf = ignitionService $ \a -> do
-    atomicWriteIORef conf $ Just a
+    writeIORef conf $ Just a
     return ""
 
 ngxExportSimpleServiceTyped
