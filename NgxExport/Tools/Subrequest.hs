@@ -367,21 +367,6 @@ makeSubrequestWithRead =
 
 ngxExportAsyncIOYY 'makeSubrequestWithRead
 
-newtype UDSConf = UDSConf { udsPath :: FilePath } deriving Read
-
-configureUDS :: UDSConf -> Bool -> IO L.ByteString
-configureUDS = ignitionService $ \UDSConf {..} -> do
-    man <- newManager defaultManagerSettings
-               { managerRawConnection = return $ openUDS udsPath }
-    writeIORef httpUDSManager $ Just man
-    return ""
-    where openUDS path _ _ _  = do
-              s <- S.socket S.AF_UNIX S.Stream S.defaultProtocol
-              S.connect s (S.SockAddrUnix path)
-              makeConnection (S.recv s 4096) (S.sendAll s) (S.close s)
-
-ngxExportSimpleServiceTyped 'configureUDS ''UDSConf SingleShotService
-
 -- $internalHTTPSubrequests
 --
 -- Making HTTP subrequests to the own Nginx service via the loopback interface
@@ -442,6 +427,21 @@ ngxExportSimpleServiceTyped 'configureUDS ''UDSConf SingleShotService
 --
 -- > $ curl 'http://localhost:8010/uds?a=Value'
 -- > In backend, Custom-Header is 'Value'
+
+newtype UDSConf = UDSConf { udsPath :: FilePath } deriving Read
+
+configureUDS :: UDSConf -> Bool -> IO L.ByteString
+configureUDS = ignitionService $ \UDSConf {..} -> do
+    man <- newManager defaultManagerSettings
+               { managerRawConnection = return $ openUDS udsPath }
+    writeIORef httpUDSManager $ Just man
+    return ""
+    where openUDS path _ _ _  = do
+              s <- S.socket S.AF_UNIX S.Stream S.defaultProtocol
+              S.connect s (S.SockAddrUnix path)
+              makeConnection (S.recv s 4096) (S.sendAll s) (S.close s)
+
+ngxExportSimpleServiceTyped 'configureUDS ''UDSConf SingleShotService
 
 -- $gettingFullResponse
 --
