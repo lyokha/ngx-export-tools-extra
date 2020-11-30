@@ -1,3 +1,7 @@
+### 0.6.0.0
+
+- Build EDE module with *prettyprinter* automatically.
+
 ### 0.5.9.0
 
 - Allow Unix domain sockets in configurations of internal HTTP subrequests.

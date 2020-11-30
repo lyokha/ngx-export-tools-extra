@@ -33,24 +33,8 @@ jobs:
         apt:
           packages: [cabal-install-3.2, ghc-8.2.2]
           sources: [hvr-ghc]
-    - env: BUILD_EXPERIMENTAL_EDE=yes CABALVER=3.2 GHCVER=head
-      addons:
-        apt:
-          packages: [cabal-install-3.2, ghc-head]
-          sources: [hvr-ghc]
-    - env: BUILD_EXPERIMENTAL_EDE=yes CABALVER=3.2 GHCVER=8.10.2
-      addons:
-        apt:
-          packages: [cabal-install-3.2, ghc-8.10.2]
-          sources: [hvr-ghc]
-    - env: BUILD_EXPERIMENTAL_EDE=yes CABALVER=3.2 GHCVER=8.8.4
-      addons:
-        apt:
-          packages: [cabal-install-3.2, ghc-8.8.4]
-          sources: [hvr-ghc]
   allow_failures:
     - env: CABALVER=3.2 GHCVER=head
-    - env: BUILD_EXPERIMENTAL_EDE=yes CABALVER=3.2 GHCVER=head
 
 before_install:
   - export PATH=/opt/ghc/$GHCVER/bin:/opt/cabal/$CABALVER/bin:$PATH
@@ -62,30 +46,13 @@ install:
     echo "$(ghc --version) "`
         `"[$(ghc --print-project-git-commit-id 2>/dev/null || echo '?')]"
     travis_retry cabal v1-update
-    if [ "$BUILD_EXPERIMENTAL_EDE" = yes ]
-    then
-        git clone https://github.com/brendanhay/ede.git ede.git
-        cd ede.git
-        cabal v1-install --only-dependencies
-        cabal v1-configure
-        cabal v1-build
-        cabal v2-sdist --builddir=dist
-        SRC_TGZ=$(cabal info . | awk '{print $2; exit}').tar.gz &&
-            (cd dist/sdist && cabal v1-install --force-reinstalls "$SRC_TGZ")
-        cd -
-    fi
     cabal v1-install --only-dependencies
     set +e
 
 script:
   - |
     set -e
-    if [ "$BUILD_EXPERIMENTAL_EDE" = yes ]
-    then
-        cabal v1-configure -f EDE -f ExperimentalEDE
-    else
-        cabal v1-configure
-    fi
+    cabal v1-configure
     cabal v1-build
     cabal v2-sdist --builddir=dist
     SRC_TGZ=$(cabal info . | awk '{print $2; exit}').tar.gz &&
