@@ -52,7 +52,7 @@ library
 
   if flag(EDE)
     if flag(EDEUsePrettyprinter)
-      build-depends:        ede
+      build-depends:        ede >= 0.3.0.0
                           , prettyprinter
                           , trifecta >= 2.1
       cpp-options:         -DEDE_USE_PRETTYPRINTER
