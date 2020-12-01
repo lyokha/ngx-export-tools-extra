@@ -46,7 +46,7 @@ import           Network.HTTP.Client hiding (ResponseTimeout)
 import qualified Network.HTTP.Client (HttpExceptionContent (ResponseTimeout))
 import           Network.HTTP.Types
 import qualified Network.Socket as S
-import qualified Network.Socket.ByteString as S
+import qualified Network.Socket.ByteString as SB
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as C8
@@ -439,7 +439,7 @@ configureUDS = ignitionService $ \UDSConf {..} -> do
     where openUDS path _ _ _  = do
               s <- S.socket S.AF_UNIX S.Stream S.defaultProtocol
               S.connect s (S.SockAddrUnix path)
-              makeConnection (S.recv s 4096) (S.sendAll s) (S.close s)
+              makeConnection (SB.recv s 4096) (SB.sendAll s) (S.close s)
 
 ngxExportSimpleServiceTyped 'configureUDS ''UDSConf SingleShotService
 
