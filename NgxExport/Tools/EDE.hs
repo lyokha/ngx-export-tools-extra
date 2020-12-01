@@ -32,7 +32,7 @@ import           Text.EDE.Filters
 #if EDE_USE_PRETTYPRINTER
 import           Data.Text.Prettyprint.Doc (unAnnotate)
 #else
-import           Text.PrettyPrint.ANSI.Leijen.Internal (plain)
+import           Text.PrettyPrint.ANSI.Leijen (plain)
 #endif
 import qualified Data.HashMap.Strict as HM
 import           Data.HashMap.Strict (HashMap)

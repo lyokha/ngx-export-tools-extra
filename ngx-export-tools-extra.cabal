@@ -58,7 +58,7 @@ library
       cpp-options:         -DEDE_USE_PRETTYPRINTER
     else
       build-depends:        ede
-                          , ansi-wl-pprint
+                          , ansi-wl-pprint >= 0.6.3
                           , trifecta <= 2
 
   exposed-modules:          NgxExport.Tools.Aggregate
