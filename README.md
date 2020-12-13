@@ -1404,11 +1404,10 @@ variables directly as they are binary encoded values. Instead, the response
 status, headers and the body must be extracted using handlers
 *extractStatusFromFullResponse*, *extractHeaderFromFullResponse*,
 and *extractBodyFromFullResponse* which are based on functions of the
-same name. Handler *extractRequestStatusFromFullResponse* and the
-corresponding function can be used to extract the request status: *0* means
-that the request was completed without technical errors, *1* means that the
-request failed due to connection errors including timeouts, and *2* means
-that the request failed due to other errors.
+same name. Handler *extractExceptionFromFullResponse* and the
+corresponding function can be used to extract the error message if an
+exception has happened while making the subrequest: the value is empty if
+there was no exception.
 
 Let's extend our example with these handlers.
 
@@ -1541,12 +1540,13 @@ Good. There is no server listening on port 8021.
 
 Data encoded in the full response can be translated to *ContentHandlerResult*
 and forwarded downstream to the client in directive *haskell_content*.
-Handler *fromFullResponse* performs such a translation. Not all response
-headers are allowed being forwarded downstream, and thus the handler deletes
-response headers with names listed in set *notForwardableResponseHeaders* as
-well as all headers with names starting with *X-Accel-* before sending the
-response to the client. The set of not forwardable response headers can be
-customized in function *contentFromFullResponse*.
+Handlers *fromFullResponse* and *fromFullResponseWithException*
+perform such a translation. Not all response headers are allowed being
+forwarded downstream, and thus the handler deletes response headers with
+names listed in set *notForwardableResponseHeaders* as well as all headers
+with names starting with *X-Accel-* before sending the response to the
+client. The set of not forwardable response headers can be customized in
+function *contentFromFullResponse*.
 
 Let's forward responses in location */full* when argument *proxy* in the
 client request's URI is equal to *yes*.
