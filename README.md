@@ -1542,7 +1542,7 @@ Data encoded in the full response can be translated to *ContentHandlerResult*
 and forwarded downstream to the client in directive *haskell_content*.
 Handlers *fromFullResponse* and *fromFullResponseWithException*
 perform such a translation. Not all response headers are allowed being
-forwarded downstream, and thus the handler deletes response headers with
+forwarded downstream, and thus the handlers delete response headers with
 names listed in set *notForwardableResponseHeaders* as well as all headers
 with names starting with *X-Accel-* before sending the response to the
 client. The set of not forwardable response headers can be customized in
@@ -1554,6 +1554,13 @@ client request's URI is equal to *yes*.
 ###### File *nginx.conf*: forward responses from location */full*
 
 ```nginx
+            set $proxy_with_exception $arg_proxy$arg_exc;
+
+            if ($proxy_with_exception = yesyes) {
+                haskell_content fromFullResponseWithException $hs_subrequest;
+                break;
+            }
+
             if ($arg_proxy = yes) {
                 haskell_content fromFullResponse $hs_subrequest;
                 break;
@@ -1573,6 +1580,35 @@ Connection: keep-alive
 Subrequest-Header: This is response from subrequest
 
 In backend, Custom-Header is 'Value'
+```
+
+Now let's get an error message in the response after feeding a wrong port
+value.
+
+```ShellSession
+$ curl -D- 'http://localhost:8010/full/?a=Value&p=8021&proxy=yes&exc=yes'
+HTTP/1.1 502 Bad Gateway
+Server: nginx/1.19.4
+Date: Mon, 14 Dec 2020 08:24:22 GMT
+Content-Length: 593
+Connection: keep-alive
+
+HttpExceptionRequest Request {
+  host                 = "127.0.0.1"
+  port                 = 8021
+  secure               = False
+  requestHeaders       = [("Custom-Header","Value")]
+  path                 = "/proxy"
+  queryString          = ""
+  method               = "GET"
+  proxy                = Nothing
+  rawBody              = False
+  redirectCount        = 10
+  responseTimeout      = ResponseTimeoutDefault
+  requestVersion       = HTTP/1.1
+  proxySecureMode      = ProxySecureWithConnect
+}
+ (ConnectionFailure Network.Socket.connect: <socket: 31>: does not exist (Connection refused))
 ```
 
 #### Building and installation

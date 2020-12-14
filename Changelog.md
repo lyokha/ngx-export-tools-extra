@@ -1,7 +1,7 @@
 ### 0.6.1.0
 
 - Handler *extractRequestStatusFromFullResponse* was replaced with handler
-  *extractExceptionFromFullResponse*. The new handler contains the error message
+  *extractExceptionFromFullResponse*. The new handler extracts the error message
   if the subrequest was terminated by an exception.
 
 ### 0.6.0.0
