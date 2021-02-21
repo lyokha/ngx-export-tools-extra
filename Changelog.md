@@ -1,3 +1,8 @@
+### 0.6.2.0
+
+- Added Cabal flag *Aggregate* to build module *NgxExport.Tools.Aggregate*
+  conditionally.
+
 ### 0.6.1.0
 
 - Handler *extractRequestStatusFromFullResponse* was replaced with handler

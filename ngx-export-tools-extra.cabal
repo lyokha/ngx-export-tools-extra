@@ -1,5 +1,5 @@
 name:                       ngx-export-tools-extra
-version:                    0.6.1.1
+version:                    0.6.2.0
 synopsis:                   More extra tools for Nginx haskell module
 description:                More extra tools for
         <https://github.com/lyokha/nginx-haskell-module Nginx haskell module>.
@@ -10,7 +10,7 @@ extra-source-files:         Changelog.md
 author:                     Alexey Radkov <alexey.radkov@gmail.com>
 maintainer:                 Alexey Radkov <alexey.radkov@gmail.com>
 stability:                  experimental
-copyright:                  2019-2020 Alexey Radkov
+copyright:                  2019-2021 Alexey Radkov
 category:                   Network
 build-type:                 Simple
 cabal-version:              1.20
@@ -19,12 +19,16 @@ source-repository head
   type:                     git
   location:                 https://github.com/lyokha/ngx-export-tools-extra
 
+flag Aggregate
+  description:              Build Aggregate module.
+
 flag EDE
   description:              Build EDE module.
 
 flag EDEUsePrettyprinter
-  description:              Build EDE module migrated from @ansi-wl-pprint@ to
-                            @prettyprinter@.
+  description:              Build EDE module migrated from
+                            [ansi-wl-pprint](https://hackage.haskell.org/package/ansi-wl-pprint)
+                            to [prettyprinter](https://hackage.haskell.org/package/prettyprinter).
 
 library
   default-language:         Haskell2010
@@ -43,12 +47,14 @@ library
                           , containers
                           , unordered-containers
                           , array
-                          , enclosed-exceptions
-                          , snap-core
-                          , snap-server
                           , text
-                          , time
                           , safe
+
+  if flag(Aggregate)
+    build-depends:          snap-core
+                          , snap-server
+                          , enclosed-exceptions
+                          , time
 
   if flag(EDE)
     if flag(EDEUsePrettyprinter)
@@ -61,9 +67,11 @@ library
                           , ansi-wl-pprint >= 0.6.3
                           , trifecta <= 2
 
-  exposed-modules:          NgxExport.Tools.Aggregate
-                          , NgxExport.Tools.Prometheus
+  exposed-modules:          NgxExport.Tools.Prometheus
                           , NgxExport.Tools.Subrequest
+
+  if flag(Aggregate)
+    exposed-modules:        NgxExport.Tools.Aggregate
 
   if flag(EDE)
     exposed-modules:        NgxExport.Tools.EDE
