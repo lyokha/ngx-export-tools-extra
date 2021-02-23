@@ -1,7 +1,8 @@
 More extra tools for Nginx Haskell module
 =========================================
 
-[![Build Status](https://travis-ci.com/lyokha/ngx-export-tools-extra.svg?branch=master)](https://travis-ci.com/lyokha/ngx-export-tools-extra)
+<!--[![Build Status](https://travis-ci.com/lyokha/ngx-export-tools-extra.svg?branch=master)](https://travis-ci.com/lyokha/ngx-export-tools-extra)-->
+[![Build Status](https://github.com/lyokha/ngx-export-tools-extra/workflows/CI/badge.svg)](https://github.com/lyokha/ngx-export-tools-extra/actions?query=workflow%3ACI)
 [![Hackage](https://img.shields.io/hackage/v/ngx-export-tools-extra.svg?label=hackage%20%7C%20ngx-export-tools-extra)](https://hackage.haskell.org/package/ngx-export-tools-extra)
 
 This package contains a collection of Haskell modules with more extra tools for
