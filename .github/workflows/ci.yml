@@ -9,25 +9,13 @@ jobs:
     continue-on-error: ${{ matrix.experimental }}
     strategy:
       matrix:
-       include:
-         - ghc: 9.0.1
-           cabal: 3.2
-           experimental: true
-         - ghc: 8.10.2
-           cabal: 3.2
-           experimental: false
-         - ghc: 8.8.4
-           cabal: 3.2
-           experimental: false
-         - ghc: 8.6.5
-           cabal: 3.2
-           experimental: false
-         - ghc: 8.4.4
-           cabal: 3.2
-           experimental: false
-         - ghc: 8.2.2
-           cabal: 3.2
-           experimental: false
+        ghc: [8.2.2, 8.4.4, 8.6.5, 8.8.4, 8.10.2]
+        cabal: [3.2]
+        experimental: [false]
+        include:
+          - ghc: 9.0.1
+            cabal: 3.2
+            experimental: true
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -36,7 +24,7 @@ jobs:
         with:
           ghc-version: ${{ matrix.ghc }}
           cabal-version: ${{ matrix.cabal }}
-      - name: Install and test
+      - name: Install
         env:
           GHCVER: ${{ matrix.ghc }}
         run: |
