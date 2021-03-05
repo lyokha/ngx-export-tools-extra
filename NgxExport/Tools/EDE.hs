@@ -173,10 +173,10 @@ import           System.IO.Unsafe
 -- * __/uenc/__ encodes a JSON object using /URL encoding/ rules
 --
 -- So, basically, we used /renderEDETemplate/ to decompose POSTed JSON objects
--- and then /rewrite/ requests to other locations where extracted fields were
--- encoded inside the location's URL path. Handler
--- /renderEDETemplateFromFreeValue/ in /location \/cookie/ does the same but
--- reads JSON objects from HTTP cookie /user/.
+-- and then /rewrite/ requests to other locations where the URL path after
+-- substitution of the extracted and then encoded into variable /$hs_user/
+-- fields points to. Handler /renderEDETemplateFromFreeValue/ in location
+-- /\/cookie/ does the same but reads JSON objects from HTTP cookie /user/.
 --
 -- ==== A simple test
 --

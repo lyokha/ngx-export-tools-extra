@@ -168,7 +168,7 @@ import           System.IO.Unsafe
 -- and other relevant data such as HTTP method, request body and headers. In
 -- this configuration we are running a periodical service which gets contents of
 -- /httpbin.org/ every 10 seconds, and doing a subrequest to a virtual server
--- /backend/ on every request to /location \//. In this subrequest, an HTTP
+-- /backend/ on every request to location /\//. In this subrequest, an HTTP
 -- header /Custom-Header/ is sent to the backend with value equal to the value
 -- of argument /a/ from the client request's URI.
 --
@@ -517,7 +517,7 @@ ngxExportSimpleServiceTyped 'configureUDS ''UDSConf SingleShotService
 -- Now we can recognize HTTP response statuses of subrequests and handle them
 -- differently. We also can read a response header /Subrequest-Header/.
 --
--- ==== File /nginx.conf/: new response header /Subrequest-Header/ in /location \// of server /backend/
+-- ==== File /nginx.conf/: new response header /Subrequest-Header/ in location /\// of server /backend/
 -- @
 --             add_header Subrequest-Header \"This is response from subrequest\";
 -- @

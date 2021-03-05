@@ -375,10 +375,10 @@ this module.
 * *uenc* encodes a JSON object using *URL encoding* rules
 
 So, basically, we used *renderEDETemplate* to decompose POSTed JSON objects
-and then *rewrite* requests to other locations where extracted fields were
-encoded inside the location's URL path. Handler
-*renderEDETemplateFromFreeValue* in *location /cookie* does the same but
-reads JSON objects from HTTP cookie *user*.
+and then *rewrite* requests to other locations where the URL path after
+substitution of the extracted and then encoded into variable *hs_user*
+fields points to. Handler *renderEDETemplateFromFreeValue* in location
+*/cookie* does the same but reads JSON objects from HTTP cookie *user*.
 
 ###### A simple test
 
@@ -1282,7 +1282,7 @@ Configurations of subrequests are defined via JSON objects which contain URI
 and other relevant data such as HTTP method, request body and headers. In
 this configuration we are running a periodical service which gets contents of
 *httpbin.org* every 10 seconds, and doing a subrequest to a virtual server
-*backend* on every request to *location /*. In this subrequest, an HTTP
+*backend* on every request to location */*. In this subrequest, an HTTP
 header *Custom-Header* is sent to the backend with value equal to the value
 of argument *a* from the client request's URI.
 
@@ -1466,7 +1466,7 @@ going to use exported handlers only.
 Now we can recognize HTTP response statuses of subrequests and handle them
 differently. We also can read a response header *Subrequest-Header*.
 
-###### File *nginx.conf*: new response header *Subrequest-Header* in *location /* of server *backend*
+###### File *nginx.conf*: new response header *Subrequest-Header* in location */* of server *backend*
 
 ```nginx
             add_header Subrequest-Header "This is response from subrequest";
