@@ -69,6 +69,7 @@ library
 
   exposed-modules:          NgxExport.Tools.Prometheus
                           , NgxExport.Tools.Subrequest
+                          , NgxExport.Tools.ServiceHookAdaptor
 
   if flag(Aggregate)
     exposed-modules:        NgxExport.Tools.Aggregate
