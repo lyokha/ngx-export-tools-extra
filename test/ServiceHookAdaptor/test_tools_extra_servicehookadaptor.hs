@@ -6,6 +6,7 @@ import           NgxExport
 import           NgxExport.Tools.ServiceHookAdaptor ()
 
 import           Data.ByteString (ByteString)
+import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
 import           Data.IORef
 import           System.IO.Unsafe
@@ -17,9 +18,11 @@ secretWord = unsafePerformIO $ newIORef ""
 testSecretWord :: ByteString -> IO L.ByteString
 testSecretWord v = do
     s <- readIORef secretWord
-    return $ if v == s
-                 then "1"
-                 else ""
+    return $ if B.null s
+                 then "null"
+                 else if v == s
+                          then "set"
+                          else "unset"
 ngxExportIOYY 'testSecretWord
 
 changeSecretWord :: ByteString -> IO L.ByteString
