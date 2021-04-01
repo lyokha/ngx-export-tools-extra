@@ -40,3 +40,4 @@ jobs:
           SRC_TGZ=$(cabal info . | awk '{print $2; exit}').tar.gz &&
               (cd dist/sdist && cabal v1-install --force-reinstalls "$SRC_TGZ")
           set +e
+
