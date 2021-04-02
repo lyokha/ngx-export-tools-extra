@@ -1,3 +1,8 @@
+### 0.7.0.0
+
+- Added module *NgxExport.Tools.ServiceHookAdaptor* to maintain custom global
+  data in all the worker processes in run-time.
+
 ### 0.6.2.0
 
 - Added Cabal flag *Aggregate* to build module *NgxExport.Tools.Aggregate*

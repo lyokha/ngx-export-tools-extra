@@ -13,6 +13,7 @@ This package contains a collection of Haskell modules with more extra tools for
 - [Module NgxExport.Tools.Aggregate](#module-ngxexporttoolsaggregate)
 - [Module NgxExport.Tools.EDE](#module-ngxexporttoolsede)
 - [Module NgxExport.Tools.Prometheus](#module-ngxexporttoolsprometheus)
+- [Module NgxExport.Tools.ServiceHookAdaptor](#module-ngxexportservicehookadaptor)
 - [Module NgxExport.Tools.Subrequest](#module-ngxexporttoolssubrequest)
 - [Building and installation](#building-and-installation) 
 
@@ -1175,6 +1176,174 @@ hst_request_time_sum{scope="total"} 7.02
 hst_request_time_err{scope="in_upstreams"} 0.0
 hst_request_time_err{scope="total"} 0.0
 ```
+
+#### Module *NgxExport.Tools.ServiceHookAdaptor*
+
+This module exports a *simple service* (in terms of module *NgxExport.Tools*)
+*simpleService_hookAdaptor* which sleeps forever. Its sole purpose is to
+serve *service hooks* for changing global data in all the worker processes in
+run-time. A single service hook adaptor can serve any number of service hooks
+with any type of global data.
+
+##### An example
+
+###### File *test_tools_extra_servicehookadaptor.hs*
+
+```haskell
+{-# LANGUAGE TemplateHaskell, OverloadedStrings #-}
+
+module TestToolsExtraServiceHookAdaptor where
+
+import           NgxExport
+import           NgxExport.Tools.ServiceHookAdaptor ()
+
+import           Data.ByteString (ByteString)
+import qualified Data.ByteString as B
+import qualified Data.ByteString.Lazy as L
+import           Data.IORef
+import           System.IO.Unsafe
+
+secretWord :: IORef ByteString
+secretWord = unsafePerformIO $ newIORef ""
+{-# NOINLINE secretWord #-}
+
+testSecretWord :: ByteString -> IO L.ByteString
+testSecretWord v = do
+    s <- readIORef secretWord
+    return $ if B.null s
+                 then "null"
+                 else if v == s
+                          then "set"
+                          else "unset"
+ngxExportIOYY 'testSecretWord
+
+changeSecretWord :: ByteString -> IO L.ByteString
+changeSecretWord s = do
+    writeIORef secretWord s
+    return "The secret word was changed"
+ngxExportServiceHook 'changeSecretWord
+```
+
+Here we are going to maintain a *secret word* of type *ByteString* in
+run-time. When a worker process starts, the word is empty. The word can be
+changed in run-time by triggering *service hook* *changeSecretWord*. Client
+requests are managed differently depending on their knowledge of the secret
+which is tested in handler *testSecretWord*.
+
+###### File *nginx.conf*
+
+```nginx
+user                    nobody;
+worker_processes        2;
+
+events {
+    worker_connections  1024;
+}
+
+error_log               /tmp/nginx-test-haskell-error.log info;
+
+http {
+    default_type        application/octet-stream;
+    sendfile            on;
+    error_log           /tmp/nginx-test-haskell-error.log info;
+    access_log          /tmp/nginx-test-haskell-access.log;
+
+    haskell load /var/lib/nginx/test_tools_extra_servicehookadaptor.so;
+
+    haskell_run_service simpleService_hookAdaptor $hs_hook_adaptor '';
+
+    haskell_service_hooks_zone hooks 32k;
+
+    server {
+        listen       8010;
+        server_name  main;
+
+        location / {
+            haskell_run testSecretWord $hs_secret_word $arg_s;
+
+            if ($hs_secret_word = null) {
+                echo_status 503;
+                echo "Try later! The service is not ready!";
+                break;
+            }
+
+            if ($hs_secret_word = set) {
+                echo_status 200;
+                echo "Congrats! You know the secret word!";
+                break;
+            }
+
+            echo_status 404;
+            echo "Hmm, you do not know a secret!";
+        }
+
+        location /change_sw {
+            allow 127.0.0.1;
+            deny all;
+
+            haskell_service_hook changeSecretWord $hs_hook_adaptor $arg_s;
+        }
+    }
+}
+```
+
+Notice that service *simpleService_hookAdaptor* is not shared.
+
+###### A simple test
+
+After starting Nginx, the secret word service must be not ready.
+
+```ShellSession
+$ curl 'http://127.0.0.1:8010/'
+Try later! The service is not ready!
+```
+
+Let's change the secret word,
+
+```ShellSession
+$ curl 'http://127.0.0.1:8010/change_sw?s=secret'
+```
+
+and try again.
+
+```ShellSession
+$ curl 'http://127.0.0.1:8010/'
+Hmm, you do not know a secret!
+$ curl 'http://127.0.0.1:8010/?s=try1'
+Hmm, you do not know a secret!
+$ curl 'http://127.0.0.1:8010/?s=secret'
+Congrats! You know the secret word!
+```
+
+Change the secret word again.
+
+```ShellSession
+$ curl 'http://127.0.0.1:8010/change_sw?s=secret1'
+$ curl 'http://127.0.0.1:8010/?s=secret'
+Hmm, you do not know a secret!
+$ curl 'http://127.0.0.1:8010/?s=secret1'
+Congrats! You know the secret word!
+```
+
+What if a worker process quits for some reason or crashes? Let's try!
+
+```ShellSession
+# ps -ef | grep nginx | grep worker
+nobody     13869   13868  0 15:43 ?        00:00:00 nginx: worker process
+nobody     13870   13868  0 15:43 ?        00:00:00 nginx: worker process
+# kill -QUIT 13869 13870
+# ps -ef | grep nginx | grep worker
+nobody     14223   13868  4 15:56 ?        00:00:00 nginx: worker process
+nobody     14224   13868  4 15:56 ?        00:00:00 nginx: worker process
+```
+
+```ShellSession
+$ curl 'http://127.0.0.1:8010/?s=secret1'
+Congrats! You know the secret word!
+```
+
+Our secret is still intact! This is because service hooks manage new worker
+processes so well as those that were running when a hook was triggered.
 
 #### Module *NgxExport.Tools.Subrequest*
 
