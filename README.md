@@ -13,7 +13,7 @@ This package contains a collection of Haskell modules with more extra tools for
 - [Module NgxExport.Tools.Aggregate](#module-ngxexporttoolsaggregate)
 - [Module NgxExport.Tools.EDE](#module-ngxexporttoolsede)
 - [Module NgxExport.Tools.Prometheus](#module-ngxexporttoolsprometheus)
-- [Module NgxExport.Tools.ServiceHookAdaptor](#module-ngxexportservicehookadaptor)
+- [Module NgxExport.Tools.ServiceHookAdaptor](#module-ngxexporttoolsservicehookadaptor)
 - [Module NgxExport.Tools.Subrequest](#module-ngxexporttoolssubrequest)
 - [Building and installation](#building-and-installation) 
 
