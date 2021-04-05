@@ -1226,7 +1226,7 @@ ngxExportServiceHook 'changeSecretWord
 
 Here we are going to maintain a *secret word* of type *ByteString* in
 run-time. When a worker process starts, the word is empty. The word can be
-changed in run-time by triggering *service hook* *changeSecretWord*. Client
+changed in run-time by triggering service hook *changeSecretWord*. Client
 requests are managed differently depending on their knowledge of the secret
 which is tested in handler *testSecretWord*.
 
@@ -1287,7 +1287,8 @@ http {
 }
 ```
 
-Notice that service *simpleService_hookAdaptor* is not shared.
+Notice that service *simpleService_hookAdaptor* is not shared, however this
+is not such important because shared services must work as well.
 
 ###### A simple test
 

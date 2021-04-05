@@ -75,7 +75,7 @@ import           Control.Monad
 --
 -- Here we are going to maintain a /secret word/ of type 'ByteString' in
 -- run-time. When a worker process starts, the word is empty. The word can be
--- changed in run-time by triggering /service hook/ /changeSecretWord/. Client
+-- changed in run-time by triggering service hook /changeSecretWord/. Client
 -- requests are managed differently depending on their knowledge of the secret
 -- which is tested in handler /testSecretWord/.
 --
@@ -98,7 +98,7 @@ import           Control.Monad
 --
 --     haskell load \/var\/lib\/nginx\/test_tools_extra_servicehookadaptor.so;
 --
---     haskell_run_service __/simpleService_hookAdaptor/__ $hs_hook_adaptor 32k;
+--     haskell_run_service __/simpleService_hookAdaptor/__ $hs_hook_adaptor \'\';
 --
 --     haskell_service_hooks_zone hooks 32k;
 --
@@ -135,7 +135,8 @@ import           Control.Monad
 -- }
 -- @
 --
--- Notice that service /simpleService_hookAdaptor/ is not shared.
+-- Notice that service /simpleService_hookAdaptor/ is not shared, however this
+-- is not such important because shared services must work as well.
 --
 -- ==== A simple test
 -- After starting Nginx, the secret word service must be not ready.
