@@ -31,3 +31,9 @@ changeSecretWord s = do
     return "The secret word was changed"
 ngxExportServiceHook 'changeSecretWord
 
+resetSecretWord :: ByteString -> IO L.ByteString
+resetSecretWord = const $ do
+    writeIORef secretWord ""
+    return "The secret word was reset"
+ngxExportServiceHook 'resetSecretWord
+
