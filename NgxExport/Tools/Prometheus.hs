@@ -731,7 +731,7 @@ ngxExportYY 'scale1000
 -- server.
 --
 -- @
---     haskell_run___/service simpleService_prometheusConf/__ $hs_prometheus_conf
+--     haskell_run_service __/simpleService_prometheusConf/__ $hs_prometheus_conf
 --             \'__/PrometheusConf/__
 --                 { __/pcMetrics/__ = fromList
 --                     [(\"cnt_4xx\", \"Number of responses with 4xx status\")
@@ -947,7 +947,7 @@ ngxExportYY 'cumulativeFPValue
 --         haskell_run ! $hs_bytes_sent $bytes_sent;
 -- 
 --         histogram $__/hst_request_time\@scope=(total)/__ 11 $request_time_bucket;
---         haskell_run__/ scale1000 $hs_request_time_scaled $hs_request_time;
+--         haskell_run scale1000 $hs_request_time_scaled $hs_request_time;
 --         counter $hst_request_time\@scope=(total)_sum inc $hs_request_time_scaled;
 -- 
 --         histogram $hst_bytes_sent 6 $bytes_sent_bucket;
