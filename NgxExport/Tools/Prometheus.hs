@@ -259,10 +259,12 @@ conf = unsafePerformIO $ newIORef Nothing
 --         }
 --
 --         location \/counters {
+--             default_type application/json;
 --             echo $cnt_collection;
 --         }
 --
 --         location \/histograms {
+--             default_type application/json;
 --             echo $cnt_histograms;
 --         }
 --
