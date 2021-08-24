@@ -247,7 +247,7 @@ conf = unsafePerformIO $ newIORef Nothing
 --                       ,\"cnt_uptime\": $cnt_uptime
 --                       ,\"cnt_uptime_reload\": $cnt_uptime_reload
 --                       }
---                      ]';
+--                      ]\';
 --
 --             if ($hs_prom_metrics = \'\') {
 --                 return 503;
@@ -322,7 +322,7 @@ conf = unsafePerformIO $ newIORef Nothing
 --                       ,\"cnt_uptime\": $cnt_uptime
 --                       ,\"cnt_uptime_reload\": $cnt_uptime_reload
 --                       }
---                      ]';
+--                      ]\';
 --         }
 -- @
 --
