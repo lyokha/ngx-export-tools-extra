@@ -61,12 +61,20 @@ regexes :: IORef Regexes
 regexes = unsafePerformIO $ newIORef HM.empty
 {-# NOINLINE regexes #-}
 
-compileRegexes :: InputRegexes -> Bool -> IO L.ByteString
-compileRegexes = ignitionService $ \irgxs -> do
-    writeIORef regexes $
-        foldl (\a (k, v, m) -> let !r = compile v $ mods $ C8.unpack m
-                               in HM.insert k r a
-              ) HM.empty irgxs
+declareRegexes :: InputRegexes -> Bool -> IO L.ByteString
+declareRegexes = ignitionService $ const $ return ""
+
+ngxExportSimpleServiceTyped 'declareRegexes ''InputRegexes SingleShotService
+
+compileRegexes :: ByteString -> IO L.ByteString
+compileRegexes = const $ do
+    !inputRegexes <- fromJust <$> readIORef storage_InputRegexes_declareRegexes
+    let !compiledRegexes =
+            foldl' (\a (!k, !v, !m) -> let !r = compile v $ mods $ C8.unpack m
+                                           !hm = HM.insert k r a
+                                       in hm
+                   ) HM.empty inputRegexes
+    writeIORef regexes compiledRegexes
     return ""
     where md 'i' = Just caseless
           md 's' = Just dotall
@@ -74,7 +82,7 @@ compileRegexes = ignitionService $ \irgxs -> do
           md  _  = Nothing
           mods = map head . group . sort . mapMaybe md
 
-ngxExportSimpleServiceTyped 'compileRegexes ''InputRegexes SingleShotService
+ngxExportServiceHook 'compileRegexes
 
 type InputSubs = [(ByteString, ByteString)]
 type Subs = HashMap ByteString ByteString
