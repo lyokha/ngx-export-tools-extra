@@ -13,7 +13,7 @@
 -- PCRE parsing and substitution from the more extra tools collection
 -- for <http://github.com/lyokha/nginx-haskell-module nginx-haskell-module>.
 --
--- Currently, this module requires
+-- __Important!__ Currently, this module requires
 -- <http://github.com/lyokha/pcre-light the patched version of pcre-light>.
 -- Without the patch, /pcre-light/ will cause segmentation faults in Nginx
 -- worker processes when releasing compiled regexes at the exit!
@@ -21,7 +21,7 @@
 -----------------------------------------------------------------------------
 
 module NgxExport.Tools.PCRE (
-    -- * Matching of regular expressions
+    -- * Matching against regular expressions
     -- $matchingPCRE
                              matchRegex
     -- * Substitution with regular expressions
@@ -62,7 +62,7 @@ import           System.IO.Unsafe
 --
 -- ==== File /test_tools_extra_pcre.hs/
 -- @
--- module TestToolsExtraPrometheus where
+-- module TestToolsExtraPCRE where
 --
 -- import NgxExport.Tools.PCRE ()
 -- @
@@ -125,8 +125,8 @@ import           System.IO.Unsafe
 --
 -- In this example, we expect requests with argument /user/ which should
 -- supposedly be tagged with an /area/ tag containing digits only. Then the
--- /user/ argument should match regex /userArea/ declared alongside with another
--- regex /keyValue/ (the latter has an option /i/ which corresponds to
+-- /user/ argument should match against regex /userArea/ declared alongside with
+-- another regex /keyValue/ (the latter has an option /i/ which corresponds to
 -- 'caseless'; the regex compiler has also support for options /s/ and /m/ which
 -- correspond to 'dotall' and 'multiline' respectively). Notice that regex
 -- declarations require 4-fold backslashes as they are getting shrunk while
