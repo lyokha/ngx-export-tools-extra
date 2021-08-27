@@ -53,10 +53,11 @@ import           System.IO.Unsafe
 -- $matchingPCRE
 --
 -- This module provides a simple handler __/matchRegex/__ to match a value
--- against a PCRE regex preliminary declared and compiled in configuration
--- service __/simpleService_declareRegexes/__ (which is an 'ignitionService'
--- in terms of module "NgxExport.Tools") and the corresponding service update
--- hook __/compileRegexes/__.
+-- against a PCRE regex preliminary declared and compiled in
+-- /configuration service/ __/simpleService_declareRegexes/__ (which is an
+-- 'ignitionService' in terms of module "NgxExport.Tools") and the corresponding
+-- /service update hook/ (in terms of module "NgxExport") __/compileRegexes/__
+-- at the start of the service.
 --
 -- Below is a simple example.
 --
@@ -68,7 +69,7 @@ import           System.IO.Unsafe
 -- @
 --
 -- The file does not contain any significant declarations as we are going to use
--- only the exporters.
+-- only the exporters of the handlers.
 --
 -- ==== File /nginx.conf/
 -- @
@@ -124,21 +125,21 @@ import           System.IO.Unsafe
 -- @
 --
 -- In this example, we expect requests with argument /user/ which should
--- supposedly be tagged with an /area/ tag containing digits only. Then the
--- /user/ argument should match against regex /userArea/ declared alongside with
--- another regex /keyValue/ (the latter has an option /i/ which corresponds to
+-- supposedly be tagged with an /area/ code containing digits only. The /user/
+-- value should match against regex /userArea/ declared alongside with another
+-- regex /keyValue/ (the latter has an option /i/ which corresponds to
 -- 'caseless'; the regex compiler has also support for options /s/ and /m/ which
 -- correspond to 'dotall' and 'multiline' respectively). Notice that regex
 -- declarations require 4-fold backslashes as they are getting shrunk while
 -- interpreted sequentially by the Nginx configuration interpreter and then by
 -- the Haskell compiler too.
 --
--- Handler /matchRegex/ finds the compiled regex /userArea/ from the beginning
--- of its argument: the second part is delimited by a /bar/ symbol and contains
--- the value to match against. If the regex contains captures, then the matched
--- value shall correspond to the contents of the first capture (in case of
--- /userArea/, this is the area number), otherwise it must correspond to the
--- whole matched value.
+-- Handler /matchRegex/ finds the named regex /userArea/ from the beginning of
+-- its argument: the second part of the argument is delimited by a /bar/ symbol
+-- and contains the value to match against. If the regex contains captures, then
+-- the matched value shall correspond to the contents of the first capture (in
+-- case of /userArea/, this is the area code), otherwise it must correspond to
+-- the whole matched value.
 --
 -- ==== A simple test
 --
@@ -240,7 +241,7 @@ ngxExportIOYY 'matchRegex
 -- There are handlers to make substitutions using PCRE regexes. An
 -- 'ignitionService' __/simpleService_mapSubs/__ declares named /plain/
 -- substitutions which are made in run-time by handlers __/subRegex/__ and
--- __/gsubRegex/__. Functions 'subRegexWith' and 'gsubRegexWith' makes it
+-- __/gsubRegex/__. Functions 'subRegexWith' and 'gsubRegexWith' make it
 -- possible to write custom /functional/ substitutions.
 --
 -- Let's extend our example by adding ability to erase the captured area code.
@@ -305,7 +306,8 @@ ngxExportIOYY 'matchRegex
 -- substitutions. In this example, it declares only one substitution /erase/
 -- which substitutes an empty string, i.e. /erases/ the matched text. Notice
 -- that the argument of handler /subRequest/ requires three parts delimited by
--- /bar/ symbols: the named regex, the named substitution, and the value.
+-- /bar/ symbols: the named regex, the named substitution, and the value to
+-- match against.
 --
 -- ==== A simple test
 --
@@ -314,7 +316,7 @@ ngxExportIOYY 'matchRegex
 -- > $ curl 'http://localhost:8010/swap?kv=kid|v0012a
 -- > Swap kid|v0012a = v0012a|kid
 
--- | Type of functions to perform the /functional/ substitution.
+-- | Type of functions to perform /functional/ substitutions.
 type SubPasteF =
        ByteString       -- ^ The full match
     -> [ByteString]     -- ^ List of captures
