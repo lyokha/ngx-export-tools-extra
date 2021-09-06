@@ -8,6 +8,9 @@ More extra tools for Nginx Haskell module
 This package contains a collection of Haskell modules with more extra tools for
 [*Nginx Haskell module*](http://github.com/lyokha/nginx-haskell-module).
 
+Detailed documentation on each module's exported functions and data can be found
+at [*the Hackage page*](http://hackage.haskell.org/package/ngx-export-tools-extra).
+
 #### Table of contents
 
 - [Module NgxExport.Tools.Aggregate](#module-ngxexporttoolsaggregate)
@@ -28,10 +31,6 @@ aggregate service starts an HTTP server implemented via the [*Snap
 framework*](http://snapframework.com/), which serves incoming requests from
 worker processes (collecting data) as well as from the Nginx server's
 clients (reporting collected data for administration purpose).
-
-See detailed documentation on the module's exported functions and data on the
-[*Hackage
-haddocks*](http://hackage.haskell.org/package/ngx-export-tools-extra/docs/NgxExport-Tools-Aggregate.html).
 
 ##### An example
 
@@ -2000,7 +1999,7 @@ or globally, being a superuser
 # cabal install --global
 ```
 
-The module is also available on
+The module is also available at
 [*hackage.haskell.org*](http://hackage.haskell.org/package/ngx-export-tools-extra),
 so you can simply install it from there with
 
