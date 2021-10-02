@@ -30,7 +30,11 @@ import           NgxExport.Tools
 import           Text.EDE
 import           Text.EDE.Filters
 #if EDE_USE_PRETTYPRINTER
+#if MIN_VERSION_prettyprinter(1,7,0)
+import           Prettyprinter (unAnnotate)
+#else
 import           Data.Text.Prettyprint.Doc (unAnnotate)
+#endif
 #else
 import           Text.PrettyPrint.ANSI.Leijen (plain)
 #endif

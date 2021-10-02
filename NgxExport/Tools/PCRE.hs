@@ -13,7 +13,7 @@
 -- Stability   :  experimental
 -- Portability :  non-portable (requires Template Haskell)
 --
--- PCRE parsing and substitution from the more extra tools collection
+-- PCRE matching and substitution from the more extra tools collection
 -- for <http://github.com/lyokha/nginx-haskell-module nginx-haskell-module>.
 --
 -----------------------------------------------------------------------------
