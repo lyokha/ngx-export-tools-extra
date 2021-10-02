@@ -1,4 +1,7 @@
 {-# LANGUAGE TemplateHaskell, BangPatterns, OverloadedStrings #-}
+{-# LANGUAGE ForeignFunctionInterface, CApiFFI #-}
+
+{-# OPTIONS_GHC -fno-warn-dodgy-foreign-imports #-}
 
 -----------------------------------------------------------------------------
 -- |
@@ -12,11 +15,6 @@
 --
 -- PCRE parsing and substitution from the more extra tools collection
 -- for <http://github.com/lyokha/nginx-haskell-module nginx-haskell-module>.
---
--- __Important!__ Currently, this module requires
--- <http://github.com/lyokha/pcre-light the patched version of pcre-light>.
--- Without the patch, /pcre-light/ will cause segmentation faults in Nginx
--- worker processes when releasing compiled regexes at the exit!
 --
 -----------------------------------------------------------------------------
 
@@ -44,10 +42,16 @@ import qualified Data.ByteString.Lazy as L
 import           Data.List
 import           Data.Maybe
 import           Data.IORef
-import           Text.Regex.PCRE.Light
-import           Text.Regex.PCRE.Heavy
+import           Text.Regex.PCRE.Light hiding (compile, compileM)
+import           Text.Regex.PCRE.Light.Base
+import           Text.Regex.PCRE.Heavy hiding (compileM)
 import           Control.Exception (Exception, throwIO)
 import           Control.Arrow
+import           Foreign.Ptr
+import           Foreign.ForeignPtr
+import           Foreign.C.String
+import           Foreign.Storable
+import           Foreign.Marshal.Alloc
 import           System.IO.Unsafe
 
 -- $matchingPCRE
@@ -167,6 +171,34 @@ declareRegexes :: InputRegexes -> Bool -> IO L.ByteString
 declareRegexes = ignitionService $ const $ return ""
 
 ngxExportSimpleServiceTyped 'declareRegexes ''InputRegexes SingleShotService
+
+
+{- SPLICE: compile with pcre_free finalizer, mostly adopted from pcre-light -}
+
+foreign import capi "pcre.h value pcre_free" c_pcre_free' :: FinalizerPtr a
+
+compile :: ByteString -> [PCREOption] -> Regex
+compile s o = case compileM s o of
+    Right r -> r
+    Left e -> error ("Text.Regex.PCRE.Light: Error in regex: " ++ e)
+
+compileM :: ByteString -> [PCREOption] -> Either String Regex
+compileM str os = unsafePerformIO $
+    C8.useAsCString str $ \ptn ->
+        alloca $ \errptr ->
+            alloca $ \erroffset -> do
+                pcre_ptr <- c_pcre_compile ptn (combineOptions os)
+                    errptr erroffset nullPtr
+                if pcre_ptr == nullPtr
+                    then do
+                        err <- peekCString =<< peek errptr
+                        return (Left err)
+                    else do
+                        reg <- newForeignPtr c_pcre_free' pcre_ptr
+                        return (Right (Regex reg str))
+
+{- SPLICE: END -}
+
 
 compileRegexes :: ByteString -> IO L.ByteString
 compileRegexes = const $ do

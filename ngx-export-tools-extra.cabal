@@ -1,5 +1,5 @@
 name:                       ngx-export-tools-extra
-version:                    0.7.0.0
+version:                    0.8.0.0
 synopsis:                   More extra tools for Nginx haskell module
 description:                More extra tools for
         <https://github.com/lyokha/nginx-haskell-module Nginx haskell module>.
@@ -31,9 +31,7 @@ flag EDEUsePrettyprinter
                             to [prettyprinter](https://hackage.haskell.org/package/prettyprinter).
 
 flag PCRE
-  description:              Build PCRE module, requires patched pcre-light.
-  default:                  False
-  manual:                   True
+  description:              Build PCRE module.
 
 library
   default-language:         Haskell2010

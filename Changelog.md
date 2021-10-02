@@ -1,3 +1,8 @@
+### 0.8.0.0
+
+- Added module *NgxExport.Tools.PCRE*, this requires *nginx-haskell-module*
+  *2.8.4* or newer.
+
 ### 0.7.0.0
 
 - Added module *NgxExport.Tools.ServiceHookAdaptor* to maintain custom global

@@ -415,11 +415,6 @@ User id: user1, options: WyJvcDEiLCJvcDIiXQ==, path: %2Fopt%2Fusers
 
 #### Module *NgxExport.Tools.PCRE*
 
-**Important!** Currently, this module requires
-[*the patched version of pcre-light*](http://github.com/lyokha/pcre-light).
-Without the patch, *pcre-light* will cause segmentation faults in Nginx
-worker processes when releasing compiled regexes at the exit!
-
 This module provides a simple handler *matchRegex* to match a value
 against a PCRE regex preliminary declared and compiled in
 *configuration service* *simpleService_declareRegexes* (which is an
