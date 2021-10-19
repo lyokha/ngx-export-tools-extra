@@ -1615,10 +1615,10 @@ http {
             echo -n $hs_subrequest;
         }
 
-        location /proxy {
+        location ~ ^/proxy(.*) {
             allow 127.0.0.1;
             deny all;
-            proxy_pass http://backend;
+            proxy_pass http://backend$1;
         }
 
         location /httpbin {
@@ -1970,6 +1970,158 @@ HttpExceptionRequest Request {
   proxySecureMode      = ProxySecureWithConnect
 }
  (ConnectionFailure Network.Socket.connect: <socket: 31>: does not exist (Connection refused))
+```
+
+---
+
+A bridged HTTP subrequest streams the response body from the *source* end of
+the *bridge* to the *sink* end. Both source and sink are subrequests
+configured with the familiar type *SubrequestConf*. They comprise another
+opaque type *BridgeConf*. The bridge abstraction is useful when some data is
+going to be copied from some source to some destination.
+
+A bridge can be configured using handlers *makeBridgedSubrequest*,
+*makeBridgedSubrequestWithRead*, *makeBridgedSubrequestFull*, and
+*makeBridgedSubrequestFullWithRead* derived from the functions with the
+same names.
+
+Let's extend our example with bridged subrequests.
+
+###### File *test_tools_extra_subrequest.hs*: auxiliary read body handler
+
+```haskell
+reqBody :: L.ByteString -> ByteString -> IO L.ByteString
+reqBody = const . return
+
+ngxExportAsyncOnReqBody 'reqBody
+```
+
+In this example, we are going to collect the request body at the sink end
+with an auxiliary handler *reqBody*.
+
+###### File *nginx.conf*: upstream *sink*
+
+```nginx
+    upstream sink {
+        server 127.0.0.1:8030;
+    }
+```
+
+###### File *nginx.conf*: new location */bridge* in server *main*
+
+```nginx
+        location /bridge {
+            haskell_run_async makeBridgedSubrequestFull $hs_subrequest
+                    '{"source":
+                        {"uri": "http://127.0.0.1:$arg_p/proxy/bridge"
+                        ,"headers": [["Custom-Header", "$arg_a"]]
+                        }
+                     ,"sink":
+                        {"uri": "http://backend_proxy/sink/echo"
+                        ,"useUDS": true
+                        }
+                     }';
+
+            if ($arg_exc = yes) {
+                haskell_content fromFullResponseWithException $hs_subrequest;
+                break;
+            }
+
+            haskell_content fromFullResponse $hs_subrequest;
+        }
+```
+
+###### File *nginx.conf*: new location */sink* in server *backend_proxy*
+
+```nginx
+        location ~ ^/sink(.*) {
+            proxy_pass http://sink$1;
+        }
+```
+
+###### File *nginx.conf*: new location */bridge* in server *backend*
+
+```nginx
+        location /bridge {
+            set $custom_header $http_custom_header;
+            add_header Subrequest-Header "This is response from subrequest";
+            echo "The response may come in chunks!";
+            echo "In backend, Custom-Header is '$custom_header'";
+        }
+```
+
+###### File *nginx.conf*: new server *sink*
+
+```nginx
+    server {
+        listen       8030;
+        server_name  sink;
+
+        location / {
+            haskell_run_async_on_request_body reqBody $hs_rb noarg;
+            add_header Bridge-Header
+                    "This response was bridged from subrequest";
+            echo "Here is the bridged response:";
+            echo -n $hs_rb;
+        }
+    }
+```
+
+Upon receiving a request with URI */bridge* at the main server, we are going
+to connect to the *source* with the same URI at the server with port equal to
+argument *arg_p*, and then stream its response body to a *sink* with URI
+*/echo* via the proxy server *backend_proxy*. Using an internal Nginx proxy
+server for the sink end of the bridge is necessary if the sink end does not
+recognize chunked HTTP requests! Note also that *method* of the sink
+subrequest is always *POST* independently of whether or not and how it was
+specified.
+
+In this example, after receiving all streamed data the sink collects it in
+variable *hs_rb* and merely sends it to the client.
+
+###### A simple test
+
+```ShellSession
+$ curl -D- 'http://localhost:8010/bridge?a=Value&p=8010&exc=yes'
+HTTP/1.1 200 OK
+Server: nginx/1.19.4
+Date: Tue, 19 Oct 2021 13:12:46 GMT
+Content-Type: application/octet-stream
+Content-Length: 100
+Connection: keep-alive
+Bridge-Header: This response was bridged from subrequest
+
+Here is the bridged response:
+The response may come in chunks!
+In backend, Custom-Header is 'Value'
+```
+
+A negative case.
+
+```ShellSession
+$ curl -D- 'http://localhost:8010/bridge?a=Value&p=8021&exc=yes'
+HTTP/1.1 502 Bad Gateway
+Server: nginx/1.19.4
+Date: Tue, 19 Oct 2021 13:16:18 GMT
+Content-Length: 600
+Connection: keep-alive
+
+HttpExceptionRequest Request {
+  host                 = "127.0.0.1"
+  port                 = 8021
+  secure               = False
+  requestHeaders       = [("Custom-Header","Value")]
+  path                 = "/proxy/bridge"
+  queryString          = ""
+  method               = "GET"
+  proxy                = Nothing
+  rawBody              = False
+  redirectCount        = 10
+  responseTimeout      = ResponseTimeoutDefault
+  requestVersion       = HTTP/1.1
+  proxySecureMode      = ProxySecureWithConnect
+}
+ (ConnectionFailure Network.Socket.connect: <socket: 32>: does not exist (Connection refused))
 ```
 
 #### Building and installation

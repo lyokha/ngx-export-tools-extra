@@ -14,3 +14,8 @@ makeRequest = const . makeSubrequest
 
 ngxExportSimpleService 'makeRequest $ PersistentService $ Just $ Sec 10
 
+reqBody :: L.ByteString -> ByteString -> IO L.ByteString
+reqBody = const . return
+
+ngxExportAsyncOnReqBody 'reqBody
+

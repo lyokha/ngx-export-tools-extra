@@ -4,7 +4,7 @@
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  NgxExport.Tools.Subrequest
--- Copyright   :  (c) Alexey Radkov 2020
+-- Copyright   :  (c) Alexey Radkov 2020-2021
 -- License     :  BSD-style
 --
 -- Maintainer  :  alexey.radkov@gmail.com
@@ -37,6 +37,12 @@ module NgxExport.Tools.Subrequest (
     -- $forwardingFullResponse
                                   ,notForwardableResponseHeaders
                                   ,contentFromFullResponse
+    -- * Making bridged HTTP subrequests
+    -- $makingBridgedHTTPSubrequests
+                                  ,makeBridgedSubrequest
+                                  ,makeBridgedSubrequestWithRead
+                                  ,makeBridgedSubrequestFull
+                                  ,makeBridgedSubrequestFullWithRead
                                   ) where
 
 import           NgxExport
@@ -60,6 +66,7 @@ import qualified Data.HashSet as HS
 import           Data.CaseInsensitive hiding (map)
 import           Data.Aeson
 import           Data.Maybe
+import           Data.List
 import           Control.Arrow
 import           Control.Exception
 import           System.IO.Unsafe
@@ -141,10 +148,10 @@ import           System.IO.Unsafe
 --             echo -n $hs_subrequest;
 --         }
 --
---         location \/proxy {
+--         location ~ ^\/proxy(.*) {
 --             allow 127.0.0.1;
 --             deny all;
---             proxy_pass http:\/\/backend;
+--             proxy_pass http:\/\/backend$1;
 --         }
 --
 --         location \/httpbin {
@@ -210,6 +217,10 @@ data SubrequestParseError = SubrequestParseError deriving Show
 
 instance Exception SubrequestParseError
 
+data BridgeParseError = BridgeParseError deriving Show
+
+instance Exception BridgeParseError
+
 data UDSNotConfiguredError = UDSNotConfiguredError deriving Show
 
 instance Exception UDSNotConfiguredError
@@ -239,60 +250,78 @@ instance FromJSON SubrequestConf where
         return SubrequestConf {..}
         where maybeEmpty = fmap $ maybe "" T.encodeUtf8
 
-subrequest :: (String -> IO Request) ->
-    (Response L.ByteString -> L.ByteString) -> SubrequestConf ->
-    IO L.ByteString
-subrequest parseRequestF buildResponseF SubrequestConf {..} = do
-    man <- if srUseUDS
-               then fromMaybe (throw UDSNotConfiguredError) <$>
-                        readIORef httpUDSManager
-               else return httpManager
-    req <- parseRequestF srUri
-    let req' = if B.null srMethod
-                   then req
-                   else req { method = srMethod }
-        req'' = if B.null srBody
-                    then req'
-                    else req' { requestBody = RequestBodyBS srBody }
-        req''' = if null srHeaders
-                     then req''
-                     else req'' { requestHeaders = srHeaders }
-        req'''' = if srResponseTimeout == ResponseTimeoutDefault
-                      then req'''
-                      else req''' { responseTimeout =
-                                        setTimeout srResponseTimeout }
-    buildResponseF <$> httpLbs req'''' man
+data BridgeConf =
+    BridgeConf { bridgeSource  :: SubrequestConf
+               , bridgeSink :: SubrequestConf
+               } deriving Read
+
+instance FromJSON BridgeConf where
+    parseJSON = withObject "BridgeConf" $ \o -> do
+        bridgeSource <- o .: "source"
+        bridgeSink <- o .: "sink"
+        return BridgeConf {..}
+
+makeRequest :: SubrequestConf -> Request -> Request
+makeRequest SubrequestConf {..} req =
+    req { method = if B.null srMethod
+                       then method req
+                       else srMethod
+        , requestBody = if B.null srBody
+                            then requestBody req
+                            else RequestBodyBS srBody
+        , requestHeaders = if null srHeaders
+                               then requestHeaders req
+                               else srHeaders
+        , responseTimeout = if srResponseTimeout == ResponseTimeoutDefault
+                                then responseTimeout req
+                                else setTimeout srResponseTimeout
+        }
     where setTimeout (ResponseTimeout v)
               | t == 0 = responseTimeoutNone
               | otherwise = responseTimeoutMicro $ t * 1e6
               where t = toSec v
           setTimeout _ = undefined
 
+subrequest :: (String -> IO Request) ->
+    (Response L.ByteString -> L.ByteString) -> SubrequestConf ->
+    IO L.ByteString
+subrequest parseRequestF buildResponseF sub@SubrequestConf {..} = do
+    man <- if srUseUDS
+               then fromMaybe (throw UDSNotConfiguredError) <$>
+                        readIORef httpUDSManager
+               else return httpManager
+    req <- parseRequestF srUri
+    buildResponseF <$> httpLbs (makeRequest sub req) man
+
 subrequestBody :: SubrequestConf -> IO L.ByteString
 subrequestBody = subrequest parseUrlThrow responseBody
 
 type FullResponse = (Int, [(ByteString, ByteString)], L.ByteString, ByteString)
 
+handleFullResponse :: IO L.ByteString -> IO L.ByteString
+handleFullResponse = handle $ \e -> do
+    let msg = C8.pack $ show e
+        response500 = (500, [], "", msg)
+        response502 = (502, [], "", msg)
+    return $ Binary.encode @FullResponse $
+        case fromException e of
+            Just (HttpExceptionRequest _ c) ->
+                case c of
+                    Network.HTTP.Client.ResponseTimeout -> response502
+                    ConnectionTimeout -> response502
+                    ConnectionFailure _ -> response502
+                    _ -> response500
+            _ -> response500
+
+buildFullResponse :: Response L.ByteString -> L.ByteString
+buildFullResponse r =
+    let status = statusCode $ responseStatus r
+        headers = map (first original) $ responseHeaders r
+        body = responseBody r
+    in Binary.encode @FullResponse (status, headers, body, "")
+
 subrequestFull :: SubrequestConf -> IO L.ByteString
-subrequestFull = handleAll . subrequest parseRequest buildResponse
-    where handleAll = handle $ \e -> do
-              let msg = C8.pack $ show e
-                  response500 = (500, [], "", msg)
-                  response502 = (502, [], "", msg)
-              return $ Binary.encode @FullResponse $
-                  case fromException e of
-                      Just (HttpExceptionRequest _ c) ->
-                          case c of
-                              Network.HTTP.Client.ResponseTimeout -> response502
-                              ConnectionTimeout -> response502
-                              ConnectionFailure _ -> response502
-                              _ -> response500
-                      _ -> response500
-          buildResponse r =
-              let status = statusCode $ responseStatus r
-                  headers = map (first original) $ responseHeaders r
-                  body = responseBody r
-              in Binary.encode @FullResponse (status, headers, body, "")
+subrequestFull = handleFullResponse . subrequest parseRequest buildFullResponse
 
 httpManager :: Manager
 httpManager = unsafePerformIO $ newManager defaultManagerSettings
@@ -771,6 +800,15 @@ notForwardableResponseHeaders = HS.fromList $
            ,"X-Pad"
            ]
 
+deleteHeaders :: HashSet HeaderName -> Bool -> ResponseHeaders ->
+    ResponseHeaders
+deleteHeaders headersToDelete deleteXAccel =
+    filter (\(n, _) -> not $
+               n `HS.member` headersToDelete ||
+                   deleteXAccel &&
+                       foldCase "X-Accel-" `B.isPrefixOf` foldedCase n
+           )
+
 -- | Translates encoded response to 'ContentHandlerResult'.
 --
 -- The translated data can be forwarded to the client by a simple handler based
@@ -792,12 +830,7 @@ contentFromFullResponse headersToDelete deleteXAccel f v =
     let (st, hs, b, e) = Binary.decode @FullResponse $ L.fromStrict v
         hs' = map (first mk) hs
         ct = fromMaybe "" $ lookup (mk "Content-Type") hs'
-        hs'' = filter
-            (\(n, _) -> not $
-                n `HS.member` headersToDelete ||
-                    deleteXAccel &&
-                        foldCase "X-Accel-" `B.isPrefixOf` foldedCase n
-            ) hs'
+        hs'' = deleteHeaders headersToDelete deleteXAccel hs'
     in (f b e, ct, st, map (first original) hs'')
 
 fromFullResponse :: ByteString -> ContentHandlerResult
@@ -813,4 +846,301 @@ fromFullResponseWithException =
           f b = const b
 
 ngxExportHandler 'fromFullResponseWithException
+
+-- $makingBridgedHTTPSubrequests
+--
+-- A bridged HTTP subrequest streams the response body from the /source/ end of
+-- the /bridge/ to the /sink/ end. Both source and sink are subrequests
+-- configured with the familiar type /SubrequestConf/. They comprise another
+-- opaque type /BridgeConf/. The bridge abstraction is useful when some data is
+-- going to be copied from some source to some destination.
+--
+-- A bridge can be configured using handlers __/makeBridgedSubrequest/__,
+-- __/makeBridgedSubrequestWithRead/__, __/makeBridgedSubrequestFull/__, and
+-- __/makeBridgedSubrequestFullWithRead/__ derived from the functions with the
+-- same names.
+--
+-- Let's extend our example with bridged subrequests.
+--
+-- ==== File /test_tools_extra_subrequest.hs/: auxiliary read body handler
+-- @
+-- reqBody :: L.ByteString -> ByteString -> IO L.ByteString
+-- reqBody = const . return
+--
+-- 'ngxExportAsyncOnReqBody' \'reqBody
+-- @
+--
+-- In this example, we are going to collect the request body at the sink end
+-- with an auxiliary handler /reqBody/.
+--
+-- ==== File /nginx.conf/: upstream /sink/
+-- @
+--     upstream sink {
+--         server 127.0.0.1:8030;
+--     }
+-- @
+--
+-- ==== File /nginx.conf/: new location /\/bridge/ in server /main/
+-- @
+--         location \/bridge {
+--             haskell_run_async __/makeBridgedSubrequestFull/__ $hs_subrequest
+--                     \'{\"source\":
+--                         {\"uri\": \"http:\/\/127.0.0.1:$arg_p\/proxy\/bridge\"
+--                         ,\"headers\": [[\"Custom-Header\", \"$arg_a\"]]
+--                         }
+--                      ,\"sink\":
+--                         {\"uri\": \"http:\/\/backend_proxy\/sink\/echo\"
+--                         ,\"useUDS\": true
+--                         }
+--                      }\';
+--
+--             if ($arg_exc = yes) {
+--                 haskell_content __/fromFullResponseWithException/__ $hs_subrequest;
+--                 break;
+--             }
+--
+--             haskell_content __/fromFullResponse/__ $hs_subrequest;
+--         }
+-- @
+--
+-- ==== File /nginx.conf/: new location /\/sink/ in server /backend_proxy/
+-- @
+--         location ~ ^\/sink(.*) {
+--             proxy_pass http:\/\/sink$1;
+--         }
+-- @
+--
+-- ==== File /nginx.conf/: new location /\/bridge/ in server /backend/
+-- @
+--         location \/bridge {
+--             set $custom_header $http_custom_header;
+--             add_header Subrequest-Header \"This is response from subrequest\";
+--             echo \"The response may come in chunks!\";
+--             echo \"In backend, Custom-Header is \'$custom_header\'\";
+--         }
+-- @
+--
+-- ==== File /nginx.conf/: new server /sink/
+-- @
+--     server {
+--         listen       8030;
+--         server_name  sink;
+--
+--         location \/ {
+--             haskell_run_async_on_request_body reqBody $hs_rb noarg;
+--             add_header Bridge-Header
+--                     \"This response was bridged from subrequest\";
+--             echo \"Here is the bridged response:\";
+--             echo -n $hs_rb;
+--         }
+--     }
+-- @
+--
+-- Upon receiving a request with URI /\/bridge/ at the main server, we are going
+-- to connect to the /source/ with the same URI at the server with port equal to
+-- argument /$arg_p/, and then stream its response body to a /sink/ with URI
+-- /\/echo/ via the proxy server /backend_proxy/. Using an internal Nginx proxy
+-- server for the sink end of the bridge is necessary if the sink end does not
+-- recognize chunked HTTP requests! Note also that /method/ of the sink
+-- subrequest is always /POST/ independently of whether or not and how it was
+-- specified.
+--
+-- In this example, after receiving all streamed data the sink collects it in
+-- variable /$hs_rb/ and merely sends it to the client.
+--
+-- ==== A simple test
+--
+-- > $ curl -D- 'http://localhost:8010/bridge?a=Value&p=8010&exc=yes'
+-- > HTTP/1.1 200 OK
+-- > Server: nginx/1.19.4
+-- > Date: Tue, 19 Oct 2021 13:12:46 GMT
+-- > Content-Type: application/octet-stream
+-- > Content-Length: 100
+-- > Connection: keep-alive
+-- > Bridge-Header: This response was bridged from subrequest
+-- >
+-- > Here is the bridged response:
+-- > The response may come in chunks!
+-- > In backend, Custom-Header is 'Value'
+--
+-- A negative case.
+--
+-- > $ curl -D- 'http://localhost:8010/bridge?a=Value&p=8021&exc=yes'
+-- > HTTP/1.1 502 Bad Gateway
+-- > Server: nginx/1.19.4
+-- > Date: Tue, 19 Oct 2021 13:16:18 GMT
+-- > Content-Length: 600
+-- > Connection: keep-alive
+-- >
+-- > HttpExceptionRequest Request {
+-- >   host                 = "127.0.0.1"
+-- >   port                 = 8021
+-- >   secure               = False
+-- >   requestHeaders       = [("Custom-Header","Value")]
+-- >   path                 = "/proxy/bridge"
+-- >   queryString          = ""
+-- >   method               = "GET"
+-- >   proxy                = Nothing
+-- >   rawBody              = False
+-- >   redirectCount        = 10
+-- >   responseTimeout      = ResponseTimeoutDefault
+-- >   requestVersion       = HTTP/1.1
+-- >   proxySecureMode      = ProxySecureWithConnect
+-- > }
+-- >  (ConnectionFailure Network.Socket.connect: <socket: 32>: does not exist (Connection refused))
+
+makeStreamingRequest :: GivesPopper () -> SubrequestConf -> Request -> Request
+makeStreamingRequest givesPopper conf req =
+    makeRequest conf { srMethod = "POST" , srBody = "" }
+                req { requestBody = RequestBodyStreamChunked givesPopper }
+
+bridgedSubrequest :: (String -> IO Request) ->
+    (Response L.ByteString -> L.ByteString) -> BridgeConf ->
+    IO L.ByteString
+bridgedSubrequest parseRequestF buildResponseF BridgeConf {..} = do
+    manIn <- if srUseUDS bridgeSource
+                 then fromMaybe (throw UDSNotConfiguredError) <$>
+                          readIORef httpUDSManager
+                 else return httpManager
+    manOut <- if srUseUDS bridgeSink
+                  then fromMaybe (throw UDSNotConfiguredError) <$>
+                           readIORef httpUDSManager
+                  else return httpManager
+    reqIn <- parseUrlThrow $ srUri bridgeSource
+    reqOut <- parseRequestF $ srUri bridgeSink
+    streamIn <- responseOpen (makeRequest bridgeSource reqIn) manIn
+    finally (do
+                let reqOut' = reqOut { requestHeaders =
+                                           deleteHeaders
+                                               notForwardableResponseHeaders
+                                               True (responseHeaders streamIn)
+                                           `union` srHeaders bridgeSink
+                                     }
+                    givesPopper needsPopper =
+                        needsPopper $ brRead (responseBody streamIn)
+                    reqOut'' =
+                        makeStreamingRequest givesPopper bridgeSink reqOut'
+                buildResponseF <$> httpLbs reqOut'' manOut
+            ) $ responseClose streamIn
+
+bridgedSubrequestBody :: BridgeConf -> IO L.ByteString
+bridgedSubrequestBody = bridgedSubrequest parseUrlThrow responseBody
+
+bridgedSubrequestFull :: BridgeConf -> IO L.ByteString
+bridgedSubrequestFull =
+    handleFullResponse . bridgedSubrequest parseRequest buildFullResponse
+
+-- | Makes a bridged HTTP request.
+--
+-- This is the core function of the /makeBridgedSubrequest/ handler. From
+-- perspective of an Nginx request, it spawns two subrequests connecting the two
+-- ends of a /bridge/: the /source/ and the /sink/, hence the name.
+--
+-- Accepts a JSON object representing an opaque type /BridgeConf/ with mandatory
+-- fields /source/ and /sink/.
+--
+-- An example of a bridge configuration:
+--
+-- > {"source":
+-- >      {"uri": "http://example.com/"
+-- >      ,"headers": [["Header1", "Value1"], ["Header2", "Value2"]]
+-- >      }
+-- > ,"sink":
+-- >      {"uri": "http://proxy/sink"
+-- >      ,"useUDS": true
+-- >      }
+-- > }
+--
+-- The sink method is always /POST/ while its body is always empty independently
+-- of whether or not and how they were specified.
+--
+-- Returns the response body of the sink if HTTP status of the response is
+-- /2xx/, otherwise throws an error. To avoid leakage of error messages into
+-- variable handlers, put the corresponding variables into the list of directive
+-- /haskell_var_empty_on_error/.
+makeBridgedSubrequest
+    :: ByteString       -- ^ Bridge configuration
+    -> IO L.ByteString
+makeBridgedSubrequest =
+    maybe (throwIO BridgeParseError) bridgedSubrequestBody .
+        readFromByteStringAsJSON @BridgeConf
+
+ngxExportAsyncIOYY 'makeBridgedSubrequest
+
+-- | Makes a bridged HTTP request.
+--
+-- Behaves exactly as 'makeBridgedSubrequest' except it parses Haskell terms
+-- representing /BridgeConf/ with 'read'. Exported on the Nginx level by
+-- handler /makeBridgedSubrequestWithRead/.
+--
+-- An example of a bridge configuration:
+--
+-- > BridgeConf
+-- > { bridgeSource = SubrequestConf
+-- >       { srMethod = ""
+-- >       , srUri = "http://127.0.0.1/source"
+-- >       , srBody = ""
+-- >       , srHeaders = [("Header1", "Value1"), ("Header2", "Value2")]
+-- >       , srResponseTimeout = ResponseTimeout (Sec 10)
+-- >       , srUseUDS = False
+-- >       }
+-- > , bridgeSink = SubrequestConf
+-- >       { srMethod = ""
+-- >       , srUri = "http://127.0.0.1/sink"
+-- >       , srBody = ""
+-- >       , srHeaders = []
+-- >       , srResponseTimeout = ResponseTimeout (Sec 10)
+-- >       , srUseUDS = False
+-- >       }
+-- > }
+--
+-- Notice that unlike JSON parsing, fields of /SubrequestConf/ comprising
+-- /bridgeSpource/ and /bridgeSink/ are not omittable and must be listed in the
+-- order shown in the example.
+makeBridgedSubrequestWithRead
+    :: ByteString       -- ^ Bridge configuration
+    -> IO L.ByteString
+makeBridgedSubrequestWithRead =
+    maybe (throwIO BridgeParseError) bridgedSubrequestBody .
+        readFromByteString @BridgeConf
+
+ngxExportAsyncIOYY 'makeBridgedSubrequestWithRead
+
+-- | Makes a bridged HTTP request.
+--
+-- The same as 'makeBridgedSubrequest' except it returns a binary encoded
+-- response data whose parts must be extracted by handlers made of
+-- 'extractStatusFromFullResponse', 'extractHeaderFromFullResponse',
+-- 'extractBodyFromFullResponse', and 'extractExceptionFromFullResponse'. It
+-- does not throw any exceptions outside. Exported on the Nginx level by handler
+-- /makeBridgedSubrequestFull/.
+makeBridgedSubrequestFull
+    :: ByteString       -- ^ Bridge configuration
+    -> IO L.ByteString
+makeBridgedSubrequestFull =
+    maybe (return $
+              Binary.encode @FullResponse
+                  (400, [], "", "Unreadable bridged subrequest data")
+          ) bridgedSubrequestFull . readFromByteStringAsJSON @BridgeConf
+
+ngxExportAsyncIOYY 'makeBridgedSubrequestFull
+
+-- | Makes a bridged HTTP request.
+--
+-- The same as 'makeBridgedSubrequestWithRead' except it returns a binary
+-- encoded response data whose parts must be extracted by handlers made of
+-- 'extractStatusFromFullResponse', 'extractHeaderFromFullResponse',
+-- 'extractBodyFromFullResponse', and 'extractExceptionFromFullResponse'. It
+-- does not throw any exceptions outside. Exported on the Nginx level by handler
+-- /makeBridgedSubrequestFullWithRead/.
+makeBridgedSubrequestFullWithRead
+    :: ByteString       -- ^ Bridge configuration
+    -> IO L.ByteString
+makeBridgedSubrequestFullWithRead =
+    maybe (return $
+              Binary.encode @FullResponse
+                  (400, [], "", "Unreadable bridged subrequest data")
+          ) bridgedSubrequestFull . readFromByteString @BridgeConf
+
+ngxExportAsyncIOYY 'makeBridgedSubrequestFullWithRead
 
