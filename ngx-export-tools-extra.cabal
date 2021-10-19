@@ -41,7 +41,7 @@ library
                           , base64 >= 0.3.0.0
                           , ngx-export
                           , ngx-export-tools >= 0.4.8.0
-                          , aeson >= 1.0.0.0
+                          , aeson >= 1.0.0.0 && < 2.0.0.0
                           , http-types >= 0.7.0
                           , http-client >= 0.5.3
                           , network >= 2.4.0.0
@@ -52,7 +52,6 @@ library
                           , array
                           , text
                           , safe
-                          , hashable <= 1.3.2.0
 
   if flag(Aggregate)
     build-depends:          snap-core
