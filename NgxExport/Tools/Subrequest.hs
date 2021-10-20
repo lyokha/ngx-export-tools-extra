@@ -64,6 +64,7 @@ import qualified Data.Binary as Binary
 import           Data.HashSet (HashSet)
 import qualified Data.HashSet as HS
 import           Data.CaseInsensitive hiding (map)
+import           Data.Function
 import           Data.Aeson
 import           Data.Maybe
 import           Data.List
@@ -269,9 +270,8 @@ makeRequest SubrequestConf {..} req =
         , requestBody = if B.null srBody
                             then requestBody req
                             else RequestBodyBS srBody
-        , requestHeaders = if null srHeaders
-                               then requestHeaders req
-                               else srHeaders
+        , requestHeaders = unionBy ((==) `on` fst) srHeaders $
+                               requestHeaders req
         , responseTimeout = if srResponseTimeout == ResponseTimeoutDefault
                                 then responseTimeout req
                                 else setTimeout srResponseTimeout
@@ -884,11 +884,11 @@ ngxExportHandler 'fromFullResponseWithException
 -- @
 --         location \/bridge {
 --             haskell_run_async __/makeBridgedSubrequestFull/__ $hs_subrequest
---                     \'{\"source\":
+--                     \'{\"__/source/__\":
 --                         {\"uri\": \"http:\/\/127.0.0.1:$arg_p\/proxy\/bridge\"
 --                         ,\"headers\": [[\"Custom-Header\", \"$arg_a\"]]
 --                         }
---                      ,\"sink\":
+--                      ,\"__/sink/__\":
 --                         {\"uri\": \"http:\/\/backend_proxy\/sink\/echo\"
 --                         ,\"useUDS\": true
 --                         }
@@ -942,11 +942,17 @@ ngxExportHandler 'fromFullResponseWithException
 -- /\/echo/ via the proxy server /backend_proxy/. Using an internal Nginx proxy
 -- server for the sink end of the bridge is necessary if the sink end does not
 -- recognize chunked HTTP requests! Note also that /method/ of the sink
--- subrequest is always /POST/ independently of whether or not and how it was
--- specified.
+-- subrequest is always /POST/ independently of whether or not and how exactly
+-- it was specified.
 --
--- In this example, after receiving all streamed data the sink collects it in
--- variable /$hs_rb/ and merely sends it to the client.
+-- The source end puts into the bridge channel its response headers except those
+-- listed in 'notForwardableResponseHeaders' and all headers which names start
+-- with /X-Accel-/. The request headers listed in the sink configuration get
+-- also sent: their values override the values of the headers of the same names
+-- sent in the response of the source end of the bridge.
+--
+-- In this example, after receiving all streamed data the sink collects the
+-- request body in variable /$hs_rb/ and merely sends it to the client.
 --
 -- ==== A simple test
 --
@@ -1008,20 +1014,15 @@ bridgedSubrequest parseRequestF buildResponseF BridgeConf {..} = do
                   else return httpManager
     reqIn <- parseUrlThrow $ srUri bridgeSource
     reqOut <- parseRequestF $ srUri bridgeSink
-    streamIn <- responseOpen (makeRequest bridgeSource reqIn) manIn
-    finally (do
-                let reqOut' = reqOut { requestHeaders =
-                                           deleteHeaders
-                                               notForwardableResponseHeaders
-                                               True (responseHeaders streamIn)
-                                           `union` srHeaders bridgeSink
-                                     }
-                    givesPopper needsPopper =
-                        needsPopper $ brRead (responseBody streamIn)
-                    reqOut'' =
-                        makeStreamingRequest givesPopper bridgeSink reqOut'
-                buildResponseF <$> httpLbs reqOut'' manOut
-            ) $ responseClose streamIn
+    withResponse (makeRequest bridgeSource reqIn) manIn $ \respIn -> do
+        let reqOut' = reqOut { requestHeaders =
+                                   deleteHeaders
+                                       notForwardableResponseHeaders
+                                       True (responseHeaders respIn)
+                             }
+            givesPopper needsPopper = needsPopper $ brRead $ responseBody respIn
+        buildResponseF <$>
+            httpLbs (makeStreamingRequest givesPopper bridgeSink reqOut') manOut
 
 bridgedSubrequestBody :: BridgeConf -> IO L.ByteString
 bridgedSubrequestBody = bridgedSubrequest parseUrlThrow responseBody
@@ -1052,7 +1053,7 @@ bridgedSubrequestFull =
 -- > }
 --
 -- The sink method is always /POST/ while its body is always empty independently
--- of whether or not and how they were specified.
+-- of whether or not and how exactly they were specified.
 --
 -- Returns the response body of the sink if HTTP status of the response is
 -- /2xx/, otherwise throws an error. To avoid leakage of error messages into
@@ -1094,9 +1095,13 @@ ngxExportAsyncIOYY 'makeBridgedSubrequest
 -- >       }
 -- > }
 --
+-- The sink method is always /POST/ while its body is always empty independently
+-- of how exactly they were specified.
+--
 -- Notice that unlike JSON parsing, fields of /SubrequestConf/ comprising
--- /bridgeSpource/ and /bridgeSink/ are not omittable and must be listed in the
--- order shown in the example.
+-- /bridgeSource/ and /bridgeSink/ are not omittable and must be listed in the
+-- order shown in the example. As well, fields /bridgeSource/ and /bridgeSink/
+-- must be listed in this order.
 makeBridgedSubrequestWithRead
     :: ByteString       -- ^ Bridge configuration
     -> IO L.ByteString

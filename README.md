@@ -2073,8 +2073,14 @@ argument *arg_p*, and then stream its response body to a *sink* with URI
 */echo* via the proxy server *backend_proxy*. Using an internal Nginx proxy
 server for the sink end of the bridge is necessary if the sink end does not
 recognize chunked HTTP requests! Note also that *method* of the sink
-subrequest is always *POST* independently of whether or not and how it was
-specified.
+subrequest is always *POST* independently of whether or not and how exactly
+it was specified.
+
+The source end puts into the bridge channel its response headers except those
+listed in *notForwardableResponseHeaders* and all headers which names start
+with *X-Accel-*. The request headers listed in the sink configuration get
+also sent: their values override the values of the headers of the same names
+sent in the response of the source end of the bridge.
 
 In this example, after receiving all streamed data the sink collects it in
 variable *hs_rb* and merely sends it to the client.
