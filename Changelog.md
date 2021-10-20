@@ -1,3 +1,10 @@
+### 0.8.1.0
+
+- In module *NgxExport.Tools.Subrequest*, bridged HTTP subrequests were added.
+- In module *NgxExport.Tools.Subrequest*, configured subrequest headers now get
+  merged with originally set request headers.
+- Added Cabal constraint *aeson &lt; 2.0.0.0* for building EDE module.
+
 ### 0.8.0.0
 
 - Added module *NgxExport.Tools.PCRE*, this requires *nginx-haskell-module*

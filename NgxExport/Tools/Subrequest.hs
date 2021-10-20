@@ -946,13 +946,13 @@ ngxExportHandler 'fromFullResponseWithException
 -- it was specified.
 --
 -- The source end puts into the bridge channel its response headers except those
--- listed in 'notForwardableResponseHeaders' and all headers which names start
--- with /X-Accel-/. The request headers listed in the sink configuration get
--- also sent: their values override the values of the headers of the same names
--- sent in the response of the source end of the bridge.
+-- listed in 'notForwardableResponseHeaders' and those with names starting with
+-- /X-Accel-/. The request headers listed in the sink configuration get also
+-- sent: their values override the values of the headers of the same names sent
+-- in the response from the source end of the bridge.
 --
 -- In this example, after receiving all streamed data the sink collects the
--- request body in variable /$hs_rb/ and merely sends it to the client.
+-- request body in variable /$hs_rb/ and merely sends it back to the client.
 --
 -- ==== A simple test
 --
