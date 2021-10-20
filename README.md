@@ -2083,9 +2083,6 @@ sent: their values override the values of the headers of the same names sent
 in the response from the source end of the bridge.
 
 In this example, after receiving all streamed data the sink collects the
-request body in variable *hs_rb* and merely sends it back to the client.
-
-In this example, after receiving all streamed data the sink collects the
 request body in variable *hs_rb* and merely sends it back as a response to
 the original bridged subrequest. Then this response gets decoded with
 handlers *fromFullResponse* or *fromFullResponseWithException* and finally
