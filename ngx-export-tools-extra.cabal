@@ -41,6 +41,7 @@ library
                           , base64 >= 0.3.0.0
                           , ngx-export
                           , ngx-export-tools >= 0.4.8.0
+                          , aeson >= 1.0.0.0 && < 2.0.0.0
                           , http-types >= 0.7.0
                           , http-client >= 0.5.3
                           , network >= 2.4.0.0
@@ -59,8 +60,6 @@ library
                           , time
 
   if flag(EDE)
-    build-depends:          aeson >= 1.0.0.0 && < 2.0.0.0
-
     if flag(EDEUsePrettyprinter)
       build-depends:        ede >= 0.3.0.0
                           , prettyprinter
@@ -70,8 +69,6 @@ library
       build-depends:        ede
                           , ansi-wl-pprint >= 0.6.3
                           , trifecta <= 2
-  else
-    build-depends:          aeson >= 1.0.0.0
 
   if flag(PCRE)
     build-depends:          pcre-light >= 0.4
