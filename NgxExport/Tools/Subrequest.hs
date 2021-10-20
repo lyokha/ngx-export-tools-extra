@@ -955,7 +955,7 @@ ngxExportHandler 'fromFullResponseWithException
 -- request body in variable /$hs_rb/ and merely sends it back as a response to
 -- the original bridged subrequest. Then this response gets decoded with
 -- handlers /fromFullResponse/ or /fromFullResponseWithException/ and finally
--- returned to the client.
+-- returned in the response to the client.
 --
 -- ==== A simple test
 --
