@@ -889,7 +889,7 @@ ngxExportHandler 'fromFullResponseWithException
 --                         ,\"headers\": [[\"Custom-Header\", \"$arg_a\"]]
 --                         }
 --                      ,\"__/sink/__\":
---                         {\"uri\": \"http:\/\/backend_proxy\/sink\/echo\"
+--                         {\"uri\": \"http:\/\/sink_proxy\/echo\"
 --                         ,\"useUDS\": true
 --                         }
 --                      }\';
@@ -903,13 +903,6 @@ ngxExportHandler 'fromFullResponseWithException
 --         }
 -- @
 --
--- ==== File /nginx.conf/: new location /\/sink/ in server /backend_proxy/
--- @
---         location ~ ^\/sink(.*) {
---             proxy_pass http:\/\/sink$1;
---         }
--- @
---
 -- ==== File /nginx.conf/: new location /\/bridge/ in server /backend/
 -- @
 --         location \/bridge {
@@ -920,13 +913,22 @@ ngxExportHandler 'fromFullResponseWithException
 --         }
 -- @
 --
--- ==== File /nginx.conf/: new server /sink/
+-- ==== File /nginx.conf/: new servers /sink_proxy/ and /sink/
 -- @
+--     server {
+--         listen       unix:\/tmp\/backend.sock;
+--         server_name  sink_proxy;
+--
+--         location \/ {
+--             proxy_pass http:\/\/sink;
+--         }
+--     }
+--
 --     server {
 --         listen       8030;
 --         server_name  sink;
 --
---         location \/ {
+--         location \/echo {
 --             haskell_run_async_on_request_body reqBody $hs_rb noarg;
 --             add_header Bridge-Header
 --                     \"This response was bridged from subrequest\";
@@ -939,8 +941,8 @@ ngxExportHandler 'fromFullResponseWithException
 -- Upon receiving a request with URI /\/bridge/ at the main server, we are going
 -- to connect to the /source/ with the same URI at the server with port equal to
 -- argument /$arg_p/, and then stream its response body to a /sink/ with URI
--- /\/echo/ via the proxy server /backend_proxy/. Using an internal Nginx proxy
--- server for the sink end of the bridge is necessary if the sink end does not
+-- /\/echo/ via proxy server /sink_proxy/. Using an internal Nginx proxy server
+-- for the sink end of the bridge is necessary if the sink end does not
 -- recognize chunked HTTP requests! Note also that /method/ of the sink
 -- subrequest is always /POST/ independently of whether or not and how exactly
 -- it was specified.
@@ -1050,7 +1052,7 @@ bridgedSubrequestFull =
 -- >      ,"headers": [["Header1", "Value1"], ["Header2", "Value2"]]
 -- >      }
 -- > ,"sink":
--- >      {"uri": "http://proxy/sink"
+-- >      {"uri": "http://sink_proxy/"
 -- >      ,"useUDS": true
 -- >      }
 -- > }
