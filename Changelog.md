@@ -1,4 +1,4 @@
-### 0.8.1.0
+### 0.8.2.0
 
 - In module *NgxExport.Tools.Subrequest*, bridged HTTP subrequests return status
   code of the source end of the bridge when it returns a *non-2xx* response.
