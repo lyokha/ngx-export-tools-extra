@@ -1,5 +1,10 @@
 ### 0.8.1.0
 
+- In module *NgxExport.Tools.Subrequest*, bridged HTTP subrequests return status
+  code of the source end of the bridge when it returns a *non-2xx* response.
+
+### 0.8.1.0
+
 - In module *NgxExport.Tools.Subrequest*, bridged HTTP subrequests were added.
 - In module *NgxExport.Tools.Subrequest*, configured subrequest headers now get
   merged with originally set request headers.

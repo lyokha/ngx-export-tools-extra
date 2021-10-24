@@ -2083,6 +2083,10 @@ listed in *notForwardableResponseHeaders* and those with names starting with
 sent: their values override the values of the headers of the same names sent
 in the response from the source end of the bridge.
 
+Bridged HTTP subrequests have transactional semantics: any errors occurred at
+either end of a bridge make the whole subrequest fail. Responses from the
+source end of a bridge with *non-2xx* status codes are regarded as a failure.
+
 In this example, after receiving all streamed data the sink collects the
 request body in variable *hs_rb* and merely sends it back as a response to
 the original bridged subrequest. Then this response gets decoded with

@@ -1,5 +1,5 @@
 {-# LANGUAGE TemplateHaskell, OverloadedStrings, RecordWildCards #-}
-{-# LANGUAGE TypeApplications, NumDecimals #-}
+{-# LANGUAGE TypeApplications, TupleSections, NumDecimals #-}
 
 -----------------------------------------------------------------------------
 -- |
@@ -301,8 +301,9 @@ type FullResponse = (Int, [(ByteString, ByteString)], L.ByteString, ByteString)
 handleFullResponse :: IO L.ByteString -> IO L.ByteString
 handleFullResponse = handle $ \e -> do
     let msg = C8.pack $ show e
-        response500 = (500, [], "", msg)
-        response502 = (502, [], "", msg)
+        responseXXX = (, [], "", msg)
+        response500 = responseXXX 500
+        response502 = responseXXX 502
     return $ Binary.encode @FullResponse $
         case fromException e of
             Just (HttpExceptionRequest _ c) ->
@@ -310,6 +311,9 @@ handleFullResponse = handle $ \e -> do
                     Network.HTTP.Client.ResponseTimeout -> response502
                     ConnectionTimeout -> response502
                     ConnectionFailure _ -> response502
+                    StatusCodeException r _ ->
+                        let status = statusCode $ responseStatus r
+                        in responseXXX status
                     _ -> response500
             _ -> response500
 
@@ -953,6 +957,10 @@ ngxExportHandler 'fromFullResponseWithException
 -- sent: their values override the values of the headers of the same names sent
 -- in the response from the source end of the bridge.
 --
+-- Bridged HTTP subrequests have transactional semantics: any errors occurred at
+-- either end of a bridge make the whole subrequest fail. Responses from the
+-- source end of a bridge with /non-2xx/ status codes are regarded as a failure.
+--
 -- In this example, after receiving all streamed data the sink collects the
 -- request body in variable /$hs_rb/ and merely sends it back as a response to
 -- the original bridged subrequest. Then this response gets decoded with
@@ -1017,6 +1025,9 @@ bridgedSubrequest parseRequestF buildResponseF BridgeConf {..} = do
                   then fromMaybe (throw UDSNotConfiguredError) <$>
                            readIORef httpUDSManager
                   else return httpManager
+    -- BEWARE: a non-2xx response from the bridge source will throw
+    -- StatusCodeException with this status which finally will be returned as
+    -- the status code of the whole bridged subrequest
     reqIn <- parseUrlThrow $ srUri bridgeSource
     reqOut <- parseRequestF $ srUri bridgeSink
     withResponse (makeRequest bridgeSource reqIn) manIn $ \respIn -> do
