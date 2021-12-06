@@ -455,10 +455,10 @@ ngxExportAggregateService f a = do
                     (normalB [|unsafePerformIO $ newIORef (0, M.empty)|])
                     []
                 ]
+            ,pragInlD sName NoInline FunLike AllPhases
 #ifdef SNAP_AGGREGATE_SERVER
             ,sigD uName [t|ByteString|]
             ,funD uName [clause [] (normalB [|C8.pack f|]) []]
-            ,pragInlD sName NoInline FunLike AllPhases
             ,sigD fName [t|AggregateServerConf -> Bool -> IO L.ByteString|]
             ,funD fName
                 [clause []
