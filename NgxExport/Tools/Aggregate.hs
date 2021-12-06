@@ -1,4 +1,4 @@
-{-# LANGUAGE TemplateHaskell, OverloadedStrings, BangPatterns #-}
+{-# LANGUAGE CPP, TemplateHaskell, OverloadedStrings, BangPatterns #-}
 
 -----------------------------------------------------------------------------
 -- |
@@ -29,6 +29,7 @@ module NgxExport.Tools.Aggregate (
                                  ,Foreign.C.Types.CUInt (..)
                                  ) where
 
+import           NgxExport
 import           NgxExport.Tools
 
 import           Language.Haskell.TH
@@ -42,21 +43,31 @@ import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import           Data.IORef
 import           Data.Int
-import qualified Data.Text as T
-import qualified Data.Text.Encoding as T
 import           Data.Time.Clock.POSIX
 import           Data.Aeson
 import           Data.Maybe
 import           Control.Monad
-import           Control.Monad.IO.Class
 import           Control.Arrow
 import           Control.Exception
-import           Control.Exception.Enclosed (handleAny)
 import           System.IO.Unsafe
+import           Safe
+
+#ifdef SNAP_AGGREGATE_SERVER
+
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
+import           Control.Monad.IO.Class
+import           Control.Exception.Enclosed (handleAny)
 import           Snap.Http.Server
 import           Snap.Core
 
-type Aggregate a = IORef (CTime, Map Int32 (CTime, Maybe a))
+#endif
+
+
+type AggregateValue a = (CTime, Map Int32 (CTime, Maybe a))
+type Aggregate a = IORef (AggregateValue a)
+
+type ReportValue a = Maybe (Int32, Maybe a)
 
 -- $aggregateServiceExporter
 --
@@ -306,6 +317,54 @@ data AggregateServerConf =
                         , asPurgeInterval :: TimeInterval
                         } deriving Read
 
+throwUserError :: String -> IO a
+throwUserError = ioError . userError
+
+encodeAggregate :: ToJSON a => AggregateValue a -> L.ByteString
+encodeAggregate = encode . (toUTCTime *** M.map (first toUTCTime))
+    where toUTCTime (CTime t) = posixSecondsToUTCTime $ fromIntegral t
+
+receiveAggregate' :: Aggregate a -> ReportValue a -> TimeInterval -> IO ()
+receiveAggregate' a s tint = do
+    let (pid, v) = fromJust s
+        int = fromIntegral . toSec $ tint
+    !t <- ngxNow
+    atomicModifyIORef' a $
+        \(t', v') ->
+            (let (!tn, f) =
+                     if t - t' >= int
+                         then (t, M.filter $ \(t'', _) -> t - t'' < int)
+                         else (t', id)
+                 !vn = f $ M.alter
+                           (\old ->
+                               let !new' =
+                                       if isNothing old || isJust v
+                                           then v
+                                           else snd $ fromJust old
+                               in Just (t, new')
+                           ) pid v'
+             in (tn, vn)
+            ,()
+            )
+        
+receiveAggregate :: FromJSON a =>
+    Aggregate a -> L.ByteString -> ByteString -> IO L.ByteString
+receiveAggregate a v sint = do
+    let !s = decode' v
+        !int = readDef (Min 5) $ C8.unpack sint
+    when (isNothing s) $ throwUserError "Unreadable aggregate!"
+    receiveAggregate' a (fromJust s) int
+    return "done"
+
+sendAggregate :: ToJSON a =>
+    Aggregate a -> ByteString -> IO ContentHandlerResult
+sendAggregate a = const $ do
+    s <- readIORef a
+    return (encodeAggregate s, "text/plain", 200, [])
+
+
+#ifdef SNAP_AGGREGATE_SERVER
+
 aggregateServer :: (FromJSON a, ToJSON a) =>
     Aggregate a -> ByteString -> AggregateServerConf -> Bool -> IO L.ByteString
 aggregateServer a u = ignitionService $ \conf ->
@@ -321,46 +380,28 @@ asConfig p = setPort p
 asHandler :: (FromJSON a, ToJSON a) =>
     Aggregate a -> ByteString -> AggregateServerConf -> Snap ()
 asHandler a u conf =
-    route [(B.append "put/" u, Snap.Core.method POST $ receiveAggregate a conf)
-          ,(B.append "get/" u, Snap.Core.method GET $ sendAggregate a)
+    route [(B.append "put/" u, Snap.Core.method POST $
+              receiveAggregateSnap a $ asPurgeInterval conf
+           )
+          ,(B.append "get/" u, Snap.Core.method GET $
+              sendAggregateSnap a
+           )
           ]
 
-receiveAggregate :: FromJSON a =>
-    Aggregate a -> AggregateServerConf -> Snap ()
-receiveAggregate a conf =
+receiveAggregateSnap :: FromJSON a => Aggregate a -> TimeInterval -> Snap ()
+receiveAggregateSnap a tint =
     handleAggregateExceptions "Exception while receiving aggregate" $ do
         !s <- decode' <$> readRequestBody 65536
         when (isNothing s) $ liftIO $ throwUserError "Unreadable aggregate!"
-        liftIO $ do
-            let (pid, v) = fromJust s
-                int = fromIntegral . toSec . asPurgeInterval $ conf
-            !t <- ngxNow
-            atomicModifyIORef' a $
-                \(t', v') ->
-                    (let (!tn, f) =
-                             if t - t' >= int
-                                 then (t, M.filter $ \(t'', _) -> t - t'' < int)
-                                 else (t', id)
-                         !vn = f $ M.alter
-                                   (\old ->
-                                       let !new' =
-                                               if isNothing old || isJust v
-                                                   then v
-                                                   else snd $ fromJust old
-                                       in Just (t, new')
-                                   ) pid v'
-                     in (tn, vn)
-                    ,()
-                    )
+        liftIO $ receiveAggregate' a (fromJust s) tint
         finishWith emptyResponse
 
-sendAggregate :: ToJSON a => Aggregate a -> Snap ()
-sendAggregate a =
+sendAggregateSnap :: ToJSON a => Aggregate a -> Snap ()
+sendAggregateSnap a =
     handleAggregateExceptions "Exception while sending aggregate" $ do
         s <- liftIO $ readIORef a
         modifyResponse $ setContentType "application/json"
-        writeLBS $ encode $ (toUTCTime *** M.map (first toUTCTime)) s
-    where toUTCTime (CTime t) = posixSecondsToUTCTime $ fromIntegral t
+        writeLBS $ encodeAggregate s
 
 handleAggregateExceptions :: String -> Snap () -> Snap ()
 handleAggregateExceptions cmsg = handleAny $ \e ->
@@ -369,8 +410,8 @@ handleAggregateExceptions cmsg = handleAny $ \e ->
               modifyResponse $ setResponseStatus c $ T.encodeUtf8 $ T.pack cmsg
               writeBS $ T.encodeUtf8 $ T.pack msg
 
-throwUserError :: String -> IO a
-throwUserError = ioError . userError
+#endif
+
 
 -- | Exports a simple aggregate service with specified name and the aggregate
 --   type.
@@ -393,20 +434,33 @@ ngxExportAggregateService :: String       -- ^ Name of the service
                           -> Name         -- ^ Name of the aggregate type
                           -> Q [Dec]
 ngxExportAggregateService f a = do
-    let nameF = 'aggregateServer
+    let sName = mkName $ "aggregate_storage_" ++ f
+
+#ifdef SNAP_AGGREGATE_SERVER
+
+        nameF = 'aggregateServer
         fName = mkName $ "aggregate_" ++ f
-        sName = mkName $ "aggregate_storage_" ++ f
         uName = mkName $ "aggregate_url_" ++ f
+
+#endif
+
+        nameRecv = 'receiveAggregate
+        recvName = mkName $ "receiveAggregate_" ++ f
+        nameSend = 'sendAggregate
+        sendName = mkName $ "sendAggregate_" ++ f
     concat <$> sequence
         [sequence
-            [sigD uName [t|ByteString|]
-            ,funD uName [clause [] (normalB [|C8.pack f|]) []]
-            ,sigD sName [t|Aggregate $(conT a)|]
+            [sigD sName [t|Aggregate $(conT a)|]
             ,funD sName
                 [clause []
                     (normalB [|unsafePerformIO $ newIORef (0, M.empty)|])
                     []
                 ]
+
+#ifdef SNAP_AGGREGATE_SERVER
+
+            ,sigD uName [t|ByteString|]
+            ,funD uName [clause [] (normalB [|C8.pack f|]) []]
             ,pragInlD sName NoInline FunLike AllPhases
             ,sigD fName [t|AggregateServerConf -> Bool -> IO L.ByteString|]
             ,funD fName
@@ -414,12 +468,35 @@ ngxExportAggregateService f a = do
                     (normalB [|$(varE nameF) $(varE sName) $(varE uName)|])
                     []
                 ]
+
+#endif
+
+            ,sigD recvName [t|L.ByteString -> ByteString -> IO L.ByteString|]
+            ,funD recvName
+                [clause []
+                    (normalB [|$(varE nameRecv) $(varE sName)|])
+                    []
+                ]
+            ,sigD sendName [t|ByteString -> IO ContentHandlerResult|]
+            ,funD sendName
+                [clause []
+                    (normalB [|$(varE nameSend) $(varE sName)|])
+                    []
+                ]
             ]
+
+#ifdef SNAP_AGGREGATE_SERVER
+
         -- FIXME: name AggregateServerConf must be imported from the user's
         -- module unqualified (see details in NgxExport/Tools.hs, function
         -- ngxExportSimpleService')!
         ,ngxExportSimpleServiceTyped
             fName ''AggregateServerConf SingleShotService
+
+#endif
+
+        ,ngxExportAsyncOnReqBody recvName
+        ,ngxExportAsyncHandler sendName
         ]
 
 -- | Reports data to an aggregate service.

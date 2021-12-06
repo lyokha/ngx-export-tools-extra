@@ -19,9 +19,6 @@ source-repository head
   type:                     git
   location:                 https://github.com/lyokha/ngx-export-tools-extra
 
-flag Aggregate
-  description:              Build Aggregate module.
-
 flag EDE
   description:              Build EDE module.
 
@@ -32,6 +29,9 @@ flag EDEUsePrettyprinter
 
 flag PCRE
   description:              Build PCRE module.
+
+flag SnapAggregateServer
+  description:              Build Snap server for Aggregate module.
 
 library
   default-language:         Haskell2010
@@ -51,13 +51,14 @@ library
                           , unordered-containers
                           , array
                           , text
+                          , time
                           , safe
 
-  if flag(Aggregate)
+  if flag(SnapAggregateServer)
     build-depends:          snap-core
                           , snap-server
                           , enclosed-exceptions
-                          , time
+    cpp-options:           -DSNAP_AGGREGATE_SERVER
 
   if flag(EDE)
     if flag(EDEUsePrettyprinter)
@@ -77,9 +78,7 @@ library
   exposed-modules:          NgxExport.Tools.Prometheus
                           , NgxExport.Tools.Subrequest
                           , NgxExport.Tools.ServiceHookAdaptor
-
-  if flag(Aggregate)
-    exposed-modules:        NgxExport.Tools.Aggregate
+                          , NgxExport.Tools.Aggregate
 
   if flag(EDE)
     exposed-modules:        NgxExport.Tools.EDE
