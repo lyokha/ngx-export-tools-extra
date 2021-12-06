@@ -1,3 +1,10 @@
+### 0.8.3.0
+
+- Module *NgxExport.Tools.Aggregate* can now be built without support from the
+  *Snap framework* (flag *SnapAggregateServer* replaces flag *Aggregate*). The
+  module now allows building native Nginx-based aggregate services (see updated
+  docs).
+
 ### 0.8.2.0
 
 - In module *NgxExport.Tools.Subrequest*, bridged HTTP subrequests return status

@@ -3,7 +3,7 @@
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  NgxExport.Tools.Aggregate
--- Copyright   :  (c) Alexey Radkov 2019-2020
+-- Copyright   :  (c) Alexey Radkov 2019-2021
 -- License     :  BSD-style
 --
 -- Maintainer  :  alexey.radkov@gmail.com
@@ -19,8 +19,13 @@
 module NgxExport.Tools.Aggregate (
     -- * The typed service exporter
     -- $aggregateServiceExporter
-                                  AggregateServerConf
-                                 ,ngxExportAggregateService
+#ifdef SNAP_AGGREGATE_SERVER
+                                  AggregateServerConf,
+#endif
+                                  ngxExportAggregateService
+    -- * Nginx-based aggregate service
+    -- $nginxBasedAggregateService
+
     -- * The worker-side reporter
                                  ,reportAggregate
     -- * Re-exported data constructors from /Foreign.C/
@@ -53,14 +58,12 @@ import           System.IO.Unsafe
 import           Safe
 
 #ifdef SNAP_AGGREGATE_SERVER
-
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import           Control.Monad.IO.Class
 import           Control.Exception.Enclosed (handleAny)
 import           Snap.Http.Server
 import           Snap.Core
-
 #endif
 
 
@@ -290,33 +293,6 @@ type ReportValue a = Maybe (Int32, Maybe a)
 -- >   }
 -- > ]
 
--- | Configuration of an aggregate service.
---
--- This type is exported because Template Haskell requires that. Though its
--- only constructor /AggregateServerConf/ is not exported, it is still reachable
--- from Nginx configuration files. Below is definition of the constructor.
---
--- @
---     AggregateServerConf { asPort          :: Int
---                         , asPurgeInterval :: 'TimeInterval'
---                         }
--- @
---
--- The value of /asPort/ corresponds to the TCP port of the internal aggregate
--- server. The /asPurgeInterval/ is the /purge/ interval. An aggregate service
--- should sometimes purge data from worker processes which did not report for a
--- long time. For example, it makes no sense to keep data from workers that
--- have already been terminated. The inactive PIDs get checked every
--- /asPurgeInterval/, and data which correspond to PIDs with timestamps older
--- than /asPurgeInterval/ get removed.
---
--- Be aware that due to limitations of Template Haskell, this name must be
--- imported unqualified!
-data AggregateServerConf =
-    AggregateServerConf { asPort          :: Int
-                        , asPurgeInterval :: TimeInterval
-                        } deriving Read
-
 throwUserError :: String -> IO a
 throwUserError = ioError . userError
 
@@ -346,7 +322,7 @@ receiveAggregate' a s tint = do
              in (tn, vn)
             ,()
             )
-        
+
 receiveAggregate :: FromJSON a =>
     Aggregate a -> L.ByteString -> ByteString -> IO L.ByteString
 receiveAggregate a v sint = do
@@ -364,6 +340,33 @@ sendAggregate a = const $ do
 
 
 #ifdef SNAP_AGGREGATE_SERVER
+
+-- | Configuration of an aggregate service.
+--
+-- This type is exported because Template Haskell requires that. Though its
+-- only constructor /AggregateServerConf/ is not exported, it is still reachable
+-- from Nginx configuration files. Below is definition of the constructor.
+--
+-- @
+--     AggregateServerConf { asPort          :: Int
+--                         , asPurgeInterval :: 'TimeInterval'
+--                         }
+-- @
+--
+-- The value of /asPort/ corresponds to the TCP port of the internal aggregate
+-- server. The /asPurgeInterval/ is the /purge/ interval. An aggregate service
+-- should sometimes purge data from worker processes which did not report for a
+-- long time. For example, it makes no sense to keep data from workers that
+-- have already been terminated. The inactive PIDs get checked every
+-- /asPurgeInterval/, and data which correspond to PIDs with timestamps older
+-- than /asPurgeInterval/ get removed.
+--
+-- Be aware that due to limitations of Template Haskell, this name must be
+-- imported unqualified!
+data AggregateServerConf =
+    AggregateServerConf { asPort          :: Int
+                        , asPurgeInterval :: TimeInterval
+                        } deriving Read
 
 aggregateServer :: (FromJSON a, ToJSON a) =>
     Aggregate a -> ByteString -> AggregateServerConf -> Bool -> IO L.ByteString
@@ -435,15 +438,11 @@ ngxExportAggregateService :: String       -- ^ Name of the service
                           -> Q [Dec]
 ngxExportAggregateService f a = do
     let sName = mkName $ "aggregate_storage_" ++ f
-
 #ifdef SNAP_AGGREGATE_SERVER
-
         nameF = 'aggregateServer
         fName = mkName $ "aggregate_" ++ f
         uName = mkName $ "aggregate_url_" ++ f
-
 #endif
-
         nameRecv = 'receiveAggregate
         recvName = mkName $ "receiveAggregate_" ++ f
         nameSend = 'sendAggregate
@@ -456,9 +455,7 @@ ngxExportAggregateService f a = do
                     (normalB [|unsafePerformIO $ newIORef (0, M.empty)|])
                     []
                 ]
-
 #ifdef SNAP_AGGREGATE_SERVER
-
             ,sigD uName [t|ByteString|]
             ,funD uName [clause [] (normalB [|C8.pack f|]) []]
             ,pragInlD sName NoInline FunLike AllPhases
@@ -468,9 +465,7 @@ ngxExportAggregateService f a = do
                     (normalB [|$(varE nameF) $(varE sName) $(varE uName)|])
                     []
                 ]
-
 #endif
-
             ,sigD recvName [t|L.ByteString -> ByteString -> IO L.ByteString|]
             ,funD recvName
                 [clause []
@@ -484,20 +479,108 @@ ngxExportAggregateService f a = do
                     []
                 ]
             ]
-
 #ifdef SNAP_AGGREGATE_SERVER
-
         -- FIXME: name AggregateServerConf must be imported from the user's
         -- module unqualified (see details in NgxExport/Tools.hs, function
         -- ngxExportSimpleService')!
         ,ngxExportSimpleServiceTyped
             fName ''AggregateServerConf SingleShotService
-
 #endif
-
         ,ngxExportAsyncOnReqBody recvName
         ,ngxExportAsyncHandler sendName
         ]
+
+-- $nginxBasedAggregateService
+--
+-- Service /simpleService_aggregate_stats/ was implemented using
+-- /Snap framework/. Basically, a native Nginx implementation is not easy
+-- because the service must listen on a single (not duplicated) file descriptor
+-- which is not the case when Nginx spawns more than one worker processes.
+-- Running /simpleService_aggregate_stats/ as a shared service is an elegant
+-- solution as shared services guarantee that they occupy only one worker at a
+-- time. However, /nginx-haskell-module/ provides directive /single_listener/
+-- which can be used to apply the required restriction in a custom Nginx virtual
+-- server. This directive requires that the virtual server listens with option
+-- /reuseport/ and is only available on Linux with socket option
+-- /SO_ATTACH_REUSEPORT_CBPF/.
+--
+-- Exporter 'ngxExportAggregateService' exports additional handlers to build a
+-- native Nginx-based aggregate service. Let's replace service
+-- /simpleService_aggregate_stats/ from the previous example with such a native
+-- Nginx-based aggregate service using /single_listener/ and listening on port
+-- /8100/.
+--
+-- ==== File /nginx.conf/
+-- @
+-- user                    nobody;
+-- worker_processes        2;
+--
+-- events {
+--     worker_connections  1024;
+-- }
+--
+-- http {
+--     default_type        application\/octet-stream;
+--     sendfile            on;
+--
+--     haskell load \/var\/lib\/nginx\/test_tools_extra_aggregate.so;
+--
+--     haskell_run_service simpleService_reportStats $hs_reportStats 8100;
+--
+--     server {
+--         listen       8010;
+--         server_name  main;
+--         error_log    \/tmp\/nginx-test-haskell-error.log;
+--         access_log   \/tmp\/nginx-test-haskell-access.log;
+--
+--         haskell_run updateStats !$hs_updateStats $bytes_sent;
+--
+--         location \/ {
+--             echo Ok;
+--         }
+--     }
+--
+--     server {
+--         listen       8020;
+--         server_name  stat;
+--
+--         location \/ {
+--             allow 127.0.0.1;
+--             deny all;
+--             proxy_pass http:\/\/127.0.0.1:8100\/get\/stats;
+--         }
+--     }
+--
+--     server {
+--         listen          8100 __/reuseport/__;
+--         server_name     stats;
+--
+--         __/single_listener on/__;
+--
+--         location __/\/put\/stats/__ {
+--             haskell_run_async_on_request_body __/receiveAggregate_stats/__
+--                     $hs_stats \"Min 1\";
+--
+--             if ($hs_stats = \'\') {
+--                 return 400;
+--             }
+--
+--             return 200;
+--         }
+--
+--         location __/\/get\/stats/__ {
+--             haskell_async_content __/sendAggregate_stats/__ noarg;
+--         }
+--     }
+-- }
+-- @
+--
+-- Handler /receiveAggregate_stats/ accepts a time interval corresponding to the
+-- value of /asPurgeInterval/ from service /simpleService_aggregate_stats/. If
+-- the value is not readable (say, /noarg/) then it is defaulted to /Min 5/.
+--
+-- Notice that the stats server must listen on address /127.0.0.1/ because
+-- service /simpleService_reportStats/ reports stats to this address.
 
 -- | Reports data to an aggregate service.
 --

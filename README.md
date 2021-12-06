@@ -251,6 +251,95 @@ $ curl 'http://127.0.0.1:8020/' | jq
 ]
 ```
 
+Service *simpleService_aggregate_stats* was implemented using
+*Snap framework*. Basically, a native Nginx implementation is not easy
+because the service must listen on a single (not duplicated) file descriptor
+which is not the case when Nginx spawns more than one worker processes.
+Running *simpleService_aggregate_stats* as a shared service is an elegant
+solution as shared services guarantee that they occupy only one worker at a
+time. However, *nginx-haskell-module* provides directive *single_listener*
+which can be used to apply the required restriction in a custom Nginx virtual
+server. This directive requires that the virtual server listens with option
+*reuseport* and is only available on Linux with socket option
+*SO_ATTACH_REUSEPORT_CBPF*.
+
+Exporter *ngxExportAggregateService* exports additional handlers to build a
+native Nginx-based aggregate service. Let's replace service
+*simpleService_aggregate_stats* from the previous example with such a native
+Nginx-based aggregate service using *single_listener* and listening on port
+*8100*.
+
+```nginx
+user                    nobody;
+worker_processes        2;
+
+events {
+    worker_connections  1024;
+}
+
+http {
+    default_type        application/octet-stream;
+    sendfile            on;
+
+    haskell load /var/lib/nginx/test_tools_extra_aggregate.so;
+
+    haskell_run_service simpleService_reportStats $hs_reportStats 8100;
+
+    server {
+        listen       8010;
+        server_name  main;
+        error_log    /tmp/nginx-test-haskell-error.log;
+        access_log   /tmp/nginx-test-haskell-access.log;
+
+        haskell_run updateStats !$hs_updateStats $bytes_sent;
+
+        location / {
+            echo Ok;
+        }
+    }
+
+    server {
+        listen       8020;
+        server_name  stat;
+
+        location / {
+            allow 127.0.0.1;
+            deny all;
+            proxy_pass http://127.0.0.1:8100/get/stats;
+        }
+    }
+
+    server {
+        listen          8100 reuseport;
+        server_name     stats;
+
+        single_listener on;
+
+        location /put/stats {
+            haskell_run_async_on_request_body receiveAggregate_stats
+                    $hs_stats "Min 1";
+
+            if ($hs_stats = '') {
+                return 400;
+            }
+
+            return 200;
+        }
+
+        location /get/stats {
+            haskell_async_content sendAggregate_stats noarg;
+        }
+    }
+}
+```
+
+Handler *receiveAggregate_stats* accepts a time interval corresponding to the
+value of *asPurgeInterval* from service *simpleService_aggregate_stats*. If
+the value is not readable (say, *noarg*) then it is defaulted to *Min 5*.
+
+Notice that the stats server must listen on address *127.0.0.1* because
+service *simpleService_reportStats* reports stats to this address.
+
 #### Module *NgxExport.Tools.EDE*
 
 This module allows for complex parsing of JSON objects with [*EDE templating
