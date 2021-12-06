@@ -438,6 +438,7 @@ ngxExportAggregateService :: String       -- ^ Name of the service
                           -> Q [Dec]
 ngxExportAggregateService f a = do
     let sName = mkName $ "aggregate_storage_" ++ f
+        storage = varE sName
 #ifdef SNAP_AGGREGATE_SERVER
         nameF = 'aggregateServer
         fName = mkName $ "aggregate_" ++ f
@@ -462,20 +463,20 @@ ngxExportAggregateService f a = do
             ,sigD fName [t|AggregateServerConf -> Bool -> IO L.ByteString|]
             ,funD fName
                 [clause []
-                    (normalB [|$(varE nameF) $(varE sName) $(varE uName)|])
+                    (normalB [|$(varE nameF) $(storage) $(varE uName)|])
                     []
                 ]
 #endif
             ,sigD recvName [t|L.ByteString -> ByteString -> IO L.ByteString|]
             ,funD recvName
                 [clause []
-                    (normalB [|$(varE nameRecv) $(varE sName)|])
+                    (normalB [|$(varE nameRecv) $(storage)|])
                     []
                 ]
             ,sigD sendName [t|ByteString -> IO ContentHandlerResult|]
             ,funD sendName
                 [clause []
-                    (normalB [|$(varE nameSend) $(varE sName)|])
+                    (normalB [|$(varE nameSend) $(storage)|])
                     []
                 ]
             ]
