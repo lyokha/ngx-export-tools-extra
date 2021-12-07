@@ -300,8 +300,8 @@ encodeAggregate :: ToJSON a => AggregateValue a -> L.ByteString
 encodeAggregate = encode . (toUTCTime *** M.map (first toUTCTime))
     where toUTCTime (CTime t) = posixSecondsToUTCTime $ fromIntegral t
 
-receiveAggregate' :: Aggregate a -> ReportValue a -> TimeInterval -> IO ()
-receiveAggregate' a s tint = do
+updateAggregate :: Aggregate a -> ReportValue a -> TimeInterval -> IO ()
+updateAggregate a s tint = do
     let (pid, v) = fromJust s
         int = fromIntegral . toSec $ tint
     !t <- ngxNow
@@ -329,7 +329,7 @@ receiveAggregate a v sint = do
     let !s = decode' v
         !int = readDef (Min 5) $ C8.unpack sint
     when (isNothing s) $ throwUserError "Unreadable aggregate!"
-    receiveAggregate' a (fromJust s) int
+    updateAggregate a (fromJust s) int
     return "done"
 
 sendAggregate :: ToJSON a =>
@@ -354,8 +354,9 @@ sendAggregate a = const $ do
 -- @
 --
 -- The value of /asPort/ corresponds to the TCP port of the internal aggregate
--- server. The /asPurgeInterval/ is the /purge/ interval. An aggregate service
--- should sometimes purge data from worker processes which did not report for a
+-- server (the IP address of the internal server is always /127.0.0.1/). The
+-- /asPurgeInterval/ is the /purge/ interval. An aggregate service should
+-- sometimes purge data from worker processes which have not reported for a
 -- long time. For example, it makes no sense to keep data from workers that
 -- have already been terminated. The inactive PIDs get checked every
 -- /asPurgeInterval/, and data which correspond to PIDs with timestamps older
@@ -396,7 +397,7 @@ receiveAggregateSnap a tint =
     handleAggregateExceptions "Exception while receiving aggregate" $ do
         !s <- decode' <$> readRequestBody 65536
         when (isNothing s) $ liftIO $ throwUserError "Unreadable aggregate!"
-        liftIO $ receiveAggregate' a (fromJust s) tint
+        liftIO $ updateAggregate a (fromJust s) tint
         finishWith emptyResponse
 
 sendAggregateSnap :: ToJSON a => Aggregate a -> Snap ()
@@ -528,6 +529,8 @@ ngxExportAggregateService f a = do
 --
 --     haskell_run_service simpleService_reportStats $hs_reportStats 8100;
 --
+--     haskell_var_empty_on_error $hs_stats;
+--
 --     server {
 --         listen       8010;
 --         server_name  main;
@@ -580,8 +583,9 @@ ngxExportAggregateService f a = do
 -- value of /asPurgeInterval/ from service /simpleService_aggregate_stats/. If
 -- the value is not readable (say, /noarg/) then it is defaulted to /Min 5/.
 --
--- Notice that the stats server must listen on address /127.0.0.1/ because
--- service /simpleService_reportStats/ reports stats to this address.
+-- Notice that the stats server must listen on IP address /127.0.0.1/ because
+-- 'reportAggregate' (being the base of service /simpleService_reportStats/)
+-- reports stats to this address.
 
 -- | Reports data to an aggregate service.
 --
