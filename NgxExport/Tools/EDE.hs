@@ -29,7 +29,7 @@ import           NgxExport.Tools
 
 import           Text.EDE
 import           Text.EDE.Filters
-#if EDE_USE_PRETTYPRINTER
+#ifdef EDE_USE_PRETTYPRINTER
 #if MIN_VERSION_prettyprinter(1,7,0)
 import           Prettyprinter (unAnnotate)
 #else
@@ -275,7 +275,7 @@ renderEDETemplateWith fdec v k = do
                         Failure msg -> throwIO $ EDERenderError $ showPlain msg
                         Success r -> return $ LT.encodeUtf8 r
     where showPlain = show .
-#if EDE_USE_PRETTYPRINTER
+#ifdef EDE_USE_PRETTYPRINTER
               unAnnotate
 #else
               plain

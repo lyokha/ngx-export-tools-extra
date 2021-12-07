@@ -184,5 +184,6 @@ import           Control.Monad
 hookAdaptor :: ByteString -> Bool -> IO L.ByteString
 hookAdaptor = ignitionService $
     const $ forever $ threadDelaySec $ toSec $ Hr 24
+
 ngxExportSimpleService 'hookAdaptor SingleShotService
 

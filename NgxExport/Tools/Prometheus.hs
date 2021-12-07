@@ -440,8 +440,7 @@ prometheusConf = ignitionService $ \a -> do
     writeIORef conf $ Just a
     return ""
 
-ngxExportSimpleServiceTyped
-    'prometheusConf ''PrometheusConf SingleShotService
+ngxExportSimpleServiceTyped 'prometheusConf ''PrometheusConf SingleShotService
 
 toPrometheusMetrics' :: PrometheusConf -> AllMetrtics -> PrometheusMetrics
 toPrometheusMetrics' PrometheusConf {..} (srv, cnts, hs, ocnts) =
@@ -934,50 +933,50 @@ ngxExportYY 'cumulativeFPValue
 --                     ,\"__/hst_request_time\@scope=(in_upstreams)_sum/__\"
 --                     ]
 --                 }\';
--- 
+--
 -- @
 -- @
 --         counter $__/cnt_status\@value=(4xx),from=(response)/__ inc $inc_cnt_4xx;
 --         counter $__/cnt_status\@value=(5xx),from=(response)/__ inc $inc_cnt_5xx;
--- 
+--
 --         haskell_run statusLayout $hs_upstream_status $upstream_status;
 --         counter $__/cnt_status\@value=(4xx),from=(upstream)/__ inc $inc_cnt_u_4xx;
 --         counter $__/cnt_status\@value=(5xx),from=(upstream)/__ inc $inc_cnt_u_5xx;
--- 
+--
 --         # cache $request_time and $bytes_sent
 --         haskell_run ! $hs_request_time $request_time;
 --         haskell_run ! $hs_bytes_sent $bytes_sent;
--- 
+--
 --         histogram $__/hst_request_time\@scope=(total)/__ 11 $request_time_bucket;
 --         haskell_run scale1000 $hs_request_time_scaled $hs_request_time;
 --         counter $hst_request_time\@scope=(total)_sum inc $hs_request_time_scaled;
--- 
+--
 --         histogram $hst_bytes_sent 6 $bytes_sent_bucket;
 --         counter $hst_bytes_sent_sum inc $hs_bytes_sent;
--- 
+--
 --         # cache $upstream_response_time
 --         haskell_run ! $hs_u_response_times $upstream_response_time;
--- 
+--
 --         histogram $__/hst_request_time\@scope=(in_upstreams)/__ 11
 --                 $u_response_time_bucket;
 --         histogram $__/hst_request_time\@scope=(in_upstreams)/__ undo;
 --         haskell_run cumulativeFPValue $hs_u_response_time $hs_u_response_times;
 --         haskell_run scale1000 $hs_u_response_time_scaled $hs_u_response_time;
--- 
+--
 --         location \/ {
 --             echo_sleep 0.5;
 --             echo Ok;
 --         }
--- 
+--
 --         location \/1 {
 --             echo_sleep 1.0;
 --             echo Ok;
 --         }
--- 
+--
 --         location \/404 {
 --             return 404;
 --         }
--- 
+--
 --         location \/backends {
 --             histogram $__/hst_request_time\@scope=(in_upstreams)/__ reuse;
 --             counter $__/hst_request_time\@scope=(in_upstreams)_sum/__ inc
@@ -986,7 +985,7 @@ ngxExportYY 'cumulativeFPValue
 --             proxy_intercept_errors on;
 --             proxy_pass http:\/\/backends;
 --         }
--- 
+--
 --         location \@status404 {
 --             histogram $__/hst_request_time\@scope=(in_upstreams)/__ reuse;
 --             counter $__/hst_request_time\@scope=(in_upstreams)_sum/__ inc
@@ -1011,7 +1010,7 @@ ngxExportYY 'cumulativeFPValue
 -- > $ for i in {1..20} ; do curl -D- 'http://localhost:8010/backends' & done
 -- >   ...
 --
--- > $ curl -s 'http://localhost:8020/' 
+-- > $ curl -s 'http://localhost:8020/'
 -- > # HELP cnt_status Number of responses with given status
 -- > # TYPE cnt_status counter
 -- > cnt_status{value="4xx",from="response"} 11.0
@@ -1072,3 +1071,4 @@ ngxExportYY 'cumulativeFPValue
 -- > # TYPE hst_request_time_err counter
 -- > hst_request_time_err{scope="in_upstreams"} 0.0
 -- > hst_request_time_err{scope="total"} 0.0
+
