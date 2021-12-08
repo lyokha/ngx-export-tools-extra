@@ -298,13 +298,20 @@ type ReportValue a = Maybe (Int32, Maybe a)
 throwUserError :: String -> IO a
 throwUserError = ioError . userError
 
+#if MIN_VERSION_time(1,9,1)
 asIntegerPart :: forall a. HasResolution a => Integer -> Fixed a
 asIntegerPart = MkFixed . (resolution (undefined :: Fixed a) *)
 {-# SPECIALIZE INLINE asIntegerPart :: Integer -> Pico #-}
+#endif
 
 toNominalDiffTime :: TimeInterval -> NominalDiffTime
 toNominalDiffTime =
-    secondsToNominalDiffTime . asIntegerPart . fromIntegral . toSec
+#if MIN_VERSION_time(1,9,1)
+    secondsToNominalDiffTime . asIntegerPart
+#else
+    fromRational . toRational . secondsToDiffTime
+#endif
+    . fromIntegral . toSec
 
 updateAggregate :: Aggregate a -> ReportValue a -> NominalDiffTime -> IO ()
 updateAggregate a s int = do
