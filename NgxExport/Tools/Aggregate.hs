@@ -49,7 +49,9 @@ import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import           Data.IORef
 import           Data.Int
+#if MIN_VERSION_time(1,9,1)
 import           Data.Fixed
+#endif
 import           Data.Time.Clock
 import           Data.Time.Calendar
 import           Data.Aeson
