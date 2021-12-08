@@ -389,7 +389,7 @@ aggregateServer :: (FromJSON a, ToJSON a) =>
     Aggregate a -> ByteString -> AggregateServerConf -> Bool -> IO L.ByteString
 aggregateServer a u = ignitionService $ \conf -> do
     let !int = toNominalDiffTime $ asPurgeInterval conf
-    simpleHttpServe (asConfig $ asPort conf) (asHandler a u int)
+    simpleHttpServe (asConfig $ asPort conf) $ asHandler a u int
     return ""
 
 asConfig :: Int -> Config Snap a
