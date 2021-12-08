@@ -179,9 +179,9 @@ As far as *reportStats* is a deferred service, we won't get useful data in 5
 seconds after Nginx start.
 
 ```ShellSession
-$ curl 'http://127.0.0.1:8020/' | jq
+$ curl -s 'http://127.0.0.1:8020/' | jq
 [
-  "1970-01-01T00:00:00Z",
+  "1858-11-17T00:00:00Z",
   {}
 ]
 ```
@@ -189,24 +189,24 @@ $ curl 'http://127.0.0.1:8020/' | jq
 However, later we should get some useful data.
 
 ```ShellSession
-$ curl 'http://127.0.0.1:8020/' | jq
+$ curl -s 'http://127.0.0.1:8020/' | jq
 [
-  "2019-04-22T14:19:04Z",
+  "2021-12-08T09:56:18.118132083Z",
   {
-    "5910": [
-      "2019-04-22T14:19:19Z",
+    "21651": [
+      "2021-12-08T09:56:18.12155413Z",
       {
-        "bytesSent": 0,
+        "meanBytesSent": 0,
         "requests": 0,
-        "meanBytesSent": 0
+        "bytesSent": 0
       }
     ],
-    "5911": [
-      "2019-04-22T14:19:14Z",
+    "21652": [
+      "2021-12-08T09:56:18.118132083Z",
       {
-        "bytesSent": 0,
+        "meanBytesSent": 0,
         "requests": 0,
-        "meanBytesSent": 0
+        "bytesSent": 0
       }
     ]
   }
@@ -214,7 +214,7 @@ $ curl 'http://127.0.0.1:8020/' | jq
 ```
 
 Here we have collected stats from the two Nginx worker processes with *PIDs*
-*5910* and *5911*. The timestamps show when the stats was updated the last
+*21651* and *21652*. The timestamps show when the stats was updated the last
 time. The topmost timestamp shows the time of the latest *purge* event. The
 data itself have only zeros as soon we have made no request to the main
 server so far. Let's run 100 simultaneous requests and look at the stats (it
@@ -227,24 +227,24 @@ $ for i in {1..100} ; do curl 'http://127.0.0.1:8010/' & done
 Wait 5 seconds...
 
 ```ShellSession
-$ curl 'http://127.0.0.1:8020/' | jq
+$ curl -s 'http://127.0.0.1:8020/' | jq
 [
-  "2019-04-22T14:29:04Z",
+  "2021-12-08T09:56:18.118132083Z",
   {
-    "5910": [
-      "2019-04-22T14:31:34Z",
+    "21651": [
+      "2021-12-08T09:56:48.159263993Z",
       {
-        "bytesSent": 17751,
-        "requests": 97,
-        "meanBytesSent": 183
+        "meanBytesSent": 183,
+        "requests": 84,
+        "bytesSent": 15372
       }
     ],
-    "5911": [
-      "2019-04-22T14:31:31Z",
+    "21652": [
+      "2021-12-08T09:56:48.136934713Z",
       {
-        "bytesSent": 549,
-        "requests": 3,
-        "meanBytesSent": 183
+        "meanBytesSent": 183,
+        "requests": 16,
+        "bytesSent": 2928
       }
     ]
   }

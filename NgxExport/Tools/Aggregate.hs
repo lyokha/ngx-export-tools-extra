@@ -1,4 +1,5 @@
-{-# LANGUAGE CPP, TemplateHaskell, OverloadedStrings, BangPatterns #-}
+{-# LANGUAGE CPP, TemplateHaskell, ScopedTypeVariables #-}
+{-# LANGUAGE OverloadedStrings, BangPatterns #-}
 
 -----------------------------------------------------------------------------
 -- |
@@ -48,11 +49,12 @@ import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import           Data.IORef
 import           Data.Int
-import           Data.Time.Clock.POSIX
+import           Data.Fixed
+import           Data.Time.Clock
+import           Data.Time.Calendar
 import           Data.Aeson
 import           Data.Maybe
 import           Control.Monad
-import           Control.Arrow
 import           Control.Exception
 import           System.IO.Unsafe
 import           Safe
@@ -67,7 +69,7 @@ import           Snap.Core
 #endif
 
 
-type AggregateValue a = (CTime, Map Int32 (CTime, Maybe a))
+type AggregateValue a = (UTCTime, Map Int32 (UTCTime, Maybe a))
 type Aggregate a = IORef (AggregateValue a)
 
 type ReportValue a = Maybe (Int32, Maybe a)
@@ -228,39 +230,39 @@ type ReportValue a = Maybe (Int32, Maybe a)
 -- As far as /reportStats/ is a deferred service, we won't get useful data in 5
 -- seconds after Nginx start.
 --
--- > $ curl 'http://127.0.0.1:8020/' | jq
+-- > $ curl -s 'http://127.0.0.1:8020/' | jq
 -- > [
--- >   "1970-01-01T00:00:00Z",
+-- >   "1858-11-17T00:00:00Z",
 -- >   {}
 -- > ]
 --
 -- However, later we should get some useful data.
 --
--- > $ curl 'http://127.0.0.1:8020/' | jq
+-- > $ curl -s 'http://127.0.0.1:8020/' | jq
 -- > [
--- >   "2019-04-22T14:19:04Z",
+-- >   "2021-12-08T09:56:18.118132083Z",
 -- >   {
--- >     "5910": [
--- >       "2019-04-22T14:19:19Z",
+-- >     "21651": [
+-- >       "2021-12-08T09:56:18.12155413Z",
 -- >       {
--- >         "bytesSent": 0,
+-- >         "meanBytesSent": 0,
 -- >         "requests": 0,
--- >         "meanBytesSent": 0
+-- >         "bytesSent": 0
 -- >       }
 -- >     ],
--- >     "5911": [
--- >       "2019-04-22T14:19:14Z",
+-- >     "21652": [
+-- >       "2021-12-08T09:56:18.118132083Z",
 -- >       {
--- >         "bytesSent": 0,
+-- >         "meanBytesSent": 0,
 -- >         "requests": 0,
--- >         "meanBytesSent": 0
+-- >         "bytesSent": 0
 -- >       }
 -- >     ]
 -- >   }
 -- > ]
 --
 -- Here we have collected stats from the two Nginx worker processes with /PIDs/
--- /5910/ and /5911/. The timestamps show when the stats was updated the last
+-- /21651/ and /21652/. The timestamps show when the stats was updated the last
 -- time. The topmost timestamp shows the time of the latest /purge/ event. The
 -- data itself have only zeros as soon we have made no request to the main
 -- server so far. Let's run 100 simultaneous requests and look at the stats (it
@@ -270,24 +272,24 @@ type ReportValue a = Maybe (Int32, Maybe a)
 --
 -- Wait 5 seconds...
 --
--- > $ curl 'http://127.0.0.1:8020/' | jq
+-- > $ curl -s 'http://127.0.0.1:8020/' | jq
 -- > [
--- >   "2019-04-22T14:29:04Z",
+-- >   "2021-12-08T09:56:18.118132083Z",
 -- >   {
--- >     "5910": [
--- >       "2019-04-22T14:31:34Z",
+-- >     "21651": [
+-- >       "2021-12-08T09:56:48.159263993Z",
 -- >       {
--- >         "bytesSent": 17751,
--- >         "requests": 97,
--- >         "meanBytesSent": 183
+-- >         "meanBytesSent": 183,
+-- >         "requests": 84,
+-- >         "bytesSent": 15372
 -- >       }
 -- >     ],
--- >     "5911": [
--- >       "2019-04-22T14:31:31Z",
+-- >     "21652": [
+-- >       "2021-12-08T09:56:48.136934713Z",
 -- >       {
--- >         "bytesSent": 549,
--- >         "requests": 3,
--- >         "meanBytesSent": 183
+-- >         "meanBytesSent": 183,
+-- >         "requests": 16,
+-- >         "bytesSent": 2928
 -- >       }
 -- >     ]
 -- >   }
@@ -296,27 +298,32 @@ type ReportValue a = Maybe (Int32, Maybe a)
 throwUserError :: String -> IO a
 throwUserError = ioError . userError
 
-encodeAggregate :: ToJSON a => AggregateValue a -> L.ByteString
-encodeAggregate = encode . (toUTCTime *** M.map (first toUTCTime))
-    where toUTCTime (CTime t) = posixSecondsToUTCTime $ fromIntegral t
+asIntegerPart :: forall a. HasResolution a => Integer -> Fixed a
+asIntegerPart = MkFixed . (resolution (undefined :: Fixed a) *)
+{-# SPECIALIZE INLINE asIntegerPart :: Integer -> Pico #-}
 
-updateAggregate :: Aggregate a -> ReportValue a -> TimeInterval -> IO ()
-updateAggregate a s tint = do
+toNominalDiffTime :: TimeInterval -> NominalDiffTime
+toNominalDiffTime =
+    secondsToNominalDiffTime . asIntegerPart . fromIntegral . toSec
+
+updateAggregate :: Aggregate a -> ReportValue a -> NominalDiffTime -> IO ()
+updateAggregate a s int = do
     let (pid, v) = fromJust s
-        int = fromIntegral . toSec $ tint
-    !t <- ngxNow
+    !t <- getCurrentTime
     atomicModifyIORef' a $
         \(t', v') ->
             (let (!tn, f) =
-                     if t - t' >= int
-                         then (t, M.filter $ \(t'', _) -> t - t'' < int)
+                     if diffUTCTime t t' >= int
+                         then (t
+                              ,M.filter $
+                                  \(t'', _) -> diffUTCTime t t'' < int
+                              )
                          else (t', id)
                  !vn = f $ M.alter
                            (\old ->
-                               let !new' =
-                                       if isNothing old || isJust v
-                                           then v
-                                           else snd $ fromJust old
+                               let !new' = if isNothing old || isJust v
+                                               then v
+                                               else snd $ fromJust old
                                in Just (t, new')
                            ) pid v'
              in (tn, vn)
@@ -327,7 +334,7 @@ receiveAggregate :: FromJSON a =>
     Aggregate a -> L.ByteString -> ByteString -> IO L.ByteString
 receiveAggregate a v sint = do
     let !s = decode' v
-        !int = readDef (Min 5) $ C8.unpack sint
+        !int = toNominalDiffTime $ readDef (Min 5) $ C8.unpack sint
     when (isNothing s) $ throwUserError "Unreadable aggregate!"
     updateAggregate a (fromJust s) int
     return "done"
@@ -336,7 +343,7 @@ sendAggregate :: ToJSON a =>
     Aggregate a -> ByteString -> IO ContentHandlerResult
 sendAggregate a = const $ do
     s <- readIORef a
-    return (encodeAggregate s, "text/plain", 200, [])
+    return (encode s, "text/plain", 200, [])
 
 
 #ifdef SNAP_AGGREGATE_SERVER
@@ -371,8 +378,10 @@ data AggregateServerConf =
 
 aggregateServer :: (FromJSON a, ToJSON a) =>
     Aggregate a -> ByteString -> AggregateServerConf -> Bool -> IO L.ByteString
-aggregateServer a u = ignitionService $ \conf ->
-    simpleHttpServe (asConfig $ asPort conf) (asHandler a u conf) >> return ""
+aggregateServer a u = ignitionService $ \conf -> do
+    let !int = toNominalDiffTime $ asPurgeInterval conf
+    simpleHttpServe (asConfig $ asPort conf) (asHandler a u int)
+    return ""
 
 asConfig :: Int -> Config Snap a
 asConfig p = setPort p
@@ -382,22 +391,22 @@ asConfig p = setPort p
            $ setVerbose False mempty
 
 asHandler :: (FromJSON a, ToJSON a) =>
-    Aggregate a -> ByteString -> AggregateServerConf -> Snap ()
-asHandler a u conf =
-    route [(B.append "put/" u, Snap.Core.method POST $
-              receiveAggregateSnap a $ asPurgeInterval conf
+    Aggregate a -> ByteString -> NominalDiffTime -> Snap ()
+asHandler a u int =
+    route [(B.append "put/" u
+           ,Snap.Core.method POST $ receiveAggregateSnap a int
            )
-          ,(B.append "get/" u, Snap.Core.method GET $
-              sendAggregateSnap a
+          ,(B.append "get/" u
+           ,Snap.Core.method GET $ sendAggregateSnap a
            )
           ]
 
-receiveAggregateSnap :: FromJSON a => Aggregate a -> TimeInterval -> Snap ()
-receiveAggregateSnap a tint =
+receiveAggregateSnap :: FromJSON a => Aggregate a -> NominalDiffTime -> Snap ()
+receiveAggregateSnap a int =
     handleAggregateExceptions "Exception while receiving aggregate" $ do
         !s <- decode' <$> readRequestBody 65536
         when (isNothing s) $ liftIO $ throwUserError "Unreadable aggregate!"
-        liftIO $ updateAggregate a (fromJust s) tint
+        liftIO $ updateAggregate a (fromJust s) int
         finishWith emptyResponse
 
 sendAggregateSnap :: ToJSON a => Aggregate a -> Snap ()
@@ -405,7 +414,7 @@ sendAggregateSnap a =
     handleAggregateExceptions "Exception while sending aggregate" $ do
         s <- liftIO $ readIORef a
         modifyResponse $ setContentType "application/json"
-        writeLBS $ encodeAggregate s
+        writeLBS $ encode s
 
 handleAggregateExceptions :: String -> Snap () -> Snap ()
 handleAggregateExceptions cmsg = handleAny $ \e ->
@@ -454,7 +463,12 @@ ngxExportAggregateService f a = do
             [sigD sName [t|Aggregate $(conT a)|]
             ,funD sName
                 [clause []
-                    (normalB [|unsafePerformIO $ newIORef (0, M.empty)|])
+                    (normalB [|unsafePerformIO $
+                                 newIORef (UTCTime (ModifiedJulianDay 0) 0
+                                          ,M.empty
+                                          )
+                             |]
+                    )
                     []
                 ]
             ,pragInlD sName NoInline FunLike AllPhases

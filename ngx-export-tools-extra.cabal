@@ -45,13 +45,13 @@ library
                           , http-types >= 0.7.0
                           , http-client >= 0.5.3
                           , network >= 2.4.0.0
+                          , time >= 1.9.1
                           , binary
                           , case-insensitive
                           , containers
                           , unordered-containers
                           , array
                           , text
-                          , time
                           , safe
 
   if flag(SnapAggregateServer)

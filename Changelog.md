@@ -4,6 +4,8 @@
   *Snap framework* (flag *SnapAggregateServer* replaces flag *Aggregate*). The
   module now allows building native Nginx-based aggregate services (see updated
   docs).
+- In module *NgxExport.Tools.Aggregate*, getting current time with *ngxNow* was
+  replaced by *getCurrentTime* because the former is not safe in async context.
 
 ### 0.8.2.0
 
