@@ -251,6 +251,8 @@ $ curl -s 'http://127.0.0.1:8020/' | jq
 ]
 ```
 
+---
+
 Service *simpleService_aggregate_stats* was implemented using
 *Snap framework*. Basically, a native Nginx implementation is not easy
 because the service must listen on a single (not duplicated) file descriptor
