@@ -9,7 +9,7 @@ jobs:
     continue-on-error: ${{ matrix.experimental }}
     strategy:
       matrix:
-        ghc: [8.2.2, 8.4.4, 8.6.5, 8.8.4, 8.10.2]
+        ghc: [8.2.2, 8.4.4, 8.6.5, 8.8.4, 8.10.7]
         cabal: [3.2]
         experimental: [false]
         include:
@@ -43,7 +43,12 @@ jobs:
               cabal v1-update
           fi
           cabal v1-install --only-dependencies
-          cabal v1-configure
+          if echo "$GHCVER" | grep -q '^8\.[246]\.'
+          then
+              cabal v1-configure -f ede
+          else
+              cabal v1-configure -f ede -f edeuseprettyprinter
+          fi
           cabal v1-build
           cabal v2-sdist --builddir=dist
           SRC_TGZ=$(cabal info . | awk '{print $2; exit}').tar.gz &&
