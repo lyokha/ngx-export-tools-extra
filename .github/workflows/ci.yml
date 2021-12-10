@@ -43,6 +43,7 @@ jobs:
               cabal v1-update
           fi
           cabal v1-install --only-dependencies --constraint='aeson<2.0.0.0'
+          cabal v1-install ede
           cabal v1-configure
           cabal v1-build
           cabal v2-sdist --builddir=dist
