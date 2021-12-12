@@ -3,11 +3,11 @@
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  NgxExport.Tools.EDE
--- Copyright   :  (c) Alexey Radkov 2020
+-- Copyright   :  (c) Alexey Radkov 2020-2021
 -- License     :  BSD-style
 --
 -- Maintainer  :  alexey.radkov@gmail.com
--- Stability   :  experimental
+-- Stability   :  stable
 -- Portability :  non-portable (requires Template Haskell)
 --
 -- EDE templates for parsing JSON objects from the more extra tools collection

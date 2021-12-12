@@ -7,7 +7,7 @@
 -- License     :  BSD-style
 --
 -- Maintainer  :  alexey.radkov@gmail.com
--- Stability   :  experimental
+-- Stability   :  stable
 -- Portability :  non-portable (requires Template Haskell)
 --
 -- A service hook adaptor from the more extra tools collection for

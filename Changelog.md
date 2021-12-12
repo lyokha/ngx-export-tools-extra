@@ -1,11 +1,15 @@
-### 0.8.3.0
+### 1.0
 
 - Module *NgxExport.Tools.Aggregate* can now be built without support from the
   *Snap framework* (flag *SnapAggregateServer* replaces flag *Aggregate*). The
   module now allows building native Nginx-based aggregate services (see updated
   docs).
 - In module *NgxExport.Tools.Aggregate*, getting current time with *ngxNow* was
-  replaced by *getCurrentTime* because the former is not safe in async context.
+  replaced by *getCurrentTime* because the former is not safe in the async
+  context.
+- Removed upper bound restriction in the Cabal constraint on the version of
+  package *aeson*.
+- Package stability tag was promoted to stable.
 
 ### 0.8.2.0
 

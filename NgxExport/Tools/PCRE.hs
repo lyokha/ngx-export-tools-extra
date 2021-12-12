@@ -10,7 +10,7 @@
 -- License     :  BSD-style
 --
 -- Maintainer  :  alexey.radkov@gmail.com
--- Stability   :  experimental
+-- Stability   :  stable
 -- Portability :  non-portable (requires Template Haskell)
 --
 -- PCRE matching and substitution from the more extra tools collection

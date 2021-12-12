@@ -4,11 +4,11 @@
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  NgxExport.Tools.Prometheus
--- Copyright   :  (c) Alexey Radkov 2020
+-- Copyright   :  (c) Alexey Radkov 2020-2021
 -- License     :  BSD-style
 --
 -- Maintainer  :  alexey.radkov@gmail.com
--- Stability   :  experimental
+-- Stability   :  stable
 -- Portability :  non-portable (requires Template Haskell)
 --
 -- Prometheus metrics from the more extra tools collection for
