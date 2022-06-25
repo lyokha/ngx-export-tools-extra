@@ -4,7 +4,7 @@
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  NgxExport.Tools.Subrequest
--- Copyright   :  (c) Alexey Radkov 2020-2021
+-- Copyright   :  (c) Alexey Radkov 2020-2022
 -- License     :  BSD-style
 --
 -- Maintainer  :  alexey.radkov@gmail.com
@@ -50,6 +50,7 @@ import           NgxExport.Tools
 
 import           Network.HTTP.Client hiding (ResponseTimeout)
 import qualified Network.HTTP.Client (HttpExceptionContent (ResponseTimeout))
+import           Network.HTTP.Client.BrReadWithTimeout
 import           Network.HTTP.Types
 import qualified Network.Socket as S
 import qualified Network.Socket.ByteString as SB
@@ -291,7 +292,7 @@ subrequest parseRequestF buildResponseF sub@SubrequestConf {..} = do
                         readIORef httpUDSManager
                else return httpManager
     req <- parseRequestF srUri
-    buildResponseF <$> httpLbs (makeRequest sub req) man
+    buildResponseF <$> httpLbsBrReadWithTimeout (makeRequest sub req) man
 
 subrequestBody :: SubrequestConf -> IO L.ByteString
 subrequestBody = subrequest parseUrlThrow responseBody
@@ -1036,9 +1037,12 @@ bridgedSubrequest parseRequestF buildResponseF BridgeConf {..} = do
                                        notForwardableResponseHeaders
                                        True (responseHeaders respIn)
                              }
-            givesPopper needsPopper = needsPopper $ brRead $ responseBody respIn
+            tmo = fromResponseTimeout reqIn manIn
+            givesPopper needsPopper = needsPopper $
+                brReadWithTimeout tmo reqIn $ responseBody respIn
         buildResponseF <$>
-            httpLbs (makeStreamingRequest givesPopper bridgeSink reqOut') manOut
+            httpLbsBrReadWithTimeout
+                (makeStreamingRequest givesPopper bridgeSink reqOut') manOut
 
 bridgedSubrequestBody :: BridgeConf -> IO L.ByteString
 bridgedSubrequestBody = bridgedSubrequest parseUrlThrow responseBody

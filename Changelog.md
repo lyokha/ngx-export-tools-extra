@@ -1,3 +1,9 @@
+### 1.1.0
+
+- Using *Network.HTTP.Client.BrReadWithTimeout* in module
+  *NgxExport.Tools.Subrequest* to ensure that a request won't stall on a bad
+  response from a buggy server.
+
 ### 1.0
 
 - Module *NgxExport.Tools.Aggregate* can now be built without support from the
