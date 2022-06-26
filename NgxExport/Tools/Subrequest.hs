@@ -1073,7 +1073,9 @@ bridgedSubrequestFull =
 -- > }
 --
 -- The sink method is always /POST/ while its body is always empty independently
--- of whether or not and how exactly they were specified.
+-- of whether or not and how exactly they were specified. The sink response
+-- timeout should be big enough to fulfill streaming of the response from the
+-- source to the sink.
 --
 -- Returns the response body of the sink if HTTP status of the response is
 -- /2xx/, otherwise throws an error. To avoid leakage of error messages into
@@ -1110,13 +1112,14 @@ ngxExportAsyncIOYY 'makeBridgedSubrequest
 -- >       , srUri = "http://127.0.0.1/sink"
 -- >       , srBody = ""
 -- >       , srHeaders = []
--- >       , srResponseTimeout = ResponseTimeout (Sec 10)
+-- >       , srResponseTimeout = ResponseTimeout (Sec 30)
 -- >       , srUseUDS = False
 -- >       }
 -- > }
 --
 -- The sink method is always /POST/ while its body is always empty independently
--- of how exactly they were specified.
+-- of how exactly they were specified. The sink response timeout should be big
+-- enough to fulfill streaming of the response from the source to the sink.
 --
 -- Notice that unlike JSON parsing, fields of /SubrequestConf/ comprising
 -- /bridgeSource/ and /bridgeSink/ are not omittable and must be listed in the
