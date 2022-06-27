@@ -1055,7 +1055,10 @@ bridgedSubrequestFull =
 --
 -- This is the core function of the /makeBridgedSubrequest/ handler. From
 -- perspective of an Nginx request, it spawns two subrequests connecting the two
--- ends of a /bridge/: the /source/ and the /sink/, hence the name.
+-- ends of a /bridge/: the /source/ and the /sink/, hence the name. The
+-- connection between the bridge ends is implemented via 'GivesPopper' and
+-- 'RequestBodyStreamChunked' which means that the server bound at the sink end
+-- must be capable of processing chunked requests.
 --
 -- Accepts a JSON object representing an opaque type /BridgeConf/ with mandatory
 -- fields /source/ and /sink/.
