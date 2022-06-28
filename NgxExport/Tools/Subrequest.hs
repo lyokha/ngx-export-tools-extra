@@ -61,6 +61,7 @@ import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString.Lazy.Char8 as C8L
 import           Data.IORef
 import qualified Data.Text.Encoding as T
+import qualified Data.Text.Lazy.Encoding as TL
 import qualified Data.Binary as Binary
 import           Data.HashSet (HashSet)
 import qualified Data.HashSet as HS
@@ -233,7 +234,7 @@ data ResponseTimeout = ResponseTimeoutDefault
 data SubrequestConf =
     SubrequestConf { srMethod          :: ByteString
                    , srUri             :: String
-                   , srBody            :: ByteString
+                   , srBody            :: L.ByteString
                    , srHeaders         :: RequestHeaders
                    , srResponseTimeout :: ResponseTimeout
                    , srUseUDS          :: Bool
@@ -241,16 +242,15 @@ data SubrequestConf =
 
 instance FromJSON SubrequestConf where
     parseJSON = withObject "SubrequestConf" $ \o -> do
-        srMethod <- maybeEmpty $ o .:? "method"
+        srMethod <- maybe "" T.encodeUtf8 <$> o .:? "method"
         srUri <- o .: "uri"
-        srBody <- maybeEmpty $ o .:? "body"
+        srBody <- maybe "" TL.encodeUtf8 <$> o .:? "body"
         srHeaders <- map (mk . T.encodeUtf8 *** T.encodeUtf8) <$>
             o .:? "headers" .!= []
         srResponseTimeout <- maybe ResponseTimeoutDefault ResponseTimeout <$>
             o .:? "timeout"
         srUseUDS <- fromMaybe False <$> o .:? "useUDS"
         return SubrequestConf {..}
-        where maybeEmpty = fmap $ maybe "" T.encodeUtf8
 
 data BridgeConf =
     BridgeConf { bridgeSource  :: SubrequestConf
@@ -268,9 +268,9 @@ makeRequest SubrequestConf {..} req =
     req { method = if B.null srMethod
                        then method req
                        else srMethod
-        , requestBody = if B.null srBody
+        , requestBody = if L.null srBody
                             then requestBody req
-                            else RequestBodyBS srBody
+                            else RequestBodyLBS srBody
         , requestHeaders = unionBy ((==) `on` fst) srHeaders $
                                requestHeaders req
         , responseTimeout = if srResponseTimeout == ResponseTimeoutDefault
