@@ -3,6 +3,8 @@
 - Using *Network.HTTP.Client.BrReadWithTimeout* in module
   *NgxExport.Tools.Subrequest* to ensure that a request won't stall on a bad
   response from a buggy server.
+- In module *NgxExport.Tools.Subrequest*, *srBody* was reimplemented using lazy
+  bytestrings.
 
 ### 1.0
 

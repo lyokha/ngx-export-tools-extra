@@ -343,13 +343,14 @@ httpUDSManager = unsafePerformIO $ newIORef Nothing
 -- function can also be used to initiate an original HTTP request from a
 -- service handler.
 --
--- Accepts a JSON object representing an opaque type /SubrequestConf/.
--- The object may contain 5 fields: /method/ (optional, default is /GET/),
--- /uri/ (mandatory), /body/ (optional, default is an empty value), /headers/
--- (optional, default is an empty array), and /timeout/ (optional, default is
--- the default response timeout of the HTTP manager which is normally 30
+-- Accepts a JSON object representing an opaque type /SubrequestConf/. The
+-- object may contain the following fields: /method/ (optional, default is
+-- /GET/), /uri/ (mandatory), /body/ (optional, default is an empty string),
+-- /headers/ (optional, default is an empty list), /timeout/ (optional, default
+-- is the default response timeout of the HTTP manager which is normally 30
 -- seconds, use value @{\"tag\": \"Unset\"}@ to disable response timeout
--- completely).
+-- completely), and /useUDS/ (an optional boolean flag to enable Unix domain
+-- sockets as the transport protocol, off by default).
 --
 -- Examples of subrequest configurations:
 --
@@ -360,6 +361,9 @@ httpUDSManager = unsafePerformIO $ newIORef Nothing
 -- > {"uri": "http://127.0.0.1/subreq"
 -- > ,"headers": [["Header1", "Value1"], ["Header2", "Value2"]]
 -- > }
+--
+-- Note that the response timeout is in effect until receiving the response
+-- headers as well as in between the successive body read events.
 --
 -- Returns the response body if HTTP status of the response is /2xx/, otherwise
 -- throws an error. To avoid leakage of error messages into variable handlers,
