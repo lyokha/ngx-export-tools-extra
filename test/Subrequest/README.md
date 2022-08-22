@@ -1,8 +1,11 @@
 ##### Compile
 
 ```ShellSession
-$ ghc -O2 -dynamic -shared -fPIC -lHSrts_thr-ghc$(ghc --numeric-version) test_tools_extra_subrequest.hs -o test_tools_extra_subrequest.so -fforce-recomp
+$ ghc -O2 -dynamic -shared -fPIC -flink-rts -threaded test_tools_extra_subrequest.hs -o test_tools_extra_subrequest.so -fforce-recomp
 ```
+
+Note that in ghc older than *8.10.6*, options *-flink-rts -threaded* must be
+replaced with option *-lHSrts_thr-ghc&dollar;(ghc --numeric-version)*.
 
 ##### Install
 
