@@ -60,9 +60,9 @@ import           System.IO.Unsafe
 -- This module provides a simple handler __/matchRegex/__ to match a value
 -- against a PCRE regex preliminary declared and compiled in
 -- /configuration service/ __/simpleService_declareRegexes/__ (which is an
--- 'ignitionService' in terms of module "NgxExport.Tools") and the corresponding
--- /service update hook/ (in terms of module "NgxExport") __/compileRegexes/__
--- at the start of the service.
+-- 'ignitionService' in terms of module "NgxExport.Tools.SplitService") and the
+-- corresponding /service update hook/ (in terms of module "NgxExport")
+-- __/compileRegexes/__ at the start of the service.
 --
 -- Below is a simple example.
 --

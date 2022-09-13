@@ -60,14 +60,14 @@ import           System.IO.Unsafe
 --
 -- This module allows for complex parsing of JSON objects with [EDE templating
 -- language](http://hackage.haskell.org/package/ede/docs/Text-EDE.html). In
--- terms of module "NgxExport.Tools", it exports a /single-shot/ service
--- __/compileEDETemplates/__ to configure a list of templates parameterized by
--- a simple key, and two variable handlers __/renderEDETemplate/__ and
--- __/renderEDETemplateFromFreeValue/__ for parsing JSON objects and
--- substitution of extracted data into provided EDE templates. The former
--- handler is /asynchronous/ and suitable for parsing JSON objects POSTed in a
--- request body, while the latter is /synchronous/ and can parse JSON objects
--- contained in Nginx variables.
+-- terms of module "NgxExport.Tools.SimpleService", it exports a /single-shot/
+-- service __/compileEDETemplates/__ to configure a list of templates
+-- parameterized by a simple key, and two variable handlers
+-- __/renderEDETemplate/__ and __/renderEDETemplateFromFreeValue/__ for parsing
+-- JSON objects and substitution of extracted data into provided EDE templates.
+-- The former handler is /asynchronous/ and suitable for parsing JSON objects
+-- POSTed in a request body, while the latter is /synchronous/ and can parse
+-- JSON objects contained in Nginx variables.
 --
 -- Below is a simple example.
 --

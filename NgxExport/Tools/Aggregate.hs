@@ -38,8 +38,8 @@ module NgxExport.Tools.Aggregate (
 import           NgxExport
 #ifdef SNAP_AGGREGATE_SERVER
 import           NgxExport.Tools.SimpleService
-#endif
 import           NgxExport.Tools.SplitService
+#endif
 import           NgxExport.Tools.System
 import           NgxExport.Tools.TimeInterval
 
@@ -84,10 +84,11 @@ type ReportValue a = Maybe (Int32, Maybe a)
 -- $aggregateServiceExporter
 --
 -- An aggregate service collects custom typed data reported by worker processes
--- and sends this via HTTP when requested. This is an 'ignitionService' in terms
--- of module "NgxExport.Tools", which means that it starts upon the startup of
--- the worker process and runs until termination of the worker. Internally, an
--- aggregate service starts an HTTP server implemented via the [Snap
+-- and sends this via HTTP when requested. This is an
+-- 'NgxExport.Tools.SplitService.ignitionService' in terms of module
+-- "NgxExport.Tools.SplitService", which means that it starts upon the startup
+-- of the worker process and runs until termination of the worker. Internally,
+-- an aggregate service starts an HTTP server implemented via the [Snap
 -- framework](http://snapframework.com/), which serves incoming requests from
 -- worker processes (collecting data) as well as from the Nginx server's
 -- clients (reporting collected data for administration purpose).
@@ -453,10 +454,10 @@ handleAggregateExceptions cmsg = handleAny $ \e ->
 -- The service is implemented via
 -- 'NgxExport.Tools.SimpleService.ngxExportSimpleServiceTyped' with
 -- 'AggregateServerConf' as the name of its custom type. This is an
--- 'ignitionService' with an HTTP server based on the [Snap
--- framework](http://snapframework.com/) running inside. The internal HTTP
--- server collects data from worker processes on URL
--- /\/put\/__\<name_of_the_service\>__/ and reports data on URL
+-- 'NgxExport.Tools.SplitService.ignitionService' with an HTTP server based on
+-- the [Snap framework](http://snapframework.com/) running inside. The internal
+-- HTTP server collects data from worker processes at URL
+-- /\/put\/__\<name_of_the_service\>__/ and reports data at URL
 -- /\/get\/__\<name_of_the_service\>__/.
 ngxExportAggregateService :: String       -- ^ Name of the service
                           -> Name         -- ^ Name of the aggregate type

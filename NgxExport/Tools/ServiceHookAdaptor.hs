@@ -31,11 +31,11 @@ import           Control.Monad
 
 -- $maintainingCustomGlobalData
 --
--- This module exports a /simple service/ (in terms of module "NgxExport.Tools")
--- __/simpleService_hookAdaptor/__ which sleeps forever. Its sole purpose is to
--- serve /service hooks/ for changing global data in all the worker processes in
--- run-time. A single service hook adaptor can serve any number of service hooks
--- with any type of global data.
+-- This module exports a /simple service/ (in terms of module
+-- "NgxExport.Tools.SimpleService") __/simpleService_hookAdaptor/__ which sleeps
+-- forever. Its sole purpose is to serve /service hooks/ for changing global
+-- data in all the worker processes in run-time. A single service hook adaptor
+-- can serve any number of service hooks with any type of global data.
 --
 -- Below is a simple example.
 --

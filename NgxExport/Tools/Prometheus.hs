@@ -115,12 +115,12 @@ conf = unsafePerformIO $ newIORef Nothing
 -- [nginx-custom-counters-module](https://github.com/lyokha/nginx-custom-counters-module)
 -- to Prometheus metrics. For this, it exposes four exporters:
 -- __/prometheusConf/__ which is an 'ignitionService' in terms of module
--- "NgxExport.Tools", __/toPrometheusMetrics/__ to convert /custom counters/ to
--- Prometheus metrics, __/prometheusMetrics/__ which is a content handler aiming
--- to return Prometheus metrics to the client, and a handy utility
--- __/scale1000/__ to convert small floating point numbers to integers by
--- multiplying them by /1000/ (which fits well for dealing with request
--- durations).
+-- "NgxExport.Tools.SplitService", __/toPrometheusMetrics/__ to convert
+-- /custom counters/ to Prometheus metrics, __/prometheusMetrics/__ which is a
+-- content handler aiming to return Prometheus metrics to the client, and a
+-- handy utility __/scale1000/__ to convert small floating point numbers to
+-- integers by multiplying them by /1000/ (which fits well for dealing with
+-- request durations).
 --
 -- The module makes use of a few custom data types which are not exported while
 -- still needed when writing Nginx configurations. In the following example they
