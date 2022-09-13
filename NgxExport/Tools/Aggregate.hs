@@ -36,7 +36,9 @@ module NgxExport.Tools.Aggregate (
                                  ) where
 
 import           NgxExport
+#ifdef SNAP_AGGREGATE_SERVER
 import           NgxExport.Tools.SimpleService
+#endif
 import           NgxExport.Tools.SplitService
 import           NgxExport.Tools.System
 import           NgxExport.Tools.TimeInterval
@@ -138,7 +140,7 @@ type ReportValue a = Maybe (Int32, Maybe a)
 --     s <- readIORef stats
 --     'reportAggregate' port (Just s) \"__/stats/__\"
 --     return \"\"
--- 'ngxExportSimpleServiceTyped' \'reportStats \'\'Int $
+-- 'NgxExport.Tools.SimpleService.ngxExportSimpleServiceTyped' \'reportStats \'\'Int $
 --     'PersistentService' $ Just $ Sec 5
 --
 -- 'ngxExportAggregateService' \"__/stats/__\" \'\'Stats
@@ -448,7 +450,8 @@ handleAggregateExceptions cmsg = handleAny $ \e ->
 -- The aggregate type must have instances of 'FromJSON' and 'ToJSON' as its
 -- objects will be transferred via HTTP in JSON format.
 --
--- The service is implemented via 'ngxExportSimpleServiceTyped' with
+-- The service is implemented via
+-- 'NgxExport.Tools.SimpleService.ngxExportSimpleServiceTyped' with
 -- 'AggregateServerConf' as the name of its custom type. This is an
 -- 'ignitionService' with an HTTP server based on the [Snap
 -- framework](http://snapframework.com/) running inside. The internal HTTP
@@ -509,8 +512,8 @@ ngxExportAggregateService f a = do
             ]
 #ifdef SNAP_AGGREGATE_SERVER
         -- FIXME: name AggregateServerConf must be imported from the user's
-        -- module unqualified (see details in NgxExport/Tools.hs, function
-        -- ngxExportSimpleService')!
+        -- module unqualified (see details in NgxExport/Tools/SimpleService.hs,
+        -- function ngxExportSimpleService')!
         ,ngxExportSimpleServiceTyped
             fName ''AggregateServerConf SingleShotService
 #endif
