@@ -3,7 +3,7 @@
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  NgxExport.Tools.ServiceHookAdaptor
--- Copyright   :  (c) Alexey Radkov 2021
+-- Copyright   :  (c) Alexey Radkov 2021-2022
 -- License     :  BSD-style
 --
 -- Maintainer  :  alexey.radkov@gmail.com
@@ -21,7 +21,9 @@ module NgxExport.Tools.ServiceHookAdaptor (
     -- $maintainingCustomGlobalData
                                           ) where
 
-import           NgxExport.Tools
+import           NgxExport.Tools.SimpleService
+import           NgxExport.Tools.SplitService
+import           NgxExport.Tools.TimeInterval
 
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as L

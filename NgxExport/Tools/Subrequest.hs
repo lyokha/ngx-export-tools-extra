@@ -46,7 +46,10 @@ module NgxExport.Tools.Subrequest (
                                   ) where
 
 import           NgxExport
-import           NgxExport.Tools
+import           NgxExport.Tools.Read
+import           NgxExport.Tools.SimpleService
+import           NgxExport.Tools.SplitService
+import           NgxExport.Tools.TimeInterval
 
 import           Network.HTTP.Client hiding (ResponseTimeout)
 import qualified Network.HTTP.Client (HttpExceptionContent (ResponseTimeout))

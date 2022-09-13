@@ -6,7 +6,7 @@
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  NgxExport.Tools.PCRE
--- Copyright   :  (c) Alexey Radkov 2021
+-- Copyright   :  (c) Alexey Radkov 2021-2022
 -- License     :  BSD-style
 --
 -- Maintainer  :  alexey.radkov@gmail.com
@@ -32,7 +32,8 @@ module NgxExport.Tools.PCRE (
                             ) where
 
 import           NgxExport
-import           NgxExport.Tools
+import           NgxExport.Tools.SimpleService
+import           NgxExport.Tools.SplitService
 
 import qualified Data.HashMap.Strict as HM
 import           Data.HashMap.Strict (HashMap)

@@ -4,7 +4,7 @@
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  NgxExport.Tools.Aggregate
--- Copyright   :  (c) Alexey Radkov 2019-2021
+-- Copyright   :  (c) Alexey Radkov 2019-2022
 -- License     :  BSD-style
 --
 -- Maintainer  :  alexey.radkov@gmail.com
@@ -36,7 +36,10 @@ module NgxExport.Tools.Aggregate (
                                  ) where
 
 import           NgxExport
-import           NgxExport.Tools
+import           NgxExport.Tools.SimpleService
+import           NgxExport.Tools.SplitService
+import           NgxExport.Tools.System
+import           NgxExport.Tools.TimeInterval
 
 import           Language.Haskell.TH
 import           Network.HTTP.Client
