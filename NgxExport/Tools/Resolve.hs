@@ -148,10 +148,10 @@ minimumTTL (_, hTTL) srv = minimum $ hTTL : srv
 
 showIPv4 :: IPv4 -> String
 showIPv4 (IPv4 w) =
-  shows ((w !>>. 24) .&. 0xff) . ('.' :) .
-  shows ((w !>>. 16) .&. 0xff) . ('.' :) .
-  shows ((w !>>.  8) .&. 0xff) . ('.' :) $
-  shows ( w          .&. 0xff)
+  shows ((w `unsafeShiftR` 24) .&. 0xff) . ('.' :) .
+  shows ((w `unsafeShiftR` 16) .&. 0xff) . ('.' :) .
+  shows ((w `unsafeShiftR`  8) .&. 0xff) . ('.' :) $
+  shows ( w                    .&. 0xff)
   ""
 
 ipv4ToServerData :: UData -> IPv4 -> ServerData
