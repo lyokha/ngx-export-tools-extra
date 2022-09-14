@@ -16,6 +16,7 @@ at [*the Hackage page*](http://hackage.haskell.org/package/ngx-export-tools-extr
 - [Module NgxExport.Tools.EDE](#module-ngxexporttoolsede)
 - [Module NgxExport.Tools.PCRE](#module-ngxexporttoolspcre)
 - [Module NgxExport.Tools.Prometheus](#module-ngxexporttoolsprometheus)
+- [Module NgxExport.Tools.Resolve](#module-ngxexporttoolsresolve)
 - [Module NgxExport.Tools.ServiceHookAdaptor](#module-ngxexporttoolsservicehookadaptor)
 - [Module NgxExport.Tools.Subrequest](#module-ngxexporttoolssubrequest)
 - [Building and installation](#building-and-installation) 
@@ -1460,6 +1461,197 @@ hst_request_time_err{scope="in_upstreams"} 0.0
 hst_request_time_err{scope="total"} 0.0
 ```
 
+#### Module *NgxExport.Tools.Resolve*
+
+With Nginx module
+[nginx-upconf-module](https://github.com/lyokha/nginx-haskell-module/tree/master/examples/dynamicUpstreams),
+it is possible to update servers inside upstreams dynamically. The module
+requires an agent to update a bound variable with upstreams layout and also
+signal that the variable has been altered. This module is such an agent. It
+updates the variable with the upstreams layout inside service
+*collectUpstreams* and signals about this in service callback
+*signalUpconf*. Collecting upstreams encompasses DNS queries of types
+*A* and *SRV*. The queries are configured independently for each managed
+upstream. With *SRV* queries, the module allows configuration of complex
+hierarchies of priorities given that compound upstream containers named
+*upstrands* are in use (they are implemented in
+[nginx-combined-upstreams-module](https://github.com/lyokha/nginx-combined-upstreams-module)).
+
+Additionally, the module exports a number of functions and data types which
+implement service *collectUpstreams*.
+
+##### An example
+
+In the following example, we are going to extract IP addresses from SRV
+record of *_http._tcp.mycompany.com* to inhabit upstream *utest*.
+
+###### File *test_tools_extra_resolve.hs*
+
+```haskell
+module TestToolsExtraResolve where
+
+import NgxExport.Tools.Resolve ()
+```
+
+The file does not contain any significant declarations as we are going to use
+only the exporters.
+
+###### File *nginx.conf*
+
+```nginx
+user                    nginx;
+worker_processes        4;
+
+events {
+    worker_connections  1024;
+}
+
+error_log               /tmp/nginx-test-upconf-error.log notice;
+
+http {
+    default_type        application/octet-stream;
+    sendfile            on;
+
+    error_log           /tmp/nginx-test-upconf-error.log notice;
+    access_log          /tmp/nginx-test-upconf-access.log;
+
+    upstream utest {
+        zone utest 64k;
+        upconf_round_robin;
+        server localhost:9000;
+    }
+
+    haskell load /var/lib/nginx/test_tools_extra_resolve.so;
+
+    haskell_run_service simpleService_collectUpstreams $hs_upstreams
+        'Conf { upstreams =
+                    [UData { uQuery =
+                                 QuerySRV
+                                     (SinglePriority "utest")
+                                         (Name "_http._tcp.pkg.freebsd.org")
+                           , uMaxFails = 0
+                           , uFailTimeout = 10
+                           }
+                    ]
+              , maxWait = Sec 300
+              , waitOnException = Sec 2
+              }';
+
+    haskell_service_var_ignore_empty $hs_upstreams;
+    haskell_service_var_in_shm upstreams 64k /tmp $hs_upstreams;
+
+    haskell_service_var_update_callback simpleService_signalUpconf $hs_upstreams
+        'Upconf { upconfAddr = ("/upconf", "127.0.0.1:8010")
+                }';
+
+    server {
+        listen          localhost:8010;
+        server_name     main;
+
+        location /upconf {
+            upconf $hs_upstreams;
+
+            allow 127.0.0.1;
+            deny  all;
+        }
+
+        location /upstreams {
+            default_type application/json;
+            echo $hs_upstreams;
+
+            allow 127.0.0.1;
+            deny  all;
+        }
+
+        location / {
+            proxy_pass http://utest;
+        }
+    }
+
+    server {
+        listen          localhost:9000;
+        server_name     backend9000;
+
+        location / {
+            echo_status 503;
+            echo "Not configured";
+        }
+    }
+}
+```
+
+At the start of Nginx, upstream *utest* contains a statically declared server
+which reports *Not configured*, but so soon as service *collectUpstreams*
+collects servers for the upstream in variable *\$hs_upstreams, and then
+the upconf module gets notified about this via callback *signalUpconf*, the
+upstream gets inhabited by the collected servers. The upstream contents will
+be re-checked within the time interval of *(1 or waitOnException, maxWait)*.
+Particularly, if an exception happens during the collection of the servers,
+then the service will restart in *waitOnException*. If there were no
+exceptions and the smallest value of *TTL* calculated from all collected
+servers does not exceed the value of *maxWait*, then the service will restart
+in this time.
+
+Notice that we used *QuerySRV* and *SinglePriority "utest"*. The latter
+means that all collected servers will inhabit upstream *utest* regardless of
+their priority values. To distribute collected servers among a number of
+upstreams, we can use *PriorityList*.
+
+###### File *nginx.conf*: collect upstreams with *PriorityList*
+
+```nginx
+    haskell_run_service simpleService_collectUpstreams $hs_upstreams
+        'Conf { upstreams =
+                    [UData { uQuery =
+                                 QuerySRV
+                                     (PriorityList ["utest", "utest1"])
+                                         (Name "_http._tcp.pkg.freebsd.org")
+                           , uMaxFails = 0
+                           , uFailTimeout = 10
+                           }
+                    ]
+              , maxWait = Sec 300
+              , waitOnException = Sec 2
+              }';
+```
+
+With this configuration, servers with the highest priority will inhabit
+upstream *utest*, while servers with lesser priorities will inhabit upstream
+*utest1*. Upstream *utest1* must also be managed by the *upconf* module. The
+priority list may contain more than two upstreams, in which case upstreams
+at the beginning of the list will take higher priorities found in the
+collected servers, while the last upstream will take the remainder of the
+priorities.
+
+Upstreams in the priority list can be put inside an *upstrand* to form the
+main and the backup layers of servers.
+
+###### File *nginx.conf*: upstrand *utest*
+
+```nginx
+    upstream utest1 {
+        zone utest1 64k;
+        upconf_round_robin;
+        server localhost:9000;
+    }
+
+    upstrand utest {
+        upstream utest;
+        upstream utest1;
+        order per_request;
+        next_upstream_statuses error timeout 5xx;
+        next_upstream_timeout 60s;
+    }
+```
+
+###### File *nginx.conf*: location *upstrand*
+
+```nginx
+        location /upstrand {
+            proxy_pass http://$upstrand_utest;
+        }
+```
+
 #### Module *NgxExport.Tools.ServiceHookAdaptor*
 
 This module exports a *simple service* (in terms of module *NgxExport.Tools*)
@@ -2135,7 +2327,7 @@ with an auxiliary handler *reqBody*.
         }
 ```
 
-###### File *nginx.conf*: new server *sink*
+###### File *nginx.conf*: new servers *sink_proxy* and *sink*
 
 ```nginx
     server {
@@ -2246,24 +2438,12 @@ $ cabal build
 $ cabal install
 ```
 
-or globally, being a superuser
-
-```ShellSession
-# cabal install --global
-```
-
 The module is also available at
 [*hackage.haskell.org*](http://hackage.haskell.org/package/ngx-export-tools-extra),
 so you can simply install it from there with
 
 ```ShellSession
 $ cabal install ngx-export-tools-extra
-```
-
-or
-
-```ShellSession
-# cabal install ngx-export-tools-extra --global
 ```
 
 ##### Building custom libraries

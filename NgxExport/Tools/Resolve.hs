@@ -17,14 +17,16 @@
 -----------------------------------------------------------------------------
 
 module NgxExport.Tools.Resolve (
-    -- * Type declarations
-                                UKey
-                               ,Destination
-                               ,TTLRange
-                               ,Upstream
-                               ,PriorityList
-                               ,UData
-                               ,ServerData
+    -- * Dynamic upstreams in Nginx
+    -- $dynamicUpstreams
+
+    -- * Exported type declarations
+                                UName
+                               ,SAddress
+                               ,UQuery (..)
+                               ,PriorityList (..)
+                               ,UData (..)
+                               ,ServerData (..)
                                ,CollectedServerData
     -- * Exported functions
                                ,collectA
@@ -55,24 +57,217 @@ import           Control.Arrow
 import           Control.Monad
 import           System.IO.Unsafe
 
-type UKey = Text            -- key to upstream description
+-- $dynamicUpstreams
+--
+-- With Nginx module
+-- [nginx-upconf-module](https://github.com/lyokha/nginx-haskell-module/tree/master/examples/dynamicUpstreams),
+-- it is possible to update servers inside upstreams dynamically. The module
+-- requires an agent to update a bound variable with upstreams layout and also
+-- signal that the variable has been altered. This module is such an agent. It
+-- updates the variable with the upstreams layout inside service
+-- __/collectUpstreams/__ and signals about this in service callback
+-- __/signalUpconf/__. Collecting upstreams encompasses DNS queries of types
+-- /A/ and /SRV/. The queries are configured independently for each managed
+-- upstream. With /SRV/ queries, the module allows configuration of complex
+-- hierarchies of priorities given that compound upstream containers named
+-- /upstrands/ are in use (they are implemented in
+-- [nginx-combined-upstreams-module](https://github.com/lyokha/nginx-combined-upstreams-module)).
+--
+-- Additionally, the module exports a number of functions and data types which
+-- implement service /collectUpstreams/.
+--
+-- In the following example, we are going to extract IP addresses from SRV
+-- record of /_http._tcp.mycompany.com/ to inhabit upstream /utest/.
+--
+-- ==== File /test_tools_extra_prometheus.hs/
+-- @
+-- module TestToolsExtraResolve where
+--
+-- import NgxExport.Tools.Resolve ()
+-- @
+--
+-- The file does not contain any significant declarations as we are going to use
+-- only the exporters.
+--
+-- ==== File /nginx.conf/
+-- @
+-- user                    nginx;
+-- worker_processes        4;
+--
+-- events {
+--     worker_connections  1024;
+-- }
+--
+-- http {
+--     default_type        application\/octet-stream;
+--     sendfile            on;
+--
+--     upstream __/utest/__ {
+--         zone utest 64k;
+--         upconf_round_robin;
+--         server localhost:9000;
+--     }
+--
+--     haskell load \/var\/lib\/nginx\/test_tools_extra_resolve.so;
+--
+--     haskell_run_service __/simpleService_collectUpstreams/__ $hs_upstreams
+--         \'Conf { upstreams =
+--                     [UData { uQuery =
+--                                  QuerySRV
+--                                      (SinglePriority \"__/utest/__\")
+--                                          (Name \"_http._tcp.mycompany.com\")
+--                            , uMaxFails = 0
+--                            , uFailTimeout = 10
+--                            }
+--                     ]
+--               , maxWait = Sec 300
+--               , waitOnException = Sec 2
+--               }\';
+--
+--     haskell_service_var_ignore_empty $hs_upstreams;
+--     haskell_service_var_in_shm upstreams 64k \/tmp $hs_upstreams;
+--
+--     haskell_service_var_update_callback __/simpleService_signalUpconf/__ $hs_upstreams
+--         \'Upconf { upconfAddr = (\"__/\/upconf/__\", \"127.0.0.1:8010\")
+--                 }\';
+--
+--     server {
+--         listen          localhost:8010;
+--         server_name     main;
+--
+--         location __/\/upconf/__ {
+--             upconf $hs_upstreams;
+--
+--             allow 127.0.0.1;
+--             deny  all;
+--         }
+--
+--         location \/upstreams {
+--             default_type application\/json;
+--             echo $hs_upstreams;
+--
+--             allow 127.0.0.1;
+--             deny  all;
+--         }
+--
+--         location \/ {
+--             proxy_pass http:\/\/utest;
+--         }
+--     }
+--
+--     server {
+--         listen          localhost:9000;
+--         server_name     backend9000;
+--
+--         location \/ {
+--             echo_status 503;
+--             echo \"Not configured\";
+--         }
+--     }
+-- }
+-- @
+--
+-- At the start of Nginx, upstream /utest/ contains a statically declared server
+-- which reports /Not configured/, but so soon as service /collectUpstreams/
+-- collects servers for the upstream in variable __/$hs_upstreams/__, and then
+-- the upconf module gets notified about this via callback /signalUpconf/, the
+-- upstream gets inhabited by the collected servers. The upstream contents will
+-- be re-checked within the time interval of /(1 or waitOnException, maxWait)/.
+-- Particularly, if an exception happens during the collection of the servers,
+-- then the service will restart in /waitOnException/. If there were no
+-- exceptions and the smallest value of /TTL/ calculated from all collected
+-- servers does not exceed the value of /maxWait/, then the service will restart
+-- in this time.
+--
+-- Notice that we used /QuerySRV/ and /SinglePriority \"utest\"/. The latter
+-- means that all collected servers will inhabit upstream /utest/ regardless of
+-- their priority values. To distribute collected servers among a number of
+-- upstreams, we can use /PriorityList/.
+--
+-- ==== File /nginx.conf/: collect upstreams with /PriorityList/
+-- @
+--     haskell_run_service __/simpleService_collectUpstreams/__ $hs_upstreams
+--         \'Conf { upstreams =
+--                     [UData { uQuery =
+--                                  QuerySRV
+--                                      (PriorityList [\"__/utest/__\", \"__/utest1/__\"])
+--                                          (Name \"_http._tcp.mycompany.com\")
+--                            , uMaxFails = 0
+--                            , uFailTimeout = 10
+--                            }
+--                     ]
+--               , maxWait = Sec 300
+--               , waitOnException = Sec 2
+--               }\';
+-- @
+--
+-- With this configuration, servers with the highest priority will inhabit
+-- upstream /utest/, while servers with lesser priorities will inhabit upstream
+-- /utest1/. Upstream /utest1/ must also be managed by the /upconf/ module. The
+-- priority list may contain more than two upstreams, in which case upstreams
+-- at the beginning of the list will take higher priorities found in the
+-- collected servers, while the last upstream will take the remainder of the
+-- priorities.
+--
+-- Upstreams in the priority list can be put inside an /upstrand/ to form the
+-- main and the backup layers of servers.
+--
+-- ==== File /nginx.conf/: upstrand /utest/
+-- @
+--     upstream utest1 {
+--         zone utest1 64k;
+--         upconf_round_robin;
+--         server localhost:9000;
+--     }
+--
+--     __/upstrand utest/__ {
+--         upstream utest;
+--         upstream utest1;
+--         order per_request;
+--         next_upstream_statuses error timeout 5xx;
+--         next_upstream_timeout 60s;
+--     }
+-- @
+--
+-- ==== File /nginx.conf/: location /upstrand/
+-- @
+--         location \/upstrand {
+--             proxy_pass http:\/\/__/$upstrand\_utest/__;
+--         }
+-- @
 
-type Url = Text             -- normally must start with /
-type Destination = Text     -- IP address or domain name
+-- | Upstream name.
+type UName = Text
 
-type TTLRange = (TTL, TTL)
+type SUrl = Text
 
-data Upstream = QueryA UKey [Name]
-              | QuerySRV PriorityList
-              deriving Read
+-- | Domain name or IP address with or without port.
+type SAddress = Text
 
-data PriorityList = SinglePriority UKey Name
-                  | PriorityList [UKey] Name
+-- | DNS query model of the upstream.
+--
+-- There are 3 ways to get the list of server addresses:
+--
+-- - query /A/ records for a list of domain names,
+-- - query /SRV/ record for a single service name and then query /A/ records
+--   for the collected list of domain names,
+-- - the same as the previous, but distribute collected servers among a list of
+--   upstreams according to the collected priorities.
+data UQuery = QueryA UName [Name]         -- ^ Query /A/ records
+            | QuerySRV PriorityList Name  -- ^ Query /SRV/ record
+            deriving Read
+
+-- | Specifies how to distribute servers among given upstreams.
+data PriorityList = SinglePriority UName  -- ^ All servers to one upstream
+                  | PriorityList [UName]  -- ^ Distribute servers by priorities
                   deriving Read
 
-data UData = UData { upstream     :: Upstream
-                   , uMaxFails    :: Int
-                   , uFailTimeout :: Int
+-- | Upstream configuration.
+--
+-- Includes DNS query model and data for Nginx /server/ description.
+data UData = UData { uQuery       :: UQuery  -- ^ DNS query model
+                   , uMaxFails    :: Int     -- ^ /maxFails/
+                   , uFailTimeout :: Int     -- ^ /failTimeout/
                    } deriving Read
 
 data Conf = Conf { upstreams       :: [UData]
@@ -80,12 +275,15 @@ data Conf = Conf { upstreams       :: [UData]
                  , waitOnException :: TimeInterval
                  } deriving Read
 
-newtype Upconf = Upconf { upconfAddr :: (Url, Destination) } deriving Read
+newtype Upconf = Upconf { upconfAddr :: (SUrl, SAddress) } deriving Read
 
-data ServerData = ServerData { sAddr        :: Destination
-                             , sWeight      :: Maybe Int
-                             , sMaxFails    :: Maybe Int
-                             , sFailTimeout :: Maybe Int
+-- | Server data.
+--
+-- The fields map exactly to data from Nginx /server/ description.
+data ServerData = ServerData { sAddr        :: SAddress   -- ^ Server address
+                             , sWeight      :: Maybe Int  -- ^ /weight/
+                             , sMaxFails    :: Maybe Int  -- ^ /maxFails/
+                             , sFailTimeout :: Maybe Int  -- ^ /failTimeout/
                              } deriving (Show, Eq, Ord)
 
 instance FromJSON ServerData where
@@ -104,7 +302,12 @@ instance ToJSON ServerData where
                            , ("fail_timeout" .=) <$> sFailTimeout
                            ]
 
-type CollectedServerData = (TTL, Map UKey [ServerData])
+-- | Collected server data.
+--
+-- The first element of the tuple defines the time interval before the next run
+-- of the /collectUpstreams/ service. The second element contains the collected
+-- data.
+type CollectedServerData = (TTL, Map UName [ServerData])
 
 collectedServerData :: IORef CollectedServerData
 collectedServerData = unsafePerformIO $ newIORef (TTL 0, M.empty)
@@ -125,28 +328,39 @@ queryHTTP :: Text -> Text -> IO L.ByteString
 queryHTTP = (getUrl .) . flip mkAddr
     where mkAddr = (("http://" `T.append`) .) . T.append
 
-collectA :: TTLRange -> Name -> IO (TTL, [IPv4])
-collectA rTTL name = do
+-- | Queries /A/ record for the given domain name.
+--
+-- Returns a list of IP addresses and the minimum of their TTLs. If the list is
+-- empty, then the returned TTL gets taken from the first argument.
+collectA :: TTL -> Name -> IO (TTL, [IPv4])
+collectA lTTL name = do
     !srv <- queryA name
-    return (minimumTTL rTTL $ map fst srv, map snd srv)
+    return (minimumTTL lTTL $ map fst srv, map snd srv)
 
-collectSRV :: TTLRange -> Name -> IO (TTL, [SRV IPv4])
-collectSRV rTTL name = do
+-- | Queries /SRV/ record for the given service name.
+--
+-- After getting the /SRV/ record, runs 'collectA' for each collected element.
+--
+-- Returns a list of IP addresses wrapped in 'SRV' container and the minimum of
+-- their TTLs. If the list is empty, then the returned TTL gets taken from the
+-- first argument.
+collectSRV :: TTL -> Name -> IO (TTL, [SRV IPv4])
+collectSRV lTTL name = do
     !srv <- querySRV name
     !srv' <- mapConcurrently
                  ((\s@SRV {..} -> do
-                     (t, is) <- collectA rTTL srvTarget
+                     (t, is) <- collectA lTTL srvTarget
                      return (t, map (\v -> s { srvTarget = v }) is)
                   ) . snd
                  ) srv
-    return (min (minimumTTL rTTL $ map fst srv)
-                (minimumTTL rTTL $ map fst srv')
+    return (min (minimumTTL lTTL $ map fst srv)
+                (minimumTTL lTTL $ map fst srv')
            ,concatMap snd srv'
            )
 
-minimumTTL :: TTLRange -> [TTL] -> TTL
-minimumTTL (lTTL, _) [] = lTTL
-minimumTTL (_, hTTL) srv = minimum $ hTTL : srv
+minimumTTL :: TTL -> [TTL] -> TTL
+minimumTTL lTTL [] = lTTL
+minimumTTL _ ttls = minimum ttls
 
 showIPv4 :: IPv4 -> String
 showIPv4 (IPv4 w) =
@@ -166,9 +380,10 @@ srvToServerData UData {..} SRV {..} =
         (Just $ fromIntegral srvWeight) (Just uMaxFails) (Just uFailTimeout)
     where showAddr i p = showIPv4 i ++ ':' : show p
 
-collectServerData :: TTLRange -> UData -> IO CollectedServerData
-collectServerData rTTL ud@(UData (QueryA k us) _ _) = do
-    a <- mapConcurrently (collectA rTTL) us
+-- | Collects server data for the given upstream configuration.
+collectServerData :: TTL -> UData -> IO CollectedServerData
+collectServerData lTTL ud@(UData (QueryA k us) _ _) = do
+    a <- mapConcurrently (collectA lTTL) us
     return $
         minimum *** M.singleton k . concat $
             foldr (\(t, s) (ts, ss) ->
@@ -178,13 +393,13 @@ collectServerData rTTL ud@(UData (QueryA k us) _ _) = do
                       -- this function as well
                       (t : ts, sort (map (ipv4ToServerData ud) s) : ss)
                   ) ([], []) a
-collectServerData rTTL ud@(UData (QuerySRV (SinglePriority k u)) _ _) = do
-    (ttl, srv) <- collectSRV rTTL u
+collectServerData lTTL ud@(UData (QuerySRV (SinglePriority k) u) _ _) = do
+    (ttl, srv) <- collectSRV lTTL u
     return (ttl, M.singleton k $ sort $ map (srvToServerData ud) srv)
-collectServerData (lTTL, _) (UData (QuerySRV (PriorityList [] _)) _ _) =
+collectServerData lTTL (UData (QuerySRV (PriorityList []) _) _ _) =
     return (lTTL, M.empty)
-collectServerData rTTL ud@(UData (QuerySRV (PriorityList pl u)) _ _ ) = do
-    (ttl, srv) <- collectSRV rTTL u
+collectServerData lTTL ud@(UData (QuerySRV (PriorityList pl) u) _ _ ) = do
+    (ttl, srv) <- collectSRV lTTL u
     let srv' = zip (withTrail pl) $ partitionByPriority srv
     return (ttl
            ,M.fromList $ map (second $ sort . map (srvToServerData ud)) srv'
@@ -205,10 +420,12 @@ collectUpstreams :: Conf -> Bool -> IO L.ByteString
 collectUpstreams Conf {..} = const $ do
     (wTTL@(TTL w), !old) <- readIORef collectedServerData
     when (w > 0) $ threadDelaySec $ fromIntegral w
-    let rTTL@(lTTL, _) = (toTTL waitOnException, toTTL maxWait)
+    let (lTTL, hTTL) = (toTTL waitOnException, toTTL maxWait)
     srv <- handleCollectErrors lTTL $
-        mapConcurrently (collectServerData rTTL) upstreams
-    let (ttl, !newParts) = (minimumTTL rTTL $ map fst srv, map snd srv)
+        mapConcurrently (collectServerData lTTL) upstreams
+    let (ttl, !newParts) = (min hTTL $ minimumTTL lTTL $ map fst srv
+                           ,map snd srv
+                           )
         new = mconcat newParts
     if new == old
         then do
