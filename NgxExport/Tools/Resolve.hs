@@ -27,6 +27,7 @@ module NgxExport.Tools.Resolve (
                                ,PriorityList (..)
                                ,UData (..)
                                ,ServerData (..)
+                               ,CollectedServerDataGen
                                ,CollectedServerData
     -- * Exported functions
                                ,collectA
@@ -302,15 +303,23 @@ instance ToJSON ServerData where
                            , ("fail_timeout" .=) <$> sFailTimeout
                            ]
 
+-- | Generic type to collect and store server data.
+--
+-- Type /a/ is instantiated either by 'TTL' (to collect) or 'TimeInterval'
+-- (to store).
+type CollectedServerDataGen a = (a, Map UName [ServerData])
+
 -- | Collected server data.
 --
--- The first element of the tuple defines the time interval before the next run
--- of the /collectUpstreams/ service. The second element contains the collected
--- data.
-type CollectedServerData = (TTL, Map UName [ServerData])
+-- The first element of the tuple gets transformed into the time interval before
+-- the next run of the /collectUpstreams/ service. The second element contains
+-- the collected data.
+type CollectedServerData = CollectedServerDataGen TTL
 
-collectedServerData :: IORef CollectedServerData
-collectedServerData = unsafePerformIO $ newIORef (TTL 0, M.empty)
+type CollectedServerDataStore = CollectedServerDataGen TimeInterval
+
+collectedServerData :: IORef CollectedServerDataStore
+collectedServerData = unsafePerformIO $ newIORef (Unset, M.empty)
 {-# NOINLINE collectedServerData #-}
 
 httpManager :: Manager
@@ -328,11 +337,18 @@ queryHTTP :: Text -> Text -> IO L.ByteString
 queryHTTP = (getUrl .) . flip mkAddr
     where mkAddr = (("http://" `T.append`) .) . T.append
 
+minimumTTL :: TTL -> [TTL] -> TTL
+minimumTTL lTTL [] = lTTL
+minimumTTL _ ttls = minimum ttls
+
 -- | Queries /A/ record for the given domain name.
 --
 -- Returns a list of IP addresses and the minimum of their TTLs. If the list is
 -- empty, then the returned TTL gets taken from the first argument.
-collectA :: TTL -> Name -> IO (TTL, [IPv4])
+collectA
+    :: TTL                      -- ^ Fallback TTL value
+    -> Name                     -- ^ Domain name
+    -> IO (TTL, [IPv4])
 collectA lTTL name = do
     !srv <- queryA name
     return (minimumTTL lTTL $ map fst srv, map snd srv)
@@ -344,7 +360,10 @@ collectA lTTL name = do
 -- Returns a list of IP addresses wrapped in 'SRV' container and the minimum of
 -- their TTLs. If the list is empty, then the returned TTL gets taken from the
 -- first argument.
-collectSRV :: TTL -> Name -> IO (TTL, [SRV IPv4])
+collectSRV
+    :: TTL                      -- ^ Fallback TTL value
+    -> Name                     -- ^ Service name
+    -> IO (TTL, [SRV IPv4])
 collectSRV lTTL name = do
     !srv <- querySRV name
     !srv' <- mapConcurrently
@@ -357,10 +376,6 @@ collectSRV lTTL name = do
                 (minimumTTL lTTL $ map fst srv')
            ,concatMap snd srv'
            )
-
-minimumTTL :: TTL -> [TTL] -> TTL
-minimumTTL lTTL [] = lTTL
-minimumTTL _ ttls = minimum ttls
 
 showIPv4 :: IPv4 -> String
 showIPv4 (IPv4 w) =
@@ -381,7 +396,10 @@ srvToServerData UData {..} SRV {..} =
     where showAddr i p = showIPv4 i ++ ':' : show p
 
 -- | Collects server data for the given upstream configuration.
-collectServerData :: TTL -> UData -> IO CollectedServerData
+collectServerData
+    :: TTL                      -- ^ Fallback TTL value
+    -> UData                    -- ^ Upstream configuration
+    -> IO CollectedServerData
 collectServerData lTTL ud@(UData (QueryA k us) _ _) = do
     a <- mapConcurrently (collectA lTTL) us
     return $
@@ -394,48 +412,47 @@ collectServerData lTTL ud@(UData (QueryA k us) _ _) = do
                       (t : ts, sort (map (ipv4ToServerData ud) s) : ss)
                   ) ([], []) a
 collectServerData lTTL ud@(UData (QuerySRV (SinglePriority k) u) _ _) = do
-    (ttl, srv) <- collectSRV lTTL u
-    return (ttl, M.singleton k $ sort $ map (srvToServerData ud) srv)
+    (wt, srv) <- collectSRV lTTL u
+    return (wt, M.singleton k $ sort $ map (srvToServerData ud) srv)
 collectServerData lTTL (UData (QuerySRV (PriorityList []) _) _ _) =
     return (lTTL, M.empty)
 collectServerData lTTL ud@(UData (QuerySRV (PriorityList pl) u) _ _ ) = do
-    (ttl, srv) <- collectSRV lTTL u
+    (wt, srv) <- collectSRV lTTL u
     let srv' = zip (withTrail pl) $ partitionByPriority srv
-    return (ttl
+    return (wt
            ,M.fromList $ map (second $ sort . map (srvToServerData ud)) srv'
            )
     where partitionByPriority =
               groupBy ((==) `on` srvPriority) . sortOn srvPriority
           withTrail = uncurry (++) . (id &&& repeat . last)
 
-handleCollectErrors :: TTL -> IO [CollectedServerData] ->
+handleCollectErrors :: TimeInterval -> IO [CollectedServerData] ->
     IO [CollectedServerData]
-handleCollectErrors lTTL =
+handleCollectErrors wt =
     handle (\(e :: SomeException) -> do
-               writeIORef collectedServerData (lTTL, M.empty)
+               writeIORef collectedServerData (wt, M.empty)
                throwIO e
            )
 
 collectUpstreams :: Conf -> Bool -> IO L.ByteString
 collectUpstreams Conf {..} = const $ do
-    (wTTL@(TTL w), !old) <- readIORef collectedServerData
-    when (w > 0) $ threadDelaySec $ fromIntegral w
+    (wt, old) <- readIORef collectedServerData
+    when (wt /= Unset) $ threadDelaySec $ toSec wt
     let (lTTL, hTTL) = (toTTL waitOnException, toTTL maxWait)
-    srv <- handleCollectErrors lTTL $
+    srv <- handleCollectErrors waitOnException $
         mapConcurrently (collectServerData lTTL) upstreams
-    let (ttl, !newParts) = (min hTTL $ minimumTTL lTTL $ map fst srv
-                           ,map snd srv
-                           )
-        new = mconcat newParts
+    let nwt = fromTTL $ min hTTL $ minimumTTL lTTL $ map fst srv
+        new = mconcat $ map snd srv
     if new == old
         then do
-            when (ttl /= wTTL) $
-                modifyIORef' collectedServerData $ first $ const ttl
+            when (nwt /= wt) $
+                modifyIORef' collectedServerData $ first $ const nwt
             return ""
         else do
-            writeIORef collectedServerData (ttl, new)
+            writeIORef collectedServerData (nwt, new)
             return $ encode new
     where toTTL = TTL . fromIntegral . toSec
+          fromTTL (TTL ttl) = Sec $ fromIntegral ttl
 
 ngxExportSimpleServiceTyped 'collectUpstreams ''Conf $
     PersistentService Nothing
