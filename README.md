@@ -1527,8 +1527,8 @@ http {
         'Conf { upstreams =
                     [UData { uQuery =
                                  QuerySRV
-                                     (SinglePriority "utest")
-                                         (Name "_http._tcp.pkg.freebsd.org")
+                                     (Name "_http._tcp.pkg.freebsd.org")
+                                         (SinglePriority "utest")
                            , uMaxFails = 0
                            , uFailTimeout = 10
                            }
@@ -1604,8 +1604,8 @@ upstreams, we can use *PriorityList*.
         'Conf { upstreams =
                     [UData { uQuery =
                                  QuerySRV
-                                     (PriorityList ["utest", "utest1"])
-                                         (Name "_http._tcp.pkg.freebsd.org")
+                                     (Name "_http._tcp.pkg.freebsd.org")
+                                         (PriorityList ["utest", "utest1"])
                            , uMaxFails = 0
                            , uFailTimeout = 10
                            }

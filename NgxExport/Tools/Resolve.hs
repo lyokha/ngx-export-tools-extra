@@ -115,8 +115,8 @@ import           System.IO.Unsafe
 --         \'Conf { upstreams =
 --                     [UData { uQuery =
 --                                  QuerySRV
---                                      (SinglePriority \"__/utest/__\")
---                                          (Name \"_http._tcp.mycompany.com\")
+--                                      (Name \"_http._tcp.mycompany.com\")
+--                                          (SinglePriority \"__/utest/__\")
 --                            , uMaxFails = 0
 --                            , uFailTimeout = 10
 --                            }
@@ -191,8 +191,8 @@ import           System.IO.Unsafe
 --         \'Conf { upstreams =
 --                     [UData { uQuery =
 --                                  QuerySRV
---                                      (PriorityList [\"__/utest/__\", \"__/utest1/__\"])
---                                          (Name \"_http._tcp.mycompany.com\")
+--                                      (Name \"_http._tcp.mycompany.com\")
+--                                          (PriorityList [\"__/utest/__\", \"__/utest1/__\"])
 --                            , uMaxFails = 0
 --                            , uFailTimeout = 10
 --                            }
@@ -240,6 +240,7 @@ import           System.IO.Unsafe
 -- | Upstream name.
 type UName = Text
 
+-- URL, normally starts with /
 type SUrl = Text
 
 -- | Domain name or IP address with or without port.
@@ -254,11 +255,11 @@ type SAddress = Text
 --   for the collected list of domain names,
 -- - the same as the previous, but distribute collected servers among a list of
 --   upstreams according to the collected priorities.
-data UQuery = QueryA UName [Name]         -- ^ Query /A/ records
-            | QuerySRV PriorityList Name  -- ^ Query /SRV/ record
+data UQuery = QueryA [Name] UName         -- ^ Query /A/ records
+            | QuerySRV Name PriorityList  -- ^ Query /SRV/ record
             deriving Read
 
--- | Specifies how to distribute servers among given upstreams.
+-- | Specifies how to distribute collected servers among given upstreams.
 data PriorityList = SinglePriority UName  -- ^ All servers to one upstream
                   | PriorityList [UName]  -- ^ Distribute servers by priorities
                   deriving Read
@@ -400,10 +401,12 @@ collectServerData
     :: TTL                      -- ^ Fallback TTL value
     -> UData                    -- ^ Upstream configuration
     -> IO CollectedServerData
-collectServerData lTTL ud@(UData (QueryA k us) _ _) = do
-    a <- mapConcurrently (collectA lTTL) us
+collectServerData lTTL (UData (QueryA [] u) _ _) =
+    return (lTTL, M.singleton u [])
+collectServerData lTTL ud@(UData (QueryA ns u) _ _) = do
+    a <- mapConcurrently (collectA lTTL) ns
     return $
-        minimum *** M.singleton k . concat $
+        minimum *** M.singleton u . concat $
             foldr (\(t, s) (ts, ss) ->
                       -- sort is required because resolver may rotate servers
                       -- which means that the same data may differ after every
@@ -411,13 +414,13 @@ collectServerData lTTL ud@(UData (QueryA k us) _ _) = do
                       -- this function as well
                       (t : ts, sort (map (ipv4ToServerData ud) s) : ss)
                   ) ([], []) a
-collectServerData lTTL ud@(UData (QuerySRV (SinglePriority k) u) _ _) = do
-    (wt, srv) <- collectSRV lTTL u
-    return (wt, M.singleton k $ sort $ map (srvToServerData ud) srv)
-collectServerData lTTL (UData (QuerySRV (PriorityList []) _) _ _) =
+collectServerData lTTL ud@(UData (QuerySRV n (SinglePriority u)) _ _) = do
+    (wt, srv) <- collectSRV lTTL n
+    return (wt, M.singleton u $ sort $ map (srvToServerData ud) srv)
+collectServerData lTTL (UData (QuerySRV _ (PriorityList [])) _ _) =
     return (lTTL, M.empty)
-collectServerData lTTL ud@(UData (QuerySRV (PriorityList pl) u) _ _ ) = do
-    (wt, srv) <- collectSRV lTTL u
+collectServerData lTTL ud@(UData (QuerySRV n (PriorityList pl)) _ _ ) = do
+    (wt, srv) <- collectSRV lTTL n
     let srv' = zip (withTrail pl) $ partitionByPriority srv
     return (wt
            ,M.fromList $ map (second $ sort . map (srvToServerData ud)) srv'
