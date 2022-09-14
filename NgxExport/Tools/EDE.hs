@@ -11,7 +11,7 @@
 -- Portability :  non-portable (requires Template Haskell)
 --
 -- EDE templates for parsing JSON objects from the more extra tools collection
--- for <http://github.com/lyokha/nginx-haskell-module nginx-haskell-module>.
+-- for <https://github.com/lyokha/nginx-haskell-module nginx-haskell-module>.
 --
 -----------------------------------------------------------------------------
 

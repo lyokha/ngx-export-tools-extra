@@ -11,7 +11,7 @@
 -- Portability :  non-portable (requires Template Haskell)
 --
 -- A service hook adaptor from the more extra tools collection for
--- <http://github.com/lyokha/nginx-haskell-module nginx-haskell-module>.
+-- <https://github.com/lyokha/nginx-haskell-module nginx-haskell-module>.
 --
 -----------------------------------------------------------------------------
 

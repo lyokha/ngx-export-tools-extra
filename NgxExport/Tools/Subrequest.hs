@@ -12,7 +12,7 @@
 -- Portability :  non-portable (requires Template Haskell)
 --
 -- Easy HTTP subrequests from the more extra tools collection for
--- <http://github.com/lyokha/nginx-haskell-module nginx-haskell-module>.
+-- <https://github.com/lyokha/nginx-haskell-module nginx-haskell-module>.
 --
 -----------------------------------------------------------------------------
 

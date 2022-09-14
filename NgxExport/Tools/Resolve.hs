@@ -1,5 +1,5 @@
-{-# LANGUAGE TemplateHaskell, ScopedTypeVariables, LambdaCase #-}
-{-# LANGUAGE BangPatterns, OverloadedStrings, RecordWildCards #-}
+{-# LANGUAGE TemplateHaskell, ScopedTypeVariables, RecordWildCards #-}
+{-# LANGUAGE BangPatterns, OverloadedStrings #-}
 
 -----------------------------------------------------------------------------
 -- |
@@ -11,16 +11,25 @@
 -- Stability   :  experimental
 -- Portability :  non-portable (requires Template Haskell)
 --
--- DNS resolve utilities from the more extra tools collection
--- for <http://github.com/lyokha/nginx-haskell-module nginx-haskell-module>.
+-- DNS resolve utilities from the more extra tools collection for
+-- <https://github.com/lyokha/nginx-haskell-module nginx-haskell-module>.
 --
 -----------------------------------------------------------------------------
 
 module NgxExport.Tools.Resolve (
-                                collectA
+    -- * Type declarations
+                                UKey
+                               ,Destination
+                               ,TTLRange
+                               ,Upstream
+                               ,PriorityList
+                               ,UData
+                               ,ServerData
+                               ,CollectedServerData
+    -- * Exported functions
+                               ,collectA
                                ,collectSRV
-                               ,collectUpstreams
-                               ,signalUpconf
+                               ,collectServerData
                                ) where
 
 import           NgxExport
@@ -95,11 +104,11 @@ instance ToJSON ServerData where
                            , ("fail_timeout" .=) <$> sFailTimeout
                            ]
 
-type CollectedData = (TTL, Map UKey [ServerData])
+type CollectedServerData = (TTL, Map UKey [ServerData])
 
-collectedData :: IORef CollectedData
-collectedData = unsafePerformIO $ newIORef (TTL 0, M.empty)
-{-# NOINLINE collectedData #-}
+collectedServerData :: IORef CollectedServerData
+collectedServerData = unsafePerformIO $ newIORef (TTL 0, M.empty)
+{-# NOINLINE collectedServerData #-}
 
 httpManager :: Manager
 httpManager = unsafePerformIO $ newManager defaultManagerSettings
@@ -107,7 +116,7 @@ httpManager = unsafePerformIO $ newManager defaultManagerSettings
 
 getResponse :: Text -> (Request -> IO (Response L.ByteString)) ->
     IO L.ByteString
-getResponse url = fmap responseBody . (parseRequest (T.unpack url) >>=)
+getResponse url = fmap responseBody . (parseUrlThrow (T.unpack url) >>=)
 
 getUrl :: Text -> IO L.ByteString
 getUrl url = getResponse url $ flip httpLbs httpManager
@@ -117,12 +126,12 @@ queryHTTP = (getUrl .) . flip mkAddr
     where mkAddr = (("http://" `T.append`) .) . T.append
 
 collectA :: TTLRange -> Name -> IO (TTL, [IPv4])
-collectA rTTL@(lTTL, _) name = handleCollectError lTTL $ do
+collectA rTTL name = do
     !srv <- queryA name
     return (minimumTTL rTTL $ map fst srv, map snd srv)
 
 collectSRV :: TTLRange -> Name -> IO (TTL, [SRV IPv4])
-collectSRV rTTL@(lTTL, _) name = handleCollectError lTTL $ do
+collectSRV rTTL name = do
     !srv <- querySRV name
     !srv' <- mapConcurrently
                  ((\s@SRV {..} -> do
@@ -133,13 +142,6 @@ collectSRV rTTL@(lTTL, _) name = handleCollectError lTTL $ do
     return (min (minimumTTL rTTL $ map fst srv)
                 (minimumTTL rTTL $ map fst srv')
            ,concatMap snd srv'
-           )
-
-handleCollectError :: TTL -> IO (TTL, [a]) -> IO (TTL, [a])
-handleCollectError lTTL =
-    handle (\(e :: SomeException) -> do
-               writeIORef collectedData (lTTL, M.empty)
-               throwIO e
            )
 
 minimumTTL :: TTLRange -> [TTL] -> TTL
@@ -164,21 +166,24 @@ srvToServerData UData {..} SRV {..} =
         (Just $ fromIntegral srvWeight) (Just uMaxFails) (Just uFailTimeout)
     where showAddr i p = showIPv4 i ++ ':' : show p
 
--- BEWARE: ServerData must be ordered because libresolv may rotate elements!
-collectData :: TTLRange -> UData -> IO CollectedData
-collectData rTTL ud@(UData (QueryA k us) _ _) = do
+collectServerData :: TTLRange -> UData -> IO CollectedServerData
+collectServerData rTTL ud@(UData (QueryA k us) _ _) = do
     a <- mapConcurrently (collectA rTTL) us
     return $
         minimum *** M.singleton k . concat $
             foldr (\(t, s) (ts, ss) ->
+                      -- sort is required because resolver may rotate servers
+                      -- which means that the same data may differ after every
+                      -- single check; this note regards to other clauses of
+                      -- this function as well
                       (t : ts, sort (map (ipv4ToServerData ud) s) : ss)
                   ) ([], []) a
-collectData rTTL ud@(UData (QuerySRV (SinglePriority k u)) _ _) = do
+collectServerData rTTL ud@(UData (QuerySRV (SinglePriority k u)) _ _) = do
     (ttl, srv) <- collectSRV rTTL u
     return (ttl, M.singleton k $ sort $ map (srvToServerData ud) srv)
-collectData (lTTL, _) (UData (QuerySRV (PriorityList [] _)) _ _) =
+collectServerData (lTTL, _) (UData (QuerySRV (PriorityList [] _)) _ _) =
     return (lTTL, M.empty)
-collectData rTTL ud@(UData (QuerySRV (PriorityList pl u)) _ _ ) = do
+collectServerData rTTL ud@(UData (QuerySRV (PriorityList pl u)) _ _ ) = do
     (ttl, srv) <- collectSRV rTTL u
     let srv' = zip (withTrail pl) $ partitionByPriority srv
     return (ttl
@@ -188,18 +193,30 @@ collectData rTTL ud@(UData (QuerySRV (PriorityList pl u)) _ _ ) = do
               groupBy ((==) `on` srvPriority) . sortOn srvPriority
           withTrail = uncurry (++) . (id &&& repeat . last)
 
+handleCollectErrors :: TTL -> IO [CollectedServerData] ->
+    IO [CollectedServerData]
+handleCollectErrors lTTL =
+    handle (\(e :: SomeException) -> do
+               writeIORef collectedServerData (lTTL, M.empty)
+               throwIO e
+           )
+
 collectUpstreams :: Conf -> Bool -> IO L.ByteString
 collectUpstreams Conf {..} = const $ do
-    (TTL wTTL, !old) <- readIORef collectedData
-    when (wTTL > 0) $ threadDelaySec $ fromIntegral wTTL
-    let rTTL = (toTTL waitOnException, toTTL maxWait)
-    srv <- mapConcurrently (collectData rTTL) upstreams
+    (wTTL@(TTL w), !old) <- readIORef collectedServerData
+    when (w > 0) $ threadDelaySec $ fromIntegral w
+    let rTTL@(lTTL, _) = (toTTL waitOnException, toTTL maxWait)
+    srv <- handleCollectErrors lTTL $
+        mapConcurrently (collectServerData rTTL) upstreams
     let (ttl, !newParts) = (minimumTTL rTTL $ map fst srv, map snd srv)
         new = mconcat newParts
     if new == old
-        then return ""
+        then do
+            when (ttl /= wTTL) $
+                modifyIORef' collectedServerData $ first $ const ttl
+            return ""
         else do
-            writeIORef collectedData (ttl, new)
+            writeIORef collectedServerData (ttl, new)
             return $ encode new
     where toTTL = TTL . fromIntegral . toSec
 

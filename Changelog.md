@@ -1,3 +1,8 @@
+### 1.2.0
+
+- Added module *NgxExport.Tools.Resolve* which can be used to manage service
+  discovery in Nginx dynamic upstreams.
+
 ### 1.1.0
 
 - Using *Network.HTTP.Client.BrReadWithTimeout* in module
