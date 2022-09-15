@@ -1468,10 +1468,10 @@ With Nginx module
 it is possible to update servers inside upstreams dynamically. The module
 requires an agent to update a bound variable with upstreams layout and also
 signal that the variable has been altered. This module is such an agent. It
-updates the variable with the upstreams layout inside service
+updates the variable with the upstreams layout in service
 *collectUpstreams* and signals about this in service callback
-*signalUpconf*. Collecting upstreams encompasses DNS queries of types
-*A* and *SRV*. The queries are configured independently for each managed
+*signalUpconf*. Collecting upstreams encompasses DNS queries of *A* and
+*SRV* records. The queries are configured independently for each managed
 upstream. With *SRV* queries, the module allows configuration of complex
 hierarchies of priorities given that compound upstream containers named
 *upstrands* are in use (they are implemented in
@@ -1482,8 +1482,8 @@ implement service *collectUpstreams*.
 
 ##### An example
 
-In the following example, we are going to extract IP addresses from SRV
-record of *_http._tcp.mycompany.com* to inhabit upstream *utest*.
+In the following example, we are going to extract IP addresses from an *SRV*
+record for *_http._tcp.mycompany.com* to inhabit upstream *utest*.
 
 ###### File *test_tools_extra_resolve.hs*
 
@@ -1583,7 +1583,7 @@ http {
 At the start of Nginx, upstream *utest* contains a statically declared server
 which reports *Not configured*, but so soon as service *collectUpstreams*
 collects servers for the upstream in variable *\$hs_upstreams, and then
-the upconf module gets notified about this via callback *signalUpconf*, the
+the *upconf* module gets notified about this via callback *signalUpconf*, the
 upstream gets inhabited by the collected servers. The upstream contents will
 be re-checked within the time interval of *(1 or waitOnException, maxWait)*.
 Particularly, if an exception happens during the collection of the servers,
@@ -1623,7 +1623,7 @@ at the beginning of the list will take higher priorities found in the
 collected servers, while the last upstream will take the remainder of the
 priorities.
 
-Upstreams in the priority list can be put inside an *upstrand* to form the
+Upstreams in the priority list can be put inside of an *upstrand* to form the
 main and the backup layers of servers.
 
 ###### File *nginx.conf*: upstrand *utest*

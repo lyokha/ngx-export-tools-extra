@@ -65,10 +65,10 @@ import           System.IO.Unsafe
 -- it is possible to update servers inside upstreams dynamically. The module
 -- requires an agent to update a bound variable with upstreams layout and also
 -- signal that the variable has been altered. This module is such an agent. It
--- updates the variable with the upstreams layout inside service
+-- updates the variable with the upstreams layout in service
 -- __/collectUpstreams/__ and signals about this in service callback
--- __/signalUpconf/__. Collecting upstreams encompasses DNS queries of types
--- /A/ and /SRV/. The queries are configured independently for each managed
+-- __/signalUpconf/__. Collecting upstreams encompasses DNS queries of /A/ and
+-- /SRV/ records. The queries are configured independently for each managed
 -- upstream. With /SRV/ queries, the module allows configuration of complex
 -- hierarchies of priorities given that compound upstream containers named
 -- /upstrands/ are in use (they are implemented in
@@ -77,8 +77,8 @@ import           System.IO.Unsafe
 -- Additionally, the module exports a number of functions and data types which
 -- implement service /collectUpstreams/.
 --
--- In the following example, we are going to extract IP addresses from SRV
--- record of /_http._tcp.mycompany.com/ to inhabit upstream /utest/.
+-- In the following example, we are going to extract IP addresses from an /SRV/
+-- record for /_http._tcp.mycompany.com/ to inhabit upstream /utest/.
 --
 -- ==== File /test_tools_extra_prometheus.hs/
 -- @
@@ -171,7 +171,7 @@ import           System.IO.Unsafe
 -- At the start of Nginx, upstream /utest/ contains a statically declared server
 -- which reports /Not configured/, but so soon as service /collectUpstreams/
 -- collects servers for the upstream in variable __/$hs_upstreams/__, and then
--- the upconf module gets notified about this via callback /signalUpconf/, the
+-- the /upconf/ module gets notified about this via callback /signalUpconf/, the
 -- upstream gets inhabited by the collected servers. The upstream contents will
 -- be re-checked within the time interval of /(1 or waitOnException, maxWait)/.
 -- Particularly, if an exception happens during the collection of the servers,
@@ -210,7 +210,7 @@ import           System.IO.Unsafe
 -- collected servers, while the last upstream will take the remainder of the
 -- priorities.
 --
--- Upstreams in the priority list can be put inside an /upstrand/ to form the
+-- Upstreams in the priority list can be put inside of an /upstrand/ to form the
 -- main and the backup layers of servers.
 --
 -- ==== File /nginx.conf/: upstrand /utest/
@@ -246,20 +246,20 @@ type SUrl = Text
 -- | Domain name or IP address with or without port.
 type SAddress = Text
 
--- | DNS query model of the upstream.
+-- | DNS query model of the upstream(s).
 --
 -- There are 3 ways to get the list of server addresses:
 --
 -- - query /A/ records for a list of domain names,
--- - query /SRV/ record for a single service name and then query /A/ records
+-- - query an /SRV/ record for a single service name and then query /A/ records
 --   for the collected list of domain names,
 -- - the same as the previous, but distribute collected servers among a list of
 --   upstreams according to the collected priorities.
 data UQuery = QueryA [Name] UName         -- ^ Query /A/ records
-            | QuerySRV Name PriorityList  -- ^ Query /SRV/ record
+            | QuerySRV Name PriorityList  -- ^ Query an /SRV/ record
             deriving Read
 
--- | Specifies how to distribute collected servers among given upstreams.
+-- | Specifies how to distribute collected servers among the given upstreams.
 data PriorityList = SinglePriority UName  -- ^ All servers to one upstream
                   | PriorityList [UName]  -- ^ Distribute servers by priorities
                   deriving Read
@@ -342,10 +342,11 @@ minimumTTL :: TTL -> [TTL] -> TTL
 minimumTTL lTTL [] = lTTL
 minimumTTL _ ttls = minimum ttls
 
--- | Queries /A/ record for the given domain name.
+-- | Queries an /A/ record for the given domain name.
 --
--- Returns a list of IP addresses and the minimum of their TTLs. If the list is
--- empty, then the returned TTL gets taken from the first argument.
+-- Returns a list of IP addresses and the minimum value of their TTLs. If the
+-- list is empty, then the returned TTL value gets taken from the first
+-- argument.
 collectA
     :: TTL                      -- ^ Fallback TTL value
     -> Name                     -- ^ Domain name
@@ -354,13 +355,13 @@ collectA lTTL name = do
     !srv <- queryA name
     return (minimumTTL lTTL $ map fst srv, map snd srv)
 
--- | Queries /SRV/ record for the given service name.
+-- | Queries an /SRV/ record for the given service name.
 --
 -- After getting the /SRV/ record, runs 'collectA' for each collected element.
 --
--- Returns a list of IP addresses wrapped in 'SRV' container and the minimum of
--- their TTLs. If the list is empty, then the returned TTL gets taken from the
--- first argument.
+-- Returns a list of IP addresses wrapped in 'SRV' container and the minimum
+-- value of their TTLs. If the list is empty, then the returned TTL value gets
+-- taken from the first argument.
 collectSRV
     :: TTL                      -- ^ Fallback TTL value
     -> Name                     -- ^ Service name
