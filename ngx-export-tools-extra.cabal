@@ -47,6 +47,7 @@ library
                           , network >= 2.4.0.0
                           , async >= 2.0.1.0
                           , aeson >= 1.0.0.0
+                          , safe-exceptions
                           , resolv
                           , time
                           , binary

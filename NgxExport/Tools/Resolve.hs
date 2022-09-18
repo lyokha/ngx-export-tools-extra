@@ -1,5 +1,5 @@
-{-# LANGUAGE TemplateHaskell, ScopedTypeVariables, RecordWildCards #-}
-{-# LANGUAGE BangPatterns, OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell, RecordWildCards, BangPatterns #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 -----------------------------------------------------------------------------
 -- |
@@ -54,6 +54,7 @@ import           Data.List
 import           Data.Bits
 import           Control.Concurrent.Async
 import           Control.Exception
+import           Control.Exception.Safe (handleAny)
 import           Control.Arrow
 import           Control.Monad
 import           System.IO.Unsafe
@@ -430,20 +431,12 @@ collectServerData lTTL ud@(UData (QuerySRV n (PriorityList pl)) _ _ ) = do
               groupBy ((==) `on` srvPriority) . sortOn srvPriority
           withTrail = uncurry (++) . (id &&& repeat . last)
 
-handleCollectErrors :: TimeInterval -> IO [CollectedServerData] ->
-    IO [CollectedServerData]
-handleCollectErrors wt =
-    handle (\(e :: SomeException) -> do
-               writeIORef collectedServerData (wt, M.empty)
-               throwIO e
-           )
-
 collectUpstreams :: Conf -> Bool -> IO L.ByteString
 collectUpstreams Conf {..} = const $ do
     (wt, old) <- readIORef collectedServerData
     when (wt /= Unset) $ threadDelaySec $ toSec wt
     let (lTTL, hTTL) = (toTTL waitOnException, toTTL maxWait)
-    srv <- handleCollectErrors waitOnException $
+    srv <- handleCollectErrors $
         mapConcurrently (collectServerData lTTL) upstreams
     let nwt = fromTTL $ min hTTL $ minimumTTL lTTL $ map fst srv
         new = mconcat $ map snd srv
@@ -457,6 +450,9 @@ collectUpstreams Conf {..} = const $ do
             return $ encode new
     where toTTL = TTL . fromIntegral . toSec
           fromTTL (TTL ttl) = Sec $ fromIntegral ttl
+          handleCollectErrors = handleAny $ \e -> do
+              writeIORef collectedServerData (waitOnException, M.empty)
+              throwIO e
 
 ngxExportSimpleServiceTyped 'collectUpstreams ''Conf $
     PersistentService Nothing
