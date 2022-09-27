@@ -40,7 +40,7 @@ jobs:
           then
               cabal v1-update
           else
-              cabal v2-update
+              cabal v2-update --ignore-project
           fi
           cabal v1-install --only-dependencies
           cabal v1-configure
