@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     continue-on-error: ${{ matrix.experimental }}
     strategy:
       matrix:
@@ -18,15 +18,18 @@ jobs:
             experimental: false
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
+      - name: Hide cabal.project
+        run: |
+          mv cabal.project cabal.project.hide
       - name: Install GHC and Cabal
-        uses: haskell/actions/setup@v1
+        uses: haskell/actions/setup@v2
         with:
           ghc-version: ${{ matrix.ghc }}
           cabal-version: ${{ matrix.cabal }}
-      - name: Cleanup cabal.project setup
+      - name: Unhide cabal.project
         run: |
-          rm -rf dist-newstyle
+          mv cabal.project.hide cabal.project
       - name: Install
         env:
           GHCVER: ${{ matrix.ghc }}
