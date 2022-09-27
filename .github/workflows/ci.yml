@@ -27,9 +27,6 @@ jobs:
         with:
           ghc-version: ${{ matrix.ghc }}
           cabal-version: ${{ matrix.cabal }}
-      - name: Unhide cabal.project
-        run: |
-          mv cabal.project.hide cabal.project
       - name: Install
         env:
           GHCVER: ${{ matrix.ghc }}
@@ -43,13 +40,16 @@ jobs:
           then
               cabal v1-update
           else
-              cabal v2-update --ignore-project
+              cabal v2-update
           fi
           cabal v1-install --only-dependencies
           cabal v1-configure
           cabal v1-build
-          cabal v2-sdist --builddir=dist --ignore-project
+          cabal v2-sdist --builddir=dist
           SRC_TGZ=$(cabal info . | awk '{print $2; exit}').tar.gz &&
               (cd dist/sdist && cabal v1-install --force-reinstalls "$SRC_TGZ")
           set +e
+      - name: Unhide cabal.project
+        run: |
+          mv cabal.project.hide cabal.project
 
