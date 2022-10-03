@@ -1535,6 +1535,7 @@ http {
                     ]
               , maxWait = Sec 300
               , waitOnException = Sec 2
+              , responseTimeout = Unset
               }';
 
     haskell_service_var_ignore_empty $hs_upstreams;
@@ -1582,7 +1583,7 @@ http {
 
 At the start of Nginx, upstream *utest* contains a statically declared server
 which reports *Not configured*, but so soon as service *collectUpstreams*
-collects servers for the upstream in variable *\$hs_upstreams, and then
+collects servers for the upstream in variable *\$hs_upstreams*, and then
 the *upconf* module gets notified about this via callback *signalUpconf*, the
 upstream gets inhabited by the collected servers. The upstream contents will
 be re-checked within the time interval of *(1 or waitOnException, maxWait)*.
@@ -1591,6 +1592,10 @@ then the service will restart in *waitOnException*. If there were no
 exceptions and the smallest value of *TTL* calculated from all collected
 servers does not exceed the value of *maxWait*, then the service will restart
 in this time.
+
+Too big response times may also cause exceptions during the collection of the
+servers. The timeout is defined by the value of *responseTimeout*. In our
+example, the timeout is not set.
 
 Notice that we used *QuerySRV* and *SinglePriority "utest"*. The latter
 means that all collected servers will inhabit upstream *utest* regardless of
@@ -1612,6 +1617,7 @@ upstreams, we can use *PriorityList*.
                     ]
               , maxWait = Sec 300
               , waitOnException = Sec 2
+              , responseTimeout = Unset
               }';
 ```
 

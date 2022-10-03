@@ -1,4 +1,4 @@
-{-# LANGUAGE TemplateHaskell, RecordWildCards, BangPatterns #-}
+{-# LANGUAGE TemplateHaskell, RecordWildCards, BangPatterns, NumDecimals #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 -----------------------------------------------------------------------------
@@ -58,6 +58,7 @@ import           Control.Exception.Safe (handleAny)
 import           Control.Arrow
 import           Control.Monad
 import           System.IO.Unsafe
+import           System.Timeout
 
 -- $dynamicUpstreams
 --
@@ -124,6 +125,7 @@ import           System.IO.Unsafe
 --                     ]
 --               , maxWait = Sec 300
 --               , waitOnException = Sec 2
+--               , responseTimeout = Unset
 --               }\';
 --
 --     haskell_service_var_ignore_empty $hs_upstreams;
@@ -181,6 +183,10 @@ import           System.IO.Unsafe
 -- servers does not exceed the value of /maxWait/, then the service will restart
 -- in this time.
 --
+-- Too big response times may also cause exceptions during the collection of the
+-- servers. The timeout is defined by the value of /responseTimeout/. In our
+-- example, the timeout is not set.
+--
 -- Notice that we used /QuerySRV/ and /SinglePriority \"utest\"/. The latter
 -- means that all collected servers will inhabit upstream /utest/ regardless of
 -- their priority values. To distribute collected servers among a number of
@@ -200,6 +206,7 @@ import           System.IO.Unsafe
 --                     ]
 --               , maxWait = Sec 300
 --               , waitOnException = Sec 2
+--               , responseTimeout = Unset
 --               }\';
 -- @
 --
@@ -276,6 +283,7 @@ data UData = UData { uQuery       :: UQuery  -- ^ DNS query model
 data Conf = Conf { upstreams       :: [UData]
                  , maxWait         :: TimeInterval
                  , waitOnException :: TimeInterval
+                 , responseTimeout :: TimeInterval
                  } deriving Read
 
 newtype Upconf = Upconf { upconfAddr :: (SUrl, SAddress) } deriving Read
@@ -437,7 +445,7 @@ collectUpstreams Conf {..} = const $ do
     when (wt /= Unset) $ threadDelaySec $ toSec wt
     let (lTTL, hTTL) = (toTTL waitOnException, toTTL maxWait)
     srv <- handleCollectErrors $
-        mapConcurrently (collectServerData lTTL) upstreams
+        mapConcurrently (withTimeout . collectServerData lTTL) upstreams
     let nwt = fromTTL $ min hTTL $ minimumTTL lTTL $ map fst srv
         new = mconcat $ map snd srv
     if new == old
@@ -453,6 +461,14 @@ collectUpstreams Conf {..} = const $ do
           handleCollectErrors = handleAny $ \e -> do
               writeIORef collectedServerData (waitOnException, M.empty)
               throwIO e
+          withTimeout act = do
+              r <- timeout (toTimeout responseTimeout) act
+              case r of
+                  Nothing -> throwIO $
+                      userError "Collection of server data was timed out"
+                  Just r' -> return r'
+          toTimeout Unset = -1
+          toTimeout v = toSec v * 1e6
 
 ngxExportSimpleServiceTyped 'collectUpstreams ''Conf $
     PersistentService Nothing

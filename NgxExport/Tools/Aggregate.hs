@@ -127,7 +127,7 @@ type ReportValue a = Maybe (Int32, Maybe a)
 --
 -- updateStats :: ByteString -> IO C8L.ByteString
 -- __/updateStats/__ s = do
---     let cbs = 'readFromByteString' \@Int s
+--     let cbs = 'NgxExport.Tools.Read.readFromByteString' \@Int s
 --     modifyIORef\' stats $ \\(Stats bs rs _) ->
 --         let !nbs = bs + fromMaybe 0 cbs
 --             !nrs = rs + 1
