@@ -274,10 +274,15 @@ data PriorityList = SinglePriority UName  -- ^ All servers to one upstream
 
 -- | Upstream configuration.
 --
--- Includes DNS query model and data for Nginx /server/ description.
+-- Includes DNS query model and parameters for Nginx /server/ description.
+-- Values of /uMaxFails/ and /uFailTimeout/ get assigned to each collected
+-- server as /max_fails/ and /fail_timeout/ respectively. The weight of an
+-- individual server gets picked from the value of 'srvWeight' collected in
+-- /SRV/ queries. Note that setting of parameters /max_conns/, /backup/ and
+-- /down/ is not supported.
 data UData = UData { uQuery       :: UQuery  -- ^ DNS query model
-                   , uMaxFails    :: Int     -- ^ /maxFails/
-                   , uFailTimeout :: Int     -- ^ /failTimeout/
+                   , uMaxFails    :: Int     -- ^ /max_fails/
+                   , uFailTimeout :: Int     -- ^ /fail_timeout/
                    } deriving Read
 
 data Conf = Conf { upstreams       :: [UData]
@@ -290,11 +295,11 @@ newtype Upconf = Upconf { upconfAddr :: (SUrl, SAddress) } deriving Read
 
 -- | Server data.
 --
--- The fields map exactly to data from Nginx /server/ description.
+-- The fields map exactly to parameters from Nginx /server/ description.
 data ServerData = ServerData { sAddr        :: SAddress   -- ^ Server address
                              , sWeight      :: Maybe Int  -- ^ /weight/
-                             , sMaxFails    :: Maybe Int  -- ^ /maxFails/
-                             , sFailTimeout :: Maybe Int  -- ^ /failTimeout/
+                             , sMaxFails    :: Maybe Int  -- ^ /max_fails/
+                             , sFailTimeout :: Maybe Int  -- ^ /fail_timeout/
                              } deriving (Show, Eq, Ord)
 
 instance FromJSON ServerData where
@@ -321,9 +326,10 @@ type CollectedServerDataGen a = (a, Map UName [ServerData])
 
 -- | Collected server data.
 --
--- The first element of the tuple gets transformed into the time interval before
--- the next run of the /collectUpstreams/ service. The second element contains
--- the collected data.
+-- The first element of the tuple is the minimum value of all TTL values
+-- collected from all the managed upstreams. It gets transformed into the time
+-- interval before the next run of the /collectUpstreams/ service. The second
+-- element contains the collected server data.
 type CollectedServerData = CollectedServerDataGen TTL
 
 type CollectedServerDataStore = CollectedServerDataGen TimeInterval
@@ -368,7 +374,7 @@ collectA lTTL name = do
 --
 -- After getting the /SRV/ record, runs 'collectA' for each collected element.
 --
--- Returns a list of IP addresses wrapped in 'SRV' container and the minimum
+-- Returns a list of IP addresses wrapped in an 'SRV' container and the minimum
 -- value of their TTLs. If the list is empty, then the returned TTL value gets
 -- taken from the first argument.
 collectSRV
