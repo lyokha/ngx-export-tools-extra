@@ -24,10 +24,9 @@ module NgxExport.Tools.Resolve (
                                 UName
                                ,SAddress
                                ,UQuery (..)
-                               ,PriorityList (..)
+                               ,PriorityPolicy (..)
                                ,UData (..)
                                ,ServerData (..)
-                               ,CollectedServerDataGen
                                ,CollectedServerData
     -- * Exported functions
                                ,collectA
@@ -263,14 +262,18 @@ type SAddress = Text
 --   for the collected list of domain names,
 -- - the same as the previous, but distribute collected servers among a list of
 --   upstreams according to the collected priorities.
-data UQuery = QueryA [Name] UName         -- ^ Query /A/ records
-            | QuerySRV Name PriorityList  -- ^ Query an /SRV/ record
+data UQuery = QueryA [Name] UName                   -- ^ Query /A/ records
+            | QuerySRV Name (PriorityPolicy UName)  -- ^ Query an /SRV/ record
             deriving Read
 
--- | Specifies how to distribute collected servers among the given upstreams.
-data PriorityList = SinglePriority UName  -- ^ All servers to one upstream
-                  | PriorityList [UName]  -- ^ Distribute servers by priorities
-                  deriving Read
+-- | Priority policy.
+--
+-- Specifies how to distribute collected items by priorities. In particular,
+-- /PriorityPolicy UName/ specifies how to distribute collected servers among
+-- the given upstreams.
+data PriorityPolicy a = SinglePriority a  -- ^ All items to the given element
+                      | PriorityList [a]  -- ^ Distribute items by priorities
+                      deriving Read
 
 -- | Upstream configuration.
 --
@@ -318,23 +321,10 @@ instance ToJSON ServerData where
                            , ("fail_timeout" .=) <$> sFailTimeout
                            ]
 
--- | Generic type to collect and store server data.
---
--- Type /a/ is instantiated either by 'TTL' (to collect) or 'TimeInterval'
--- (to store).
-type CollectedServerDataGen a = (a, Map UName [ServerData])
-
 -- | Collected server data.
---
--- The first element of the tuple is the minimum value of all TTL values
--- collected from all the managed upstreams. It gets transformed into the time
--- interval before the next run of the /collectUpstreams/ service. The second
--- element contains the collected server data.
-type CollectedServerData = CollectedServerDataGen TTL
+type CollectedServerData = Map UName [ServerData]
 
-type CollectedServerDataStore = CollectedServerDataGen TimeInterval
-
-collectedServerData :: IORef CollectedServerDataStore
+collectedServerData :: IORef (TimeInterval, CollectedServerData)
 collectedServerData = unsafePerformIO $ newIORef (Unset, M.empty)
 {-# NOINLINE collectedServerData #-}
 
@@ -413,12 +403,17 @@ srvToServerData UData {..} SRV {..} =
     where showAddr i p = showIPv4 i ++ ':' : show p
 
 -- | Collects server data for the given upstream configuration.
+--
+-- Returns the collected server data and the minimum value of all the collected
+-- TTLs. If this TTL value, having been converted into a 'TimeInterval', is not
+-- bigger than /maxWait/, then it defines in how long time service
+-- /collectUpstreams/, which calls this function, will restart again.
 collectServerData
     :: TTL                      -- ^ Fallback TTL value
     -> UData                    -- ^ Upstream configuration
-    -> IO CollectedServerData
-collectServerData lTTL (UData (QueryA [] u) _ _) =
-    return (lTTL, M.singleton u [])
+    -> IO (TTL, CollectedServerData)
+collectServerData lTTL (UData (QueryA [] _) _ _) =
+    return (lTTL, M.empty)
 collectServerData lTTL ud@(UData (QueryA ns u) _ _) = do
     a <- mapConcurrently (collectA lTTL) ns
     return $
@@ -452,7 +447,7 @@ collectUpstreams Conf {..} = const $ do
     let (lTTL, hTTL) = (toTTL waitOnException, toTTL maxWait)
     srv <- handleCollectErrors $
         mapConcurrently (withTimeout . collectServerData lTTL) upstreams
-    let nwt = fromTTL $ min hTTL $ minimumTTL lTTL $ map fst srv
+    let nwt = fromTTL $ max (TTL 1) $ min hTTL $ minimumTTL lTTL $ map fst srv
         new = mconcat $ map snd srv
     if new == old
         then do
