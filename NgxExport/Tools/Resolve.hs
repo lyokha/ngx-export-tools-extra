@@ -14,6 +14,25 @@
 -- DNS resolve utilities from the more extra tools collection for
 -- <https://github.com/lyokha/nginx-haskell-module nginx-haskell-module>.
 --
+-- __An important note.__ Currently, package /resolv/ at
+-- [hackage.org](https://hackage.haskell.org/package/resolv) has
+-- [a bug](https://github.com/haskell-hvr/resolv/pull/12) which leads to
+-- memory leaks on every DNS query. This makes service /collectUpstreams/ 
+-- from module /NgxExport.Tools.Resolve/ leak as well, because it makes DNS
+-- queries regularly. To prevent memory leaks, you can clone /resolv/ from
+-- [this fork](https://github.com/lyokha/resolv) and /v1-install/ it from
+-- the source. Or, if you prefer /v2-build/, simply put lines
+--
+-- @
+-- source-repository-package
+--     type: git
+--     location: https://github.com/lyokha/resolv.git
+--     tag: 6a46c2659f79e78defd974849a8120548257cadc
+--     post-checkout-command: autoreconf -i
+-- @
+--
+-- into the /cabal.project/ file.
+
 -----------------------------------------------------------------------------
 
 module NgxExport.Tools.Resolve (
@@ -114,17 +133,17 @@ import           System.Timeout
 --
 --     haskell_run_service __/simpleService_collectUpstreams/__ $hs_upstreams
 --         \'Conf { upstreams =
---                     [UData { uQuery =
---                                  QuerySRV
---                                      (Name \"_http._tcp.mycompany.com\")
---                                          (SinglePriority \"__/utest/__\")
---                            , uMaxFails = 0
---                            , uFailTimeout = 10
+--                     ['UData' { 'uQuery' =
+--                                  'QuerySRV'
+--                                      ('Name' \"_http._tcp.mycompany.com\")
+--                                          ('SinglePriority' \"__/utest/__\")
+--                            , 'uMaxFails' = 1
+--                            , 'uFailTimeout' = 10
 --                            }
 --                     ]
---               , maxWait = Sec 300
---               , waitOnException = Sec 2
---               , responseTimeout = Unset
+--               , maxWait = 'Sec' 300
+--               , waitOnException = 'Sec' 2
+--               , responseTimeout = 'Unset'
 --               }\';
 --
 --     haskell_service_var_ignore_empty $hs_upstreams;
@@ -195,17 +214,17 @@ import           System.Timeout
 -- @
 --     haskell_run_service __/simpleService_collectUpstreams/__ $hs_upstreams
 --         \'Conf { upstreams =
---                     [UData { uQuery =
---                                  QuerySRV
---                                      (Name \"_http._tcp.mycompany.com\")
---                                          (PriorityList [\"__/utest/__\", \"__/utest1/__\"])
---                            , uMaxFails = 0
---                            , uFailTimeout = 10
+--                     ['UData' { 'uQuery' =
+--                                  'QuerySRV'
+--                                      ('Name' \"_http._tcp.mycompany.com\")
+--                                          ('PriorityList' [\"__/utest/__\", \"__/utest1/__\"])
+--                            , 'uMaxFails' = 1
+--                            , 'uFailTimeout' = 10
 --                            }
 --                     ]
---               , maxWait = Sec 300
---               , waitOnException = Sec 2
---               , responseTimeout = Unset
+--               , maxWait = 'Sec' 300
+--               , waitOnException = 'Sec' 2
+--               , responseTimeout = 'Unset'
 --               }\';
 -- @
 --
@@ -271,7 +290,7 @@ data UQuery = QueryA [Name] UName                   -- ^ Query /A/ records
 -- Specifies how to distribute collected items by priorities. In particular,
 -- /PriorityPolicy UName/ specifies how to distribute collected servers among
 -- the given upstreams.
-data PriorityPolicy a = SinglePriority a  -- ^ All items to the given element
+data PriorityPolicy a = SinglePriority a  -- ^ All items go to a single element
                       | PriorityList [a]  -- ^ Distribute items by priorities
                       deriving Read
 
