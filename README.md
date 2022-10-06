@@ -1470,7 +1470,7 @@ memory leaks on every DNS query. This makes service *collectUpstreams*
 from module *NgxExport.Tools.Resolve* leak as well, because it makes DNS
 queries regularly. To prevent memory leaks, you can clone *resolv* from
 [this fork](https://github.com/lyokha/resolv) and *v1-install* it from
-the source. Or, if you prefer *v2-build*, simply put
+the source. Or, if you prefer *v2-build*, simply put lines
 
 ```cabal
 source-repository-package
