@@ -1,3 +1,10 @@
+### 1.2.1
+
+- Improvements and bug fixes in module *NgxExport.Tools.Resolve*.
+  + Added ability to set response timeout in service *collectUpstreams*.
+  + Use *handleAny* from *safe-exceptions* in service *collectUpstreams*.
+  + Improved type declarations and documentation.
+
 ### 1.2.0
 
 - Added module *NgxExport.Tools.Resolve* which can be used to manage service
