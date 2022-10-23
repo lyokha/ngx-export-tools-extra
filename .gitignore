@@ -1,0 +1,15 @@
+*.hi
+*.o
+*.so
+*_stub.h
+.ghc.environment.*
+
+cabal.project.local
+cabal.project.local~
+
+/dist/
+/dist-newstyle/
+.hslibs/
+
+tags
+
