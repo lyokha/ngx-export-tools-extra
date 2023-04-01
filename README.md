@@ -1463,27 +1463,6 @@ hst_request_time_err{scope="total"} 0.0
 
 #### Module *NgxExport.Tools.Resolve*
 
-__An important note.__ Currently, package *resolv* at
-[hackage.org](https://hackage.haskell.org/package/resolv) has
-[a bug](https://github.com/haskell-hvr/resolv/pull/12) which leads to
-memory leaks on every DNS query. This makes service *collectUpstreams* 
-from module *NgxExport.Tools.Resolve* leak as well, because it makes DNS
-queries regularly. To prevent memory leaks, you can clone *resolv* from
-[this fork](https://github.com/lyokha/resolv) and *v1-install* it from
-the source. Or, if you prefer *v2-build*, simply put lines
-
-```cabal
-source-repository-package
-    type: git
-    location: https://github.com/lyokha/resolv.git
-    tag: 6a46c2659f79e78defd974849a8120548257cadc
-    post-checkout-command: autoreconf -i
-```
-
-into the *cabal.project* file.
-
----
-
 With Nginx module
 [nginx-upconf-module](https://github.com/lyokha/nginx-haskell-module/tree/master/examples/dynamicUpstreams),
 it is possible to update servers inside upstreams dynamically. The module
