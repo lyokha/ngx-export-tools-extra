@@ -9,15 +9,12 @@ jobs:
     continue-on-error: ${{ matrix.experimental }}
     strategy:
       matrix:
-        ghc: [8.2.2, 8.4.4, 8.6.5, 8.8.4, 8.10.7, 9.0.2, 9.2.7]
-        cabal: [3.6.2.0]
+        ghc: [8.2.2, 8.4.4, 8.6.5, 8.8.4, 8.10.7, 9.0.2, 9.2.7, 9.4.4]
+        cabal: [3.8.1.0]
         experimental: [false]
         include:
           - ghc: 9.6.1
             cabal: 3.10.1.0
-            experimental: true
-          - ghc: 9.4.4
-            cabal: 3.8.1.0
             experimental: false
     steps:
       - name: Checkout

@@ -1,6 +1,6 @@
 ### 1.2.2
 
-- Added Cabal constraint *resolv &gt; 0.2.0.1* to fix memory leaks in module
+- Added Cabal constraint *resolv &ge; 0.2.0.1* to fix memory leaks in module
   *NgxExport.Tools.Resolve*.
 
 ### 1.2.1
