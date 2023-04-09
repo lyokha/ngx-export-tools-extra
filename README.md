@@ -465,8 +465,8 @@ Functions *b64* and *uenc* are *polymorphic filters* in terms of EDE language.
 There are many filters shipped with EDE, but *b64* and *uenc* were defined in
 this module.
 
-* *b64* encodes a JSON object using *base64url* encoding
-* *uenc* encodes a JSON object using *URL encoding* rules
+* *b64* encodes an Aeson's *Value* using *base64url* encoding,
+* *uenc* encodes an Aeson's *Value* using *URL encoding* rules.
 
 So, basically, we used *renderEDETemplate* to decompose POSTed JSON objects
 and then *rewrite* requests to other locations where the URL path after

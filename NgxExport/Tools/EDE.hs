@@ -3,7 +3,7 @@
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  NgxExport.Tools.EDE
--- Copyright   :  (c) Alexey Radkov 2020-2022
+-- Copyright   :  (c) Alexey Radkov 2020-2023
 -- License     :  BSD-style
 --
 -- Maintainer  :  alexey.radkov@gmail.com
@@ -19,7 +19,8 @@
 module NgxExport.Tools.EDE (
     -- * Rendering JSON objects using EDE templates
     -- $renderingEDETemplates
-                            renderEDETemplate
+                            extraEDEFilters
+                           ,renderEDETemplate
                            ,renderEDETemplateWith
                            ,renderEDETemplateFromFreeValue
                            ) where
@@ -174,8 +175,8 @@ import           System.IO.Unsafe
 -- language. There are many filters shipped with EDE, but /b64/ and /uenc/ were
 -- defined in this module.
 --
--- * __/b64/__ encodes a JSON object using /base64url/ encoding
--- * __/uenc/__ encodes a JSON object using /URL encoding/ rules
+-- * __/b64/__ encodes an Aeson's 'Value' using /base64url/ encoding,
+-- * __/uenc/__ encodes an Aeson's 'Value' using /URL encoding/ rules.
 --
 -- So, basically, we used /renderEDETemplate/ to decompose POSTed JSON objects
 -- and then /rewrite/ requests to other locations where the URL path after
@@ -233,8 +234,15 @@ compileEDETemplates = ignitionService $ \(path, itpls) -> do
 ngxExportSimpleServiceTyped 'compileEDETemplates ''InputTemplates
     SingleShotService
 
-filters :: HashMap Id Term
-filters = HM.fromList
+-- | A small collection of custom EDE filters.
+--
+-- The collection is used in 'renderEDETemplate' and contains the following
+-- /polymorphic/ filters:
+--
+--   * __/b64/__ encodes a 'Value' using /base64url/ encoding,
+--   * __/uenc/__ encodes a 'Value' using /URL encoding/ rules.
+extraEDEFilters :: HashMap Id Term
+extraEDEFilters = HM.fromList
     ["b64"  @: applyToValue encodeBase64
     ,"uenc" @: applyToValue (T.decodeUtf8 . urlEncode False)
     ]
@@ -250,18 +258,19 @@ filters = HM.fromList
 renderEDETemplate :: L.ByteString       -- ^ JSON object
                   -> ByteString         -- ^ Key to find the EDE template
                   -> IO L.ByteString
-renderEDETemplate = renderEDETemplateWith decode
+renderEDETemplate = renderEDETemplateWith decode extraEDEFilters
 
--- | Renders an EDE template with a custom decoding function.
+-- | Renders an EDE template with custom decoding function and filters.
 --
--- This function can be used for templating from any configuration language
--- which is translatable to Aeson's 'Value'.
+-- Choice of the decoding function makes EDE available for templating from any
+-- configuration language that maps to the Aeson's 'Value'.
 renderEDETemplateWith
     :: (L.ByteString -> Maybe Value)    -- ^ Decoding function
+    -> HashMap Id Term                  -- ^ Collection of extra filters
     -> L.ByteString                     -- ^ JSON object
     -> ByteString                       -- ^ Key to find the EDE template
     -> IO L.ByteString
-renderEDETemplateWith fdec v k = do
+renderEDETemplateWith fdec flt v k = do
     tpls <- readIORef templates
     case HM.lookup k tpls of
         Nothing -> throwIO $ EDERenderError $
@@ -272,7 +281,7 @@ renderEDETemplateWith fdec v k = do
                 Nothing -> throwIO $ EDERenderError $
                     "Failed to decode value '" ++ C8L.unpack v ++ "'"
                 Just obj ->
-                    case renderWith filters tpl obj of
+                    case renderWith flt tpl obj of
                         Failure msg -> throwIO $ EDERenderError $ showPlain msg
                         Success r -> return $ LT.encodeUtf8 r
     where showPlain = show .
@@ -290,7 +299,7 @@ ngxExportAsyncOnReqBody 'renderEDETemplate
 -- Accepts a JSON object attached after the search key and a vertical bar such
 -- as /key|$hs_json/.
 renderEDETemplateFromFreeValue
-    :: ByteString           -- ^ Key to find the EDE template, and JSON object
+    :: ByteString           -- ^ Key to find the EDE template | JSON object
     -> IO L.ByteString
 renderEDETemplateFromFreeValue = uncurry (flip renderEDETemplate) .
     second (L.fromStrict . C8.tail) . C8.break (== '|')

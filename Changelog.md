@@ -1,3 +1,10 @@
+### 1.2.3
+
+- In module *NgxExport.Tools.EDE*, custom EDE filters are now passed into
+  function *renderEDETemplateWith*. The collection of custom EDE filters with
+  *b64* and *uenc* filters is now exported from the module by name
+  *extraEDEFilters*.
+
 ### 1.2.2
 
 - Added Cabal constraint *resolv &ge; 0.2.0.1* to fix memory leaks in module
