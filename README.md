@@ -19,7 +19,7 @@ at [*the Hackage page*](http://hackage.haskell.org/package/ngx-export-tools-extr
 - [Module NgxExport.Tools.Resolve](#module-ngxexporttoolsresolve)
 - [Module NgxExport.Tools.ServiceHookAdaptor](#module-ngxexporttoolsservicehookadaptor)
 - [Module NgxExport.Tools.Subrequest](#module-ngxexporttoolssubrequest)
-- [Building and installation](#building-and-installation) 
+- [Building custom libraries](#building-custom-libraries) 
 
 #### Module *NgxExport.Tools.Aggregate*
 
@@ -2431,30 +2431,7 @@ HttpExceptionRequest Request {
  (ConnectionFailure Network.Socket.connect: <socket: 32>: does not exist (Connection refused))
 ```
 
-#### Building and installation
-
-##### Configure and build
-
-```ShellSession
-$ cabal configure
-$ cabal build
-```
-
-##### Install
-
-```ShellSession
-$ cabal install
-```
-
-The module is also available at
-[*hackage.haskell.org*](http://hackage.haskell.org/package/ngx-export-tools-extra),
-so you can simply install it from there with
-
-```ShellSession
-$ cabal install ngx-export-tools-extra
-```
-
-##### Building custom libraries
+#### Building custom libraries
 
 See details in
 
