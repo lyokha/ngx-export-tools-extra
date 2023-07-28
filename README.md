@@ -2456,11 +2456,13 @@ $ cabal install ngx-export-tools-extra
 
 ##### Building custom libraries
 
-See details in [test/Aggregate/README.md](test/Aggregate/README.md),
-[test/EDE/README.md](test/EDE/README.md),
-[test/PCRE/README.md](test/PCRE/README.md),
-[test/Prometheus/README.md](test/Prometheus/README.md),
-[test/Resolve/README.md](test/Resolve/README.md),
-[test/ServiceHookAdaptor/README.md](test/ServiceHookAdaptor/README.md), and
-[test/Subrequest/README.md](test/Subrequest/README.md).
+See details in
+
+- [test/Aggregate/README.md](test/Aggregate/README.md),
+- [test/EDE/README.md](test/EDE/README.md),
+- [test/PCRE/README.md](test/PCRE/README.md),
+- [test/Prometheus/README.md](test/Prometheus/README.md),
+- [test/Resolve/README.md](test/Resolve/README.md),
+- [test/ServiceHookAdaptor/README.md](test/ServiceHookAdaptor/README.md),
+- [test/Subrequest/README.md](test/Subrequest/README.md).
 
