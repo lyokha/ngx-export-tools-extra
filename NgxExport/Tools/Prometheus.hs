@@ -579,7 +579,7 @@ showPrometheusMetrics = TL.encodeUtf8 . M.foldlWithKey
                                      ]
                           ,n
                           )
-                      _  -> a
+                      _ -> a
                   else let n' = n + v
                        in (TL.concat [t, k
                                      ,"_bucket{le=\"", TL.fromStrict l, "\""

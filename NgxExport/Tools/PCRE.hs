@@ -283,7 +283,7 @@ ngxExportIOYY 'matchRegex
 --
 -- ==== File /test_tools_extra_pcre.hs/
 -- @
--- {-\# LANGUAGE TemplateHaskell \#-}
+-- {-\# LANGUAGE TemplateHaskell, LambdaCase \#-}
 --
 -- module TestToolsExtraPCRE where
 --
@@ -295,7 +295,9 @@ ngxExportIOYY 'matchRegex
 -- import qualified Data.ByteString.Lazy as L
 --
 -- gsubSwapAround :: ByteString -> IO L.ByteString
--- __/gsubSwapAround/__ = 'gsubRegexWith' $ \\_ (a : d : b : _) -> B.concat [b, d, a]
+-- __/gsubSwapAround/__ = 'gsubRegexWith' $ const $ \\case 
+--     (a : d : b : _) -> B.concat [b, d, a]
+--     \_ -> B.empty
 --
 -- 'ngxExportIOYY' \'gsubSwapAround
 -- @

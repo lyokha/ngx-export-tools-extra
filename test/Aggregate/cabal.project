@@ -1,0 +1,8 @@
+-- note that ngx-export-tools-extra will be taken from Hackage;
+-- to build ngx-export-healthcheck locally, add
+-- ../../ngx-export-tools-extra.cabal to packages
+packages: test-tools-extra-aggregate.cabal
+
+-- enforce building the Snap aggregate server
+constraints: ngx-export-tools-extra +snapaggregateserver
+

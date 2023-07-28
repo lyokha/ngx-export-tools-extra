@@ -626,7 +626,7 @@ the values matched in the *keyValue* regex.
 ###### File *test_tools_extra_pcre.hs*
 
 ```haskell
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TemplateHaskell, LambdaCase #-}
 
 module TestToolsExtraPCRE where
 
@@ -638,7 +638,9 @@ import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
 
 gsubSwapAround :: ByteString -> IO L.ByteString
-gsubSwapAround = gsubRegexWith $ \_ (a : d : b : _) -> B.concat [b, d, a]
+gsubSwapAround = gsubRegexWith $ const $ \case
+    (a : d : b : _) -> B.concat [b, d, a]
+    _ -> B.empty
 
 ngxExportIOYY 'gsubSwapAround
 ```

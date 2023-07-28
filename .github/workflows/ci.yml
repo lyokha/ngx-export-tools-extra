@@ -9,11 +9,11 @@ jobs:
     continue-on-error: ${{ matrix.experimental }}
     strategy:
       matrix:
-        ghc: [8.2.2, 8.4.4, 8.6.5, 8.8.4, 8.10.7, 9.0.2, 9.2.7, 9.4.4]
+        ghc: [8.2.2, 8.4.4, 8.6.5, 8.8.4, 8.10.7, 9.0.2, 9.2.8, 9.4.5]
         cabal: [3.8.1.0]
         experimental: [false]
         include:
-          - ghc: 9.6.1
+          - ghc: 9.6.2
             cabal: 3.10.1.0
             experimental: false
     steps:
