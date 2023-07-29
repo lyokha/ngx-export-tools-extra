@@ -3,6 +3,3 @@
 -- ../../ngx-export-tools-extra.cabal to packages
 packages: test-tools-extra-subrequest.cabal
 
--- enforce building the Snap aggregate server
-constraints: ngx-export-tools-extra +snapaggregateserver
-
