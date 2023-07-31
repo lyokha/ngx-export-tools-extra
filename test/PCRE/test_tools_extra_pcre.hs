@@ -11,7 +11,7 @@ import qualified Data.ByteString.Lazy as L
 
 gsubSwapAround :: ByteString -> IO L.ByteString
 gsubSwapAround = gsubRegexWith $ const $ \case
-    (a : d : b : _) -> B.concat [b, d, a]
+    a : d : b : _ -> B.concat [b, d, a]
     _ -> B.empty
 
 ngxExportIOYY 'gsubSwapAround
