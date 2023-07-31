@@ -38,7 +38,7 @@ endif
 	  --package-db=clear --package-db=global \
 	  $$(sed -n 's/^\(package-db\)\s\+/--\1=/p' $(GHCENV)) \
 	  --prefix=$(PREFIX)
-	. ../cabal-plan-direct-deps.sh | grep -v '.-e-ede-' >> $(GHCENV)
+	hslibdeps -e | grep -v '.-e-ede-' >> $(GHCENV)
 	runhaskell --ghc-arg=-package=base \
 	  --ghc-arg=-package=$(PKGDISTR) Setup.hs build \
 	  --ghc-options="$(SRC) -o $(LIB) $(LINKRTS)"
