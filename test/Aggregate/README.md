@@ -4,8 +4,8 @@ The build tool requires Cabal, [*patchelf*](https://github.com/NixOS/patchelf),
 and utility *nhm-tool* which is shipped with package
 [*ngx-export-distribution*](https://hackage.haskell.org/package/ngx-export-distribution).
 
-Before building the project, tune the *constraints* stanza in *cabal.project*.
-Currently, it should look similar to
+Before building the project, tune the *constraints* stanza in
+[*cabal.project*](cabal.project). Currently, it should look similar to
 
 ```Cabal Config
 constraints: ngx-export-tools-extra +snapaggregateserver
