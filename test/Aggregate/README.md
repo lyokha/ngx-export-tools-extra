@@ -1,7 +1,21 @@
 ##### Building and installation
 
 The build tool requires Cabal, [*patchelf*](https://github.com/NixOS/patchelf),
-and utility *nhm-tool* which is shipped with package *ngx-export-distribution*.
+and utility *nhm-tool* which is shipped with package
+[*ngx-export-distribution*](https://hackage.haskell.org/package/ngx-export-distribution).
+
+Before building the project, tune the *constraints* stanza in *cabal.project*.
+Currently, it should look similar to
+
+```Cabal Config
+constraints: ngx-export-tools-extra +snapaggregateserver
+```
+
+This line enforces building the Snap aggregate server. To disable this,
+replace *+snapaggregateserver* by *-snapaggregateserver*. To let Cabal deduce
+whether to build Snap automatically, remove the constraint.
+
+Now run
 
 ```ShellSession
 $ make
