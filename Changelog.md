@@ -1,3 +1,7 @@
+### 1.2.4
+
+- Added support for *https* connections in module *NgxExport.Tools.Subrequest*.
+
 ### 1.2.3
 
 - In module *NgxExport.Tools.EDE*, custom EDE filters are now passed into

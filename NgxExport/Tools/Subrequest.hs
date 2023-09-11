@@ -4,7 +4,7 @@
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  NgxExport.Tools.Subrequest
--- Copyright   :  (c) Alexey Radkov 2020-2022
+-- Copyright   :  (c) Alexey Radkov 2020-2023
 -- License     :  BSD-style
 --
 -- Maintainer  :  alexey.radkov@gmail.com
@@ -53,6 +53,7 @@ import           NgxExport.Tools.TimeInterval
 
 import           Network.HTTP.Client hiding (ResponseTimeout)
 import qualified Network.HTTP.Client (HttpExceptionContent (ResponseTimeout))
+import           Network.HTTP.Client.TLS (newTlsManager)
 import           Network.HTTP.Client.BrReadWithTimeout
 import           Network.HTTP.Types
 import qualified Network.Socket as S
@@ -129,7 +130,7 @@ import           System.IO.Unsafe
 --     }
 --
 --     haskell_run_service __/simpleService_makeRequest/__ $hs_service_httpbin
---             \'{\"uri\": \"http:\/\/httpbin.org\"}\';
+--             \'{\"uri\": \"https:\/\/httpbin.org\"}\';
 --
 --     haskell_var_empty_on_error $hs_subrequest;
 --
@@ -255,10 +256,9 @@ instance FromJSON SubrequestConf where
         srUseUDS <- fromMaybe False <$> o .:? "useUDS"
         return SubrequestConf {..}
 
-data BridgeConf =
-    BridgeConf { bridgeSource  :: SubrequestConf
-               , bridgeSink :: SubrequestConf
-               } deriving Read
+data BridgeConf = BridgeConf { bridgeSource :: SubrequestConf
+                             , bridgeSink :: SubrequestConf
+                             } deriving Read
 
 instance FromJSON BridgeConf where
     parseJSON = withObject "BridgeConf" $ \o -> do
@@ -290,10 +290,7 @@ subrequest :: (String -> IO Request) ->
     (Response L.ByteString -> L.ByteString) -> SubrequestConf ->
     IO L.ByteString
 subrequest parseRequestF buildResponseF sub@SubrequestConf {..} = do
-    man <- if srUseUDS
-               then fromMaybe (throw UDSNotConfiguredError) <$>
-                        readIORef httpUDSManager
-               else return httpManager
+    man <- getManager sub
     req <- parseRequestF srUri
     buildResponseF <$> httpLbsBrReadWithTimeout (makeRequest sub req) man
 
@@ -335,9 +332,20 @@ httpManager :: Manager
 httpManager = unsafePerformIO $ newManager defaultManagerSettings
 {-# NOINLINE httpManager #-}
 
+httpsManager :: Manager
+httpsManager = unsafePerformIO newTlsManager
+{-# NOINLINE httpsManager #-}
+
 httpUDSManager :: IORef (Maybe Manager)
 httpUDSManager = unsafePerformIO $ newIORef Nothing
 {-# NOINLINE httpUDSManager #-}
+
+getManager :: SubrequestConf -> IO Manager
+getManager SubrequestConf {..}
+    | srUseUDS =
+        fromMaybe (throw UDSNotConfiguredError) <$> readIORef httpUDSManager
+    | "https://" `isPrefixOf` srUri = return httpsManager
+    | otherwise = return httpManager
 
 -- | Makes an HTTP request.
 --
@@ -478,7 +486,7 @@ configureUDS = ignitionService $ \UDSConf {..} -> do
                { managerRawConnection = return $ openUDS udsPath }
     writeIORef httpUDSManager $ Just man
     return ""
-    where openUDS path _ _ _  = do
+    where openUDS path _ _ _ = do
               s <- S.socket S.AF_UNIX S.Stream S.defaultProtocol
               S.connect s (S.SockAddrUnix path)
               makeConnection (SB.recv s 4096) (SB.sendAll s) (S.close s)
@@ -1025,14 +1033,8 @@ bridgedSubrequest :: (String -> IO Request) ->
     (Response L.ByteString -> L.ByteString) -> BridgeConf ->
     IO L.ByteString
 bridgedSubrequest parseRequestF buildResponseF BridgeConf {..} = do
-    manIn <- if srUseUDS bridgeSource
-                 then fromMaybe (throw UDSNotConfiguredError) <$>
-                          readIORef httpUDSManager
-                 else return httpManager
-    manOut <- if srUseUDS bridgeSink
-                  then fromMaybe (throw UDSNotConfiguredError) <$>
-                           readIORef httpUDSManager
-                  else return httpManager
+    manIn <- getManager bridgeSource
+    manOut <- getManager bridgeSink
     -- BEWARE: a non-2xx response from the bridge source will throw
     -- StatusCodeException with this status which finally will be returned as
     -- the status code of the whole bridged subrequest

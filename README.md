@@ -1883,7 +1883,7 @@ http {
     haskell load /var/lib/nginx/test_tools_extra_subrequest.so;
 
     haskell_run_service simpleService_makeRequest $hs_service_httpbin
-            '{"uri": "http://httpbin.org"}';
+            '{"uri": "https://httpbin.org"}';
 
     haskell_var_empty_on_error $hs_subrequest;
 
