@@ -329,12 +329,8 @@ subrequestFull :: SubrequestConf -> IO L.ByteString
 subrequestFull = handleFullResponse . subrequest parseRequest buildFullResponse
 
 httpManager :: Manager
-httpManager = unsafePerformIO $ newManager defaultManagerSettings
+httpManager = unsafePerformIO newTlsManager
 {-# NOINLINE httpManager #-}
-
-httpsManager :: Manager
-httpsManager = unsafePerformIO newTlsManager
-{-# NOINLINE httpsManager #-}
 
 httpUDSManager :: IORef (Maybe Manager)
 httpUDSManager = unsafePerformIO $ newIORef Nothing
@@ -344,7 +340,6 @@ getManager :: SubrequestConf -> IO Manager
 getManager SubrequestConf {..}
     | srUseUDS =
         fromMaybe (throw UDSNotConfiguredError) <$> readIORef httpUDSManager
-    | "https://" `isPrefixOf` srUri = return httpsManager
     | otherwise = return httpManager
 
 -- | Makes an HTTP request.
