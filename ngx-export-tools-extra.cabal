@@ -78,7 +78,7 @@ library
                           , aeson >= 1.0.0.0 && < 2.0.0.0
 
   if flag(PCRE)
-    build-depends:          pcre-light >= 0.4
+    build-depends:          pcre-light >= 0.4.1.2
                           , pcre-heavy
 
   exposed-modules:          NgxExport.Tools.Aggregate
