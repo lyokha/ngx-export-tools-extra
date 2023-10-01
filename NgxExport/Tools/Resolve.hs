@@ -308,15 +308,6 @@ data ServerData = ServerData { sAddr        :: SAddress   -- ^ Server address
                              , sFailTimeout :: Maybe Int  -- ^ /fail_timeout/
                              } deriving (Show, Eq, Ord)
 
-instance FromJSON ServerData where
-    parseJSON = withObject "server_options" $ \o -> do
-        sAddr        <- o .:  "addr"
-        sHost        <- o .:  "host"
-        sWeight      <- o .:? "weight"
-        sMaxFails    <- o .:? "max_fails"
-        sFailTimeout <- o .:? "fail_timeout"
-        return ServerData {..}
-
 instance ToJSON ServerData where
     toJSON ServerData {..} =
         object $ catMaybes [ pure $ "addr"   .=      sAddr
