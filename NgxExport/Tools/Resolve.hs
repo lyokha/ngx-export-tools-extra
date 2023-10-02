@@ -363,7 +363,8 @@ collectA lTTL name = do
 -- Returns a list of pairs /(Domain name, IP address)/ wrapped in an 'SRV'
 -- container and the minimum value of their TTLs. If the list is empty, then
 -- the returned TTL value gets taken from the first argument. Note that trailing
--- dots get removed in the returned domain names.
+-- dots in the collected domain names (as in /www.mycompany.com./) get removed
+-- in the returned list.
 collectSRV
     :: TTL                      -- ^ Fallback TTL value
     -> Name                     -- ^ Service name
@@ -376,7 +377,7 @@ collectSRV lTTL name = do
                      return (t
                             ,map (\v ->
                                      s { srvTarget =
-                                             (removeTrailingDot srvTarget, v)
+                                           (removeTrailingDot srvTarget, v)
                                        }
                                  ) is
                             )
@@ -386,9 +387,7 @@ collectSRV lTTL name = do
                 (minimumTTL lTTL $ map fst srv')
            ,concatMap snd srv'
            )
-    where removeTrailingDot (Name v) = Name $ case C8.unsnoc v of
-                                                  Just (v', '.') -> v'
-                                                  _ -> v
+    where removeTrailingDot (Name v) = Name $ maybe v fst $ C8.unsnoc v
 
 showIPv4 :: IPv4 -> String
 showIPv4 (IPv4 w) =
