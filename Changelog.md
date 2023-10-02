@@ -1,3 +1,15 @@
+### 1.2.5
+
+- Module *NgxExport.Tools.Resolve*.
+  + Function *collectSrv* now returns a *TTL* with a list of pairs
+    *(Domain name, IP address)* wrapped in an *SRV* container.
+  + Collection *ServerData* now contains the host name.
+  + Allow multiple *upconf* endpoints, secure and insecure.
+  + Removed *instance FromJSON ServerData*.
+- Module *NgxExport.Tools.PCRE*.
+  + Removed internal implementation of function *compile* which now requires
+    *pcre-light &ge; 0.4.1.2*.
+
 ### 1.2.4
 
 - Added support for *https* connections in module *NgxExport.Tools.Subrequest*.

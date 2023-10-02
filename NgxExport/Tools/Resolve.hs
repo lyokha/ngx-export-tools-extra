@@ -40,6 +40,8 @@ import           NgxExport.Tools.TimeInterval
 
 import           Network.DNS
 import           Network.HTTP.Client
+import           Network.HTTP.Client.TLS (newTlsManager)
+import           Network.HTTP.Client.BrReadWithTimeout
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as L
 import           Data.Map.Strict (Map)
@@ -133,8 +135,7 @@ import           System.Timeout
 --     haskell_service_var_in_shm upstreams 64k \/tmp $hs_upstreams;
 --
 --     haskell_service_var_update_callback __/simpleService_signalUpconf/__ $hs_upstreams
---         \'Upconf { upconfAddr = (\"__/\/upconf/__\", \"127.0.0.1:8010\")
---                 }\';
+--         \'[\"http:\/\/127.0.0.1:8010__/\/upconf/__\"]\';
 --
 --     server {
 --         listen          localhost:8010;
@@ -176,13 +177,16 @@ import           System.Timeout
 -- which reports /Not configured/, but so soon as service /collectUpstreams/
 -- collects servers for the upstream in variable __/$hs_upstreams/__, and then
 -- the /upconf/ module gets notified about this via callback /signalUpconf/, the
--- upstream gets inhabited by the collected servers. The upstream contents will
--- be re-checked within the time interval of /(1 or waitOnException, maxWait)/.
--- Particularly, if an exception happens during the collection of the servers,
--- then the service will restart in /waitOnException/. If there were no
--- exceptions and the smallest value of /TTL/ calculated from all collected
--- servers does not exceed the value of /maxWait/, then the service will restart
--- in this time.
+-- upstream gets inhabited by the collected servers. Notice that /signalUpconf/
+-- accepts a /list/ of URLs which means that it can broadcast collected servers
+-- to multiple /upconf/ endpoints listening on this or other hosts.
+--
+-- The upstream contents will be re-checked within the time interval of
+-- /(1 or waitOnException, maxWait)/. Particularly, if an exception happens
+-- during the collection of the servers, then the service will restart in
+-- /waitOnException/. If there were no exceptions and the smallest value of
+-- /TTL/ calculated from all collected servers does not exceed the value of
+-- /maxWait/, then the service will restart in this time.
 --
 -- Too big response times may also cause exceptions during the collection of the
 -- servers. The timeout is defined by the value of /responseTimeout/. In our
@@ -249,9 +253,6 @@ import           System.Timeout
 -- | Upstream name.
 type UName = Text
 
--- URL, normally starts with /
-type SUrl = Text
-
 -- | Domain name or IP address with or without port.
 type SAddress = Text
 
@@ -296,8 +297,6 @@ data Conf = Conf { upstreams       :: [UData]
                  , responseTimeout :: TimeInterval
                  } deriving Read
 
-newtype Upconf = Upconf { upconfAddr :: (SUrl, SAddress) } deriving Read
-
 -- | Server data.
 --
 -- The fields map exactly to parameters from Nginx /server/ description.
@@ -325,7 +324,7 @@ collectedServerData = unsafePerformIO $ newIORef (Unset, M.empty)
 {-# NOINLINE collectedServerData #-}
 
 httpManager :: Manager
-httpManager = unsafePerformIO $ newManager defaultManagerSettings
+httpManager = unsafePerformIO newTlsManager
 {-# NOINLINE httpManager #-}
 
 getResponse :: Text -> (Request -> IO (Response L.ByteString)) ->
@@ -333,11 +332,7 @@ getResponse :: Text -> (Request -> IO (Response L.ByteString)) ->
 getResponse url = fmap responseBody . (parseUrlThrow (T.unpack url) >>=)
 
 getUrl :: Text -> IO L.ByteString
-getUrl url = getResponse url $ flip httpLbs httpManager
-
-queryHTTP :: Text -> Text -> IO L.ByteString
-queryHTTP = (getUrl .) . flip mkAddr
-    where mkAddr = (("http://" `T.append`) .) . T.append
+getUrl url = getResponse url $ flip httpLbsBrReadWithTimeout httpManager
 
 minimumTTL :: TTL -> [TTL] -> TTL
 minimumTTL lTTL [] = lTTL
@@ -481,9 +476,12 @@ collectUpstreams Conf {..} = const $ do
 ngxExportSimpleServiceTyped 'collectUpstreams ''Conf $
     PersistentService Nothing
 
+-- a list of fully qualified URLs such as 'http://../..' or 'https://../..'
+type Upconf = [Text]
+
 signalUpconf :: Upconf -> Bool -> IO L.ByteString
-signalUpconf Upconf {..} = const $ do
-    void $ uncurry queryHTTP upconfAddr
+signalUpconf upconf = const $ do
+    mapConcurrently_ getUrl upconf
     return ""
 
 ngxExportSimpleServiceTyped 'signalUpconf ''Upconf $

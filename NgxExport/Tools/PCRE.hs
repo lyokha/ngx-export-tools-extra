@@ -3,7 +3,7 @@
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  NgxExport.Tools.PCRE
--- Copyright   :  (c) Alexey Radkov 2021-2022
+-- Copyright   :  (c) Alexey Radkov 2021-2023
 -- License     :  BSD-style
 --
 -- Maintainer  :  alexey.radkov@gmail.com

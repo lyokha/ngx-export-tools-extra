@@ -1544,8 +1544,7 @@ http {
     haskell_service_var_in_shm upstreams 64k /tmp $hs_upstreams;
 
     haskell_service_var_update_callback simpleService_signalUpconf $hs_upstreams
-        'Upconf { upconfAddr = ("/upconf", "127.0.0.1:8010")
-                }';
+        '["http://127.0.0.1:8010/upconf"]';
 
     server {
         listen          localhost:8010;
@@ -1587,13 +1586,16 @@ At the start of Nginx, upstream *utest* contains a statically declared server
 which reports *Not configured*, but so soon as service *collectUpstreams*
 collects servers for the upstream in variable *\$hs_upstreams*, and then
 the *upconf* module gets notified about this via callback *signalUpconf*, the
-upstream gets inhabited by the collected servers. The upstream contents will
-be re-checked within the time interval of *(1 or waitOnException, maxWait)*.
-Particularly, if an exception happens during the collection of the servers,
-then the service will restart in *waitOnException*. If there were no
-exceptions and the smallest value of *TTL* calculated from all collected
-servers does not exceed the value of *maxWait*, then the service will restart
-in this time.
+upstream gets inhabited by the collected servers. Notice that *signalUpconf*
+accepts a *list* of URLs which means that it can broadcast collected servers
+to multiple *upconf* endpoints listening on this or other hosts.
+
+The upstream contents will be re-checked within the time interval of
+*(1 or waitOnException, maxWait)*. Particularly, if an exception happens
+during the collection of the servers, then the service will restart in
+*waitOnException*. If there were no exceptions and the smallest value of
+*TTL* calculated from all collected servers does not exceed the value of
+*maxWait*, then the service will restart in this time.
 
 Too big response times may also cause exceptions during the collection of the
 servers. The timeout is defined by the value of *responseTimeout*. In our
