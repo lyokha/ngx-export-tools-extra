@@ -37,8 +37,8 @@ module NgxExport.Tools.Aggregate (
 
 import           NgxExport
 #ifdef SNAP_AGGREGATE_SERVER
+import           NgxExport.Tools.Combinators
 import           NgxExport.Tools.SimpleService
-import           NgxExport.Tools.SplitService
 #endif
 import           NgxExport.Tools.System
 import           NgxExport.Tools.TimeInterval
@@ -126,21 +126,19 @@ type ReportValue a = Maybe (Int32, Maybe a)
 -- {-\# NOINLINE stats \#-}
 --
 -- updateStats :: ByteString -> IO C8L.ByteString
--- __/updateStats/__ s = do
+-- __/updateStats/__ s = voidHandler $ do
 --     let cbs = 'NgxExport.Tools.Read.readFromByteString' \@Int s
 --     modifyIORef\' stats $ \\(Stats bs rs _) ->
 --         let !nbs = bs + fromMaybe 0 cbs
 --             !nrs = rs + 1
 --             !nmbs = nbs \`div\` nrs
 --         in Stats nbs nrs nmbs
---     return \"\"
 -- 'NgxExport.ngxExportIOYY' \'updateStats
 --
 -- reportStats :: Int -> Bool -> IO C8L.ByteString
--- __/reportStats/__ = 'deferredService' $ \\port -> do
+-- __/reportStats/__ = 'deferredService' $ \\port -> voidHandler $ do
 --     s <- readIORef stats
 --     'reportAggregate' port (Just s) \"__/stats/__\"
---     return \"\"
 -- 'NgxExport.Tools.SimpleService.ngxExportSimpleServiceTyped' \'reportStats \'\'Int $
 --     'PersistentService' $ Just $ Sec 5
 --
@@ -393,10 +391,9 @@ data AggregateServerConf =
 
 aggregateServer :: (FromJSON a, ToJSON a) =>
     Aggregate a -> ByteString -> AggregateServerConf -> Bool -> IO L.ByteString
-aggregateServer a u = ignitionService $ \conf -> do
+aggregateServer a u = ignitionService $ \conf -> voidHandler $ do
     let !int = toNominalDiffTime $ asPurgeInterval conf
     simpleHttpServe (asConfig $ asPort conf) $ asHandler a u int
-    return ""
 
 asConfig :: Int -> Config Snap a
 asConfig p = setPort p

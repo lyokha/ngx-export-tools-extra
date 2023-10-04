@@ -47,8 +47,8 @@ module NgxExport.Tools.Subrequest (
 
 import           NgxExport
 import           NgxExport.Tools.Read
+import           NgxExport.Tools.Combinators
 import           NgxExport.Tools.SimpleService
-import           NgxExport.Tools.SplitService
 import           NgxExport.Tools.TimeInterval
 
 import           Network.HTTP.Client hiding (ResponseTimeout)
@@ -476,11 +476,10 @@ ngxExportAsyncIOYY 'makeSubrequestWithRead
 newtype UDSConf = UDSConf { udsPath :: FilePath } deriving Read
 
 configureUDS :: UDSConf -> Bool -> IO L.ByteString
-configureUDS = ignitionService $ \UDSConf {..} -> do
+configureUDS = ignitionService $ \UDSConf {..} -> voidHandler $ do
     man <- newManager defaultManagerSettings
                { managerRawConnection = return $ openUDS udsPath }
     writeIORef httpUDSManager $ Just man
-    return ""
     where openUDS path _ _ _ = do
               s <- S.socket S.AF_UNIX S.Stream S.defaultProtocol
               S.connect s (S.SockAddrUnix path)

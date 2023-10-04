@@ -29,8 +29,8 @@ module NgxExport.Tools.PCRE (
                             ) where
 
 import           NgxExport
+import           NgxExport.Tools.Combinators
 import           NgxExport.Tools.SimpleService
-import           NgxExport.Tools.SplitService
 
 import qualified Data.HashMap.Strict as HM
 import           Data.HashMap.Strict (HashMap)
@@ -160,12 +160,12 @@ regexes = unsafePerformIO $ newIORef HM.empty
 {-# NOINLINE regexes #-}
 
 declareRegexes :: InputRegexes -> Bool -> IO L.ByteString
-declareRegexes = ignitionService $ const $ return ""
+declareRegexes = ignitionService $ const $ voidHandler $ return ()
 
 ngxExportSimpleServiceTyped 'declareRegexes ''InputRegexes SingleShotService
 
 compileRegexes :: ByteString -> IO L.ByteString
-compileRegexes = const $ do
+compileRegexes = const $ voidHandler $ do
     !inputRegexes <- fromJust <$> readIORef storage_InputRegexes_declareRegexes
     let !compiledRegexes =
             foldl' (\a (!k, !v, !m) -> let !r = compile v $ mods $ C8.unpack m
@@ -173,7 +173,6 @@ compileRegexes = const $ do
                                        in hm
                    ) HM.empty inputRegexes
     writeIORef regexes compiledRegexes
-    return ""
     where md 'i' = Just caseless
           md 's' = Just dotall
           md 'm' = Just multiline
@@ -190,10 +189,8 @@ substitutions = unsafePerformIO $ newIORef HM.empty
 {-# NOINLINE substitutions #-}
 
 mapSubs :: InputSubs -> Bool -> IO L.ByteString
-mapSubs = ignitionService $ \isubs -> do
-    writeIORef substitutions $
-        foldl (\a (k, v) -> HM.insert k v a) HM.empty isubs
-    return ""
+mapSubs = ignitionService $ voidHandler .
+    writeIORef substitutions . foldl (\a (k, v) -> HM.insert k v a) HM.empty
 
 ngxExportSimpleServiceTyped 'mapSubs ''InputSubs SingleShotService
 

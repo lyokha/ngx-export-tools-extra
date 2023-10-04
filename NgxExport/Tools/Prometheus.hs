@@ -34,8 +34,8 @@ module NgxExport.Tools.Prometheus (
 
 import           NgxExport
 import           NgxExport.Tools.Read
+import           NgxExport.Tools.Combinators
 import           NgxExport.Tools.SimpleService
-import           NgxExport.Tools.SplitService
 
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
@@ -438,9 +438,7 @@ conf = unsafePerformIO $ newIORef Nothing
 -- > hst_request_time_err 0.0
 
 prometheusConf :: PrometheusConf -> Bool -> IO L.ByteString
-prometheusConf = ignitionService $ \a -> do
-    writeIORef conf $ Just a
-    return ""
+prometheusConf = ignitionService $ voidHandler . writeIORef conf . Just
 
 ngxExportSimpleServiceTyped 'prometheusConf ''PrometheusConf SingleShotService
 

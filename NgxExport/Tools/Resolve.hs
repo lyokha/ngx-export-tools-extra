@@ -35,6 +35,7 @@ module NgxExport.Tools.Resolve (
                                ) where
 
 import           NgxExport
+import           NgxExport.Tools.Combinators
 import           NgxExport.Tools.SimpleService
 import           NgxExport.Tools.TimeInterval
 
@@ -480,9 +481,7 @@ ngxExportSimpleServiceTyped 'collectUpstreams ''Conf $
 type Upconf = [Text]
 
 signalUpconf :: Upconf -> Bool -> IO L.ByteString
-signalUpconf upconf = const $ do
-    mapConcurrently_ getUrl upconf
-    return ""
+signalUpconf = const . voidHandler . mapConcurrently_ getUrl
 
 ngxExportSimpleServiceTyped 'signalUpconf ''Upconf $
     PersistentService Nothing

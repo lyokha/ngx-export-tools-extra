@@ -26,8 +26,8 @@ module NgxExport.Tools.EDE (
                            ) where
 
 import           NgxExport
+import           NgxExport.Tools.Combinators
 import           NgxExport.Tools.SimpleService
-import           NgxExport.Tools.SplitService
 
 import           Text.EDE
 import           Text.EDE.Filters
@@ -225,11 +225,10 @@ templates = unsafePerformIO $ newIORef HM.empty
 {-# NOINLINE templates #-}
 
 compileEDETemplates :: InputTemplates -> Bool -> IO L.ByteString
-compileEDETemplates = ignitionService $ \(path, itpls) -> do
+compileEDETemplates = ignitionService $ \(path, itpls) -> voidHandler $
     writeIORef templates $
         foldl (\a (k, v) -> HM.insert k (unsafePerformIO $ parseIO path v) a)
             HM.empty itpls
-    return ""
 
 ngxExportSimpleServiceTyped 'compileEDETemplates ''InputTemplates
     SingleShotService

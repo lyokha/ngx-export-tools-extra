@@ -40,7 +40,7 @@ library
                           , bytestring >= 0.10.0.0
                           , base64 >= 0.3.0.0
                           , ngx-export
-                          , ngx-export-tools >= 1.0
+                          , ngx-export-tools >= 1.2.0
                           , http-types >= 0.7.0
                           , http-client >= 0.5.3
                           , http-client-tls >= 0.3.4
