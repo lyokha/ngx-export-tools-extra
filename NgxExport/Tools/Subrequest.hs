@@ -475,7 +475,7 @@ ngxExportAsyncIOYY 'makeSubrequestWithRead
 
 newtype UDSConf = UDSConf { udsPath :: FilePath } deriving Read
 
-configureUDS :: UDSConf -> Bool -> IO L.ByteString
+configureUDS :: UDSConf -> NgxExportService
 configureUDS = ignitionService $ \UDSConf {..} -> voidHandler $ do
     man <- newManager defaultManagerSettings
                { managerRawConnection = return $ openUDS udsPath }

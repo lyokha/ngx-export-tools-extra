@@ -224,7 +224,7 @@ templates :: IORef Templates
 templates = unsafePerformIO $ newIORef HM.empty
 {-# NOINLINE templates #-}
 
-compileEDETemplates :: InputTemplates -> Bool -> IO L.ByteString
+compileEDETemplates :: InputTemplates -> NgxExportService
 compileEDETemplates = ignitionService $ \(path, itpls) -> voidHandler $
     writeIORef templates $
         foldl (\a (k, v) -> HM.insert k (unsafePerformIO $ parseIO path v) a)

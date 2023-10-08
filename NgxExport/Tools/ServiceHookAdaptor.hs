@@ -26,7 +26,6 @@ import           NgxExport.Tools.SplitService
 import           NgxExport.Tools.TimeInterval
 
 import           Data.ByteString (ByteString)
-import qualified Data.ByteString.Lazy as L
 import           Control.Monad
 
 -- $maintainingCustomGlobalData
@@ -183,7 +182,7 @@ import           Control.Monad
 -- Our secret is still intact! This is because service hooks manage new worker
 -- processes so well as those that were running when a hook was triggered.
 
-hookAdaptor :: ByteString -> Bool -> IO L.ByteString
+hookAdaptor :: ByteString -> NgxExportService
 hookAdaptor = ignitionService $
     const $ forever $ threadDelaySec $ toSec $ Hr 24
 

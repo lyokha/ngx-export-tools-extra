@@ -437,7 +437,7 @@ conf = unsafePerformIO $ newIORef Nothing
 -- > # TYPE hst_request_time_err counter
 -- > hst_request_time_err 0.0
 
-prometheusConf :: PrometheusConf -> Bool -> IO L.ByteString
+prometheusConf :: PrometheusConf -> NgxExportService
 prometheusConf = ignitionService $ voidHandler . writeIORef conf . Just
 
 ngxExportSimpleServiceTyped 'prometheusConf ''PrometheusConf SingleShotService

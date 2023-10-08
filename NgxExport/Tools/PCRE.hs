@@ -159,13 +159,13 @@ regexes :: IORef Regexes
 regexes = unsafePerformIO $ newIORef HM.empty
 {-# NOINLINE regexes #-}
 
-declareRegexes :: InputRegexes -> Bool -> IO L.ByteString
-declareRegexes = ignitionService $ const $ voidHandler $ return ()
+declareRegexes :: InputRegexes -> NgxExportService
+declareRegexes = ignitionService $ voidHandler' $ return ()
 
 ngxExportSimpleServiceTyped 'declareRegexes ''InputRegexes SingleShotService
 
 compileRegexes :: ByteString -> IO L.ByteString
-compileRegexes = const $ voidHandler $ do
+compileRegexes = voidHandler' $ do
     !inputRegexes <- fromJust <$> readIORef storage_InputRegexes_declareRegexes
     let !compiledRegexes =
             foldl' (\a (!k, !v, !m) -> let !r = compile v $ mods $ C8.unpack m
@@ -188,7 +188,7 @@ substitutions :: IORef Subs
 substitutions = unsafePerformIO $ newIORef HM.empty
 {-# NOINLINE substitutions #-}
 
-mapSubs :: InputSubs -> Bool -> IO L.ByteString
+mapSubs :: InputSubs -> NgxExportService
 mapSubs = ignitionService $ voidHandler .
     writeIORef substitutions . foldl (\a (k, v) -> HM.insert k v a) HM.empty
 

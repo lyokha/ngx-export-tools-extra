@@ -443,7 +443,7 @@ collectServerData lTTL ud@(UData (QuerySRV n (PriorityList pl)) _ _ ) = do
               groupBy ((==) `on` srvPriority) . sortOn srvPriority
           withTrail = uncurry (++) . (id &&& repeat . last)
 
-collectUpstreams :: Conf -> Bool -> IO L.ByteString
+collectUpstreams :: Conf -> NgxExportService
 collectUpstreams Conf {..} = const $ do
     (wt, old) <- readIORef collectedServerData
     when (wt /= Unset) $ threadDelaySec $ toSec wt
@@ -480,8 +480,8 @@ ngxExportSimpleServiceTyped 'collectUpstreams ''Conf $
 -- a list of fully qualified URLs such as 'http://../..' or 'https://../..'
 type Upconf = [Text]
 
-signalUpconf :: Upconf -> Bool -> IO L.ByteString
-signalUpconf = const . voidHandler . mapConcurrently_ getUrl
+signalUpconf :: Upconf -> NgxExportService
+signalUpconf = voidHandler' . mapConcurrently_ getUrl
 
 ngxExportSimpleServiceTyped 'signalUpconf ''Upconf $
     PersistentService Nothing

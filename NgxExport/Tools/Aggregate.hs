@@ -390,7 +390,7 @@ data AggregateServerConf =
                         } deriving Read
 
 aggregateServer :: (FromJSON a, ToJSON a) =>
-    Aggregate a -> ByteString -> AggregateServerConf -> Bool -> IO L.ByteString
+    Aggregate a -> ByteString -> AggregateServerConf -> NgxExportService
 aggregateServer a u = ignitionService $ \conf -> voidHandler $ do
     let !int = toNominalDiffTime $ asPurgeInterval conf
     simpleHttpServe (asConfig $ asPort conf) $ asHandler a u int
