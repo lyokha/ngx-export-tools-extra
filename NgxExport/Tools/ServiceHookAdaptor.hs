@@ -99,7 +99,7 @@ import           Control.Monad
 --
 --     haskell load \/var\/lib\/nginx\/test_tools_extra_servicehookadaptor.so;
 --
---     haskell_run_service __/simpleService_hookAdaptor/__ $hs_hook_adaptor \'\';
+--     haskell_run_service __/simpleService_hookAdaptor/__ $hs_hook_adaptor noarg;
 --
 --     haskell_service_hooks_zone hooks 32k;
 --
