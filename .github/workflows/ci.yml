@@ -13,6 +13,9 @@ jobs:
         cabal: ['3.8']
         experimental: [false]
         include:
+          - ghc: '9.8'
+            cabal: '3.10'
+            experimental: true
           - ghc: '9.6'
             cabal: '3.10'
             experimental: false

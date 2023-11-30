@@ -6,7 +6,7 @@ description:                More extra tools for
 homepage:                   https://github.com/lyokha/ngx-export-tools-extra
 license:                    BSD3
 license-file:               LICENSE
-extra-source-files:         Changelog.md
+extra-doc-files:            Changelog.md
 author:                     Alexey Radkov <alexey.radkov@gmail.com>
 maintainer:                 Alexey Radkov <alexey.radkov@gmail.com>
 stability:                  stable
@@ -17,7 +17,7 @@ cabal-version:              1.20
 
 source-repository head
   type:                     git
-  location:                 https://github.com/lyokha/ngx-export-tools-extra
+  location:                 https://github.com/lyokha/ngx-export-tools-extra.git
 
 flag EDE
   description:              Build EDE module.

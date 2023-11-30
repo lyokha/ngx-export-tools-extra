@@ -209,10 +209,9 @@ rtRegex f = fmap L.fromStrict . uncurry doRtRegex .
 doMatchRegex :: RegexF
 doMatchRegex r v = return $
     case match r v [] of
-        Nothing -> ""
-        Just cs -> if captureCount r == 0
-                       then head cs
-                       else head $ tail cs
+        Just (_ : c1 : _) -> c1
+        Just (c0 : _) -> c0
+        _ -> ""
 
 -- | Matches a value against a named regex.
 --
