@@ -94,4 +94,6 @@ library
     exposed-modules:        NgxExport.Tools.PCRE
 
   ghc-options:             -Wall
+  if impl(ghc >= 9.8)
+    ghc-options:           -Wno-x-partial
 
