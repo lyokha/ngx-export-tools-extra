@@ -54,6 +54,8 @@ import           Data.Aeson
 import           Data.Maybe
 import           Data.Function
 import           Data.List
+import           Data.List.NonEmpty (NonEmpty)
+import qualified Data.List.NonEmpty as NE
 import           Data.Char
 import           Data.Word
 import           Data.Array.ST hiding (range)
@@ -103,7 +105,7 @@ data MetricsRole = HistogramBucket
                  | HistogramSum
                  | HistogramCount deriving Eq
 
-type PrometheusMetrics = Map MetricsName (MetricsHelp, [MetricsType])
+type PrometheusMetrics = Map MetricsName (MetricsHelp, NonEmpty MetricsType)
 
 conf :: IORef (Maybe PrometheusConf)
 conf = unsafePerformIO $ newIORef Nothing
@@ -502,8 +504,8 @@ toPrometheusMetrics' PrometheusConf {..} (srv, cnts, hs, ocnts) =
               in ranges `M.union` sums
           collect cType renameErrCounterF =
               M.fromAscList
-              . map ((fst . head) &&& map (uncurry cType . snd))
-              . groupBy ((==) `on` fst)
+              . map (fst . NE.head &&& NE.map (uncurry cType . snd))
+              . NE.groupBy ((==) `on` fst)
               . map (\(k, v) ->
                         let (k', a) =
                                 second (\a' ->
@@ -532,7 +534,7 @@ showPrometheusMetrics = TL.encodeUtf8 . M.foldlWithKey
     (\a k (h, ms) ->
         let k' = TL.fromStrict k
         in TL.concat [a, "# HELP ", k', " ", TL.fromStrict h, "\n"
-                     ,   "# TYPE ", k', " ", showType $ head ms, "\n"
+                     ,   "# TYPE ", k', " ", showType $ NE.head ms, "\n"
                      ,foldl (showCounter k') "" ms
                      ]
     ) ""
@@ -872,8 +874,10 @@ statusLayout = C8L.pack . intercalate "," . map show . statuses
               a <- newArray bs 0 :: ST s (STUArray s Int Int)
               mapM_ (uncurry $ writeStatus a) $ toPairs s
               getElems a
-          toPairs = map (subtract (ord '0') . ord . C8.head . head &&& length)
-                    . groupBy ((==) `on` C8.head)
+          toPairs = map (subtract (ord '0') . ord . C8.head . NE.head
+                            &&& NE.length
+                        )
+                    . NE.groupBy ((==) `on` C8.head)
                     . sort
                     . extractValues
           writeStatus a i = when (i >= lb && i <= ub) . writeArray a i

@@ -38,6 +38,7 @@ import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as L
 import           Data.List
+import qualified Data.List.NonEmpty as NE
 import           Data.Maybe
 import           Data.IORef
 import           Text.Regex.PCRE.Light
@@ -177,7 +178,7 @@ compileRegexes = voidHandler' $ do
           md 's' = Just dotall
           md 'm' = Just multiline
           md  _  = Nothing
-          mods = map head . group . sort . mapMaybe md
+          mods = map NE.head . NE.group . sort . mapMaybe md
 
 ngxExportServiceHook 'compileRegexes
 
