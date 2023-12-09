@@ -94,7 +94,7 @@ type AllCounters = Map ServerName MetricsData
 type AllHistogramsLayout = Map ServerName (Map MetricsName HistogramLayout)
 type AllOtherCounters = MetricsData
 
-type AllMetrtics =
+type AllMetrics =
     (ServerName, AllCounters, AllHistogramsLayout, AllOtherCounters)
 
 data MetricsType = Counter Double MetricsAnnotation
@@ -444,7 +444,7 @@ prometheusConf = ignitionService $ voidHandler . writeIORef conf . Just
 
 ngxExportSimpleServiceTyped 'prometheusConf ''PrometheusConf SingleShotService
 
-toPrometheusMetrics' :: PrometheusConf -> AllMetrtics -> PrometheusMetrics
+toPrometheusMetrics' :: PrometheusConf -> AllMetrics -> PrometheusMetrics
 toPrometheusMetrics' PrometheusConf {..} (srv, cnts, hs, ocnts) =
     let toValues = M.mapWithKey
             (\k v -> (if k `HS.member` pcScale1000
@@ -592,7 +592,7 @@ showPrometheusMetrics = TL.encodeUtf8 . M.foldlWithKey
 
 toPrometheusMetrics :: ByteString -> IO L.ByteString
 toPrometheusMetrics v = do
-    let cs = fromJust $ readFromByteStringAsJSON @AllMetrtics v
+    let cs = fromJust $ readFromByteStringAsJSON @AllMetrics v
     pc <- readIORef conf
     return $ maybe "" (showPrometheusMetrics . flip toPrometheusMetrics' cs) pc
 
