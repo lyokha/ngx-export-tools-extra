@@ -4,7 +4,7 @@
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  NgxExport.Tools.Prometheus
--- Copyright   :  (c) Alexey Radkov 2020-2022
+-- Copyright   :  (c) Alexey Radkov 2020-2023
 -- License     :  BSD-style
 --
 -- Maintainer  :  alexey.radkov@gmail.com

@@ -1,3 +1,10 @@
+### 1.2.6
+
+- Refactored to avoid using *head* and *tail* as it triggers *x-partial*
+  warnings in GHC *9.8.1*.
+- Use declarations *voidHandler*, *voidHandler'*, and *NgxExportService* from
+  package *ngx-export-tools* *1.2.2*.
+
 ### 1.2.5
 
 - Module *NgxExport.Tools.Resolve*.

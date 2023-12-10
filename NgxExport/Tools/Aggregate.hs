@@ -4,7 +4,7 @@
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  NgxExport.Tools.Aggregate
--- Copyright   :  (c) Alexey Radkov 2019-2022
+-- Copyright   :  (c) Alexey Radkov 2019-2023
 -- License     :  BSD-style
 --
 -- Maintainer  :  alexey.radkov@gmail.com
