@@ -1,8 +1,8 @@
 name:                       ngx-export-tools-extra
-version:                    1.2.6
-synopsis:                   More extra tools for Nginx haskell module
+version:                    1.2.7
+synopsis:                   More extra tools for Nginx Haskell module
 description:                More extra tools for
-        <https://github.com/lyokha/nginx-haskell-module Nginx haskell module>.
+        <https://github.com/lyokha/nginx-haskell-module Nginx Haskell module>.
 homepage:                   https://github.com/lyokha/ngx-export-tools-extra
 license:                    BSD3
 license-file:               LICENSE
@@ -10,7 +10,7 @@ extra-doc-files:            Changelog.md
 author:                     Alexey Radkov <alexey.radkov@gmail.com>
 maintainer:                 Alexey Radkov <alexey.radkov@gmail.com>
 stability:                  stable
-copyright:                  2019-2023 Alexey Radkov
+copyright:                  2019-2024 Alexey Radkov
 category:                   Network
 build-type:                 Simple
 cabal-version:              1.20

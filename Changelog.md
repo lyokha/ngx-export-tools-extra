@@ -1,3 +1,7 @@
+### 1.2.7
+
+- Support package *base64* *1.0*.
+
 ### 1.2.6
 
 - Refactored to avoid using *head* and *tail* as it triggers *x-partial*

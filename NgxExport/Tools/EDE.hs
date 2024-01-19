@@ -3,7 +3,7 @@
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  NgxExport.Tools.EDE
--- Copyright   :  (c) Alexey Radkov 2020-2023
+-- Copyright   :  (c) Alexey Radkov 2020-2024
 -- License     :  BSD-style
 --
 -- Maintainer  :  alexey.radkov@gmail.com
@@ -47,6 +47,9 @@ import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString.Lazy.Char8 as C8L
 import           Data.ByteString.Base64.URL
+#if MIN_VERSION_base64(1,0,0)
+import           Data.Base64.Types
+#endif
 import           Data.IORef
 import           Data.Text (Text)
 import qualified Data.Text.Encoding as T
@@ -242,12 +245,17 @@ ngxExportSimpleServiceTyped 'compileEDETemplates ''InputTemplates
 --   * __/uenc/__ encodes a 'Value' using /URL encoding/ rules.
 extraEDEFilters :: HashMap Id Term
 extraEDEFilters = HM.fromList
-    ["b64"  @: applyToValue encodeBase64
+    ["b64"  @: applyToValue eb64
     ,"uenc" @: applyToValue (T.decodeUtf8 . urlEncode False)
     ]
     where applyToValue :: (ByteString -> Text) -> Value -> Text
           applyToValue f (String t) = f $ T.encodeUtf8 t
           applyToValue f v = f $ L.toStrict $ encode v
+#if MIN_VERSION_base64(1,0,0)
+          eb64 = extractBase64 . encodeBase64
+#else
+          eb64 = encodeBase64
+#endif
 
 -- | Renders an EDE template from a JSON object.
 --
