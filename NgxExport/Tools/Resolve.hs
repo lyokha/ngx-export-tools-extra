@@ -244,7 +244,7 @@ import           System.Timeout
 --     }
 -- @
 --
--- ==== File /nginx.conf/: location /upstrand/
+-- ==== File /nginx.conf/: location /\/upstrand/
 -- @
 --         location \/upstrand {
 --             proxy_pass http:\/\/__/$upstrand\_utest/__;

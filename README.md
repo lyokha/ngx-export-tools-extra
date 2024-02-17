@@ -1652,7 +1652,7 @@ main and the backup layers of servers.
     }
 ```
 
-###### File *nginx.conf*: location *upstrand*
+###### File *nginx.conf*: location */upstrand*
 
 ```nginx
         location /upstrand {
@@ -1986,8 +1986,8 @@ Making HTTP subrequests to the own Nginx service via the loopback interface
 compared with various types of local data communication channels) nor very
 secure. Unix domain sockets is a better alternative in this sense. This
 module has support for them by providing configuration service
-*simpleService_configureUDS* where path to the socket can be set, and an
-extra field *srUseUDS* in data *SubrequestConf*.
+*simpleService_configureUDS* where path to the socket can be set, and
+setting field *manager* to value *uds* in the subrequest configuration.
 
 To extend the previous example for using with Unix domain sockets, the
 following declarations should be added.
@@ -2009,7 +2009,7 @@ to the socket.
             haskell_run_async makeSubrequest $hs_subrequest
                     '{"uri": "http://backend_proxy/"
                      ,"headers": [["Custom-Header", "$arg_a"]]
-                     ,"useUDS": true
+                     ,"manager": "uds"
                      }';
 
             if ($hs_subrequest = '') {
@@ -2043,6 +2043,74 @@ service *simpleService_configureUDS*.
 ```ShellSession
 $ curl 'http://localhost:8010/uds?a=Value'
 In backend, Custom-Header is 'Value'
+```
+
+---
+
+To serve subrequests, a custom HTTP manager can be implemented and then
+configured in a custom service handler with *registerCustomManager*. To
+enable this manager in the subrequest configuration, use field *manager*
+with the key that was bound to the manager in *registerCustomManager*.
+
+For example, let's implement a custom UDS manager which will serve
+connections via Unix Domain Sockets as in the previous section.
+
+###### File *test_tools_extra_subrequest_custom_manager.hs*
+
+```haskell
+{-# LANGUAGE TemplateHaskell, OverloadedStrings #-}
+
+module TestToolsExtraSubrequestCustomManager where
+
+import           NgxExport.Tools
+import           NgxExport.Tools.Subrequest
+
+import           Data.ByteString (ByteString)
+import qualified Data.ByteString.Lazy as L
+
+import           Network.HTTP.Client
+import qualified Network.Socket as S
+import qualified Network.Socket.ByteString as SB
+import qualified Data.ByteString.Char8 as C8
+
+configureUdsManager :: ByteString -> Bool -> IO L.ByteString
+configureUdsManager = ignitionService $ \path -> voidHandler $ do
+    man <- newManager defaultManagerSettings
+               { managerRawConnection = return $ openUDS path }
+    registerCustomManager "myuds" man
+    where openUDS path _ _ _ = do
+              s <- S.socket S.AF_UNIX S.Stream S.defaultProtocol
+              S.connect s (S.SockAddrUnix $ C8.unpack path)
+              makeConnection (SB.recv s 4096) (SB.sendAll s) (S.close s)
+
+ngxExportSimpleService 'configureUdsManager SingleShotService
+```
+
+###### File *nginx.conf*: configuring the custom manager
+
+```nginx
+    haskell_run_service simpleService_configureUdsManager $hs_service_manager
+            '/tmp/myuds.sock';
+```
+
+###### File *nginx.conf*: location */uds* with the custom manager *myuds*
+
+```nginx
+        location /uds {
+            haskell_run_async makeSubrequest $hs_subrequest
+                    '{"uri": "http://backend_proxy"
+                     ,"headers": [["Custom-Header", "$arg_a"]]
+                     ,"manager": "myuds"
+                     }';
+
+            if ($hs_subrequest = '') {
+                echo_status 404;
+                echo "Failed to perform subrequest";
+                break;
+            }
+
+            echo -n $hs_subrequest;
+        }
 ```
 
 ---
@@ -2311,7 +2379,7 @@ with an auxiliary handler *reqBody*.
                         }
                      ,"sink":
                         {"uri": "http://sink_proxy/echo"
-                        ,"useUDS": true
+                        ,"manager": "uds"
                         }
                      }';
 

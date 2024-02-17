@@ -1,3 +1,8 @@
+### 1.2.8
+
+- Module *NgxExport.Tools.Subrequest*: allow setting custom HTTP managers in
+  subrequest configurations.
+
 ### 1.2.7
 
 - Support package *base64* *1.0*.

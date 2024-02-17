@@ -1,10 +1,10 @@
 {-# LANGUAGE TemplateHaskell, OverloadedStrings, RecordWildCards #-}
-{-# LANGUAGE TypeApplications, TupleSections, NumDecimals #-}
+{-# LANGUAGE TypeApplications, TupleSections, LambdaCase, NumDecimals #-}
 
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  NgxExport.Tools.Subrequest
--- Copyright   :  (c) Alexey Radkov 2020-2023
+-- Copyright   :  (c) Alexey Radkov 2020-2024
 -- License     :  BSD-style
 --
 -- Maintainer  :  alexey.radkov@gmail.com
@@ -25,6 +25,9 @@ module NgxExport.Tools.Subrequest (
     -- * Internal HTTP subrequests via Unix domain sockets
     -- $internalHTTPSubrequests
 
+    -- * HTTP subrequests with a custom HTTP manager
+    -- $subrequestsWithCustomManager
+                                  ,registerCustomManager
     -- * Getting full response data from HTTP subrequests
     -- $gettingFullResponse
                                   ,makeSubrequestFull
@@ -67,6 +70,8 @@ import           Data.IORef
 import qualified Data.Text.Encoding as T
 import qualified Data.Text.Lazy.Encoding as TL
 import qualified Data.Binary as Binary
+import qualified Data.HashMap.Strict as HM
+import           Data.HashMap.Strict (HashMap)
 import           Data.HashSet (HashSet)
 import qualified Data.HashSet as HS
 import           Data.CaseInsensitive hiding (map)
@@ -232,8 +237,17 @@ data UDSNotConfiguredError = UDSNotConfiguredError deriving Show
 
 instance Exception UDSNotConfiguredError
 
+newtype ManagerNotConfiguredError =
+    ManagerNotConfiguredError ByteString deriving Show
+
+instance Exception ManagerNotConfiguredError
+
 data ResponseTimeout = ResponseTimeoutDefault
                      | ResponseTimeout TimeInterval deriving (Eq, Read)
+
+data ConnectionManager = Default
+                       | UDS
+                       | Custom ByteString deriving (Eq, Read)
 
 data SubrequestConf =
     SubrequestConf { srMethod          :: ByteString
@@ -241,7 +255,7 @@ data SubrequestConf =
                    , srBody            :: L.ByteString
                    , srHeaders         :: RequestHeaders
                    , srResponseTimeout :: ResponseTimeout
-                   , srUseUDS          :: Bool
+                   , srManager         :: ConnectionManager
                    } deriving Read
 
 instance FromJSON SubrequestConf where
@@ -253,7 +267,11 @@ instance FromJSON SubrequestConf where
             o .:? "headers" .!= []
         srResponseTimeout <- maybe ResponseTimeoutDefault ResponseTimeout <$>
             o .:? "timeout"
-        srUseUDS <- fromMaybe False <$> o .:? "useUDS"
+        srManager <- maybe Default (\case
+                                        "default" -> Default
+                                        "uds" -> UDS
+                                        v -> Custom $ T.encodeUtf8 v
+                                   ) <$> o .:? "manager"
         return SubrequestConf {..}
 
 data BridgeConf = BridgeConf { bridgeSource :: SubrequestConf
@@ -336,11 +354,21 @@ httpUDSManager :: IORef (Maybe Manager)
 httpUDSManager = unsafePerformIO $ newIORef Nothing
 {-# NOINLINE httpUDSManager #-}
 
+httpCustomManager :: IORef (HashMap ByteString Manager)
+httpCustomManager = unsafePerformIO $ newIORef HM.empty
+{-# NOINLINE httpCustomManager #-}
+
 getManager :: SubrequestConf -> IO Manager
-getManager SubrequestConf {..}
-    | srUseUDS =
-        fromMaybe (throw UDSNotConfiguredError) <$> readIORef httpUDSManager
-    | otherwise = return httpManager
+getManager SubrequestConf {..} =
+    case srManager of
+        Default ->
+            return httpManager
+        UDS ->
+            fromMaybe (throw UDSNotConfiguredError) <$>
+                readIORef httpUDSManager
+        Custom k ->
+            fromMaybe (throw $ ManagerNotConfiguredError k) . HM.lookup k <$>
+                readIORef httpCustomManager
 
 -- | Makes an HTTP request.
 --
@@ -355,8 +383,9 @@ getManager SubrequestConf {..}
 -- /headers/ (optional, default is an empty list), /timeout/ (optional, default
 -- is the default response timeout of the HTTP manager which is normally 30
 -- seconds, use value @{\"tag\": \"Unset\"}@ to disable response timeout
--- completely), and /useUDS/ (an optional boolean flag to enable Unix domain
--- sockets as the transport protocol, off by default).
+-- completely), and /manager/ (an optional value which links to an HTTP manager
+-- that will serve connections, default is /default/ which links to the internal
+-- TLS-aware manager).
 --
 -- Examples of subrequest configurations:
 --
@@ -397,12 +426,14 @@ ngxExportAsyncIOYY 'makeSubrequest
 -- >                , srBody = ""
 -- >                , srHeaders = [("Header1", "Value1"), ("Header2", "Value2")]
 -- >                , srResponseTimeout = ResponseTimeout (Sec 10)
--- >                , srUseUDS = False
+-- >                , srManager = Default
 -- >                }
 --
 -- Notice that unlike JSON parsing, fields of /SubrequestConf/ are not
 -- omittable and must be listed in the order shown in the example. Empty
--- /srMethod/ implies /GET/.
+-- /srMethod/ implies /GET/. Values of /srManager/ can be /Default/, /UDS/, or
+-- /Custom \"key\"/ where /key/ is an arbitrary key bound to a custom HTTP
+-- manager.
 makeSubrequestWithRead
     :: ByteString       -- ^ Subrequest configuration
     -> IO L.ByteString
@@ -419,8 +450,8 @@ ngxExportAsyncIOYY 'makeSubrequestWithRead
 -- compared with various types of local data communication channels) nor very
 -- secure. Unix domain sockets is a better alternative in this sense. This
 -- module has support for them by providing configuration service
--- __/simpleService_configureUDS/__ where path to the socket can be set, and an
--- extra field /srUseUDS/ in data /SubrequestConf/.
+-- __/simpleService_configureUDS/__ where path to the socket can be set, and
+-- setting field /manager/ to value /uds/ in the subrequest configuration.
 --
 -- To extend the previous example for using with Unix domain sockets, the
 -- following declarations should be added.
@@ -440,7 +471,7 @@ ngxExportAsyncIOYY 'makeSubrequestWithRead
 --             haskell_run_async __/makeSubrequest/__ $hs_subrequest
 --                     \'{\"uri\": \"http:\/\/backend_proxy\/\"
 --                      ,\"headers\": [[\"Custom-Header\", \"$arg_a\"]]
---                      ,\"__/useUDS/__\": __/true/__
+--                      ,\"__/manager/__\": \"__uds__\"
 --                      }\';
 --
 --             if ($hs_subrequest = \'\') {
@@ -486,6 +517,85 @@ configureUDS = ignitionService $ \UDSConf {..} -> voidHandler $ do
               makeConnection (SB.recv s 4096) (SB.sendAll s) (S.close s)
 
 ngxExportSimpleServiceTyped 'configureUDS ''UDSConf SingleShotService
+
+-- $subrequestsWithCustomManager
+--
+-- To serve subrequests, a custom HTTP manager can be implemented and then
+-- configured in a custom service handler with 'registerCustomManager'. To
+-- enable this manager in the subrequest configuration, use field /manager/
+-- with the key that was bound to the manager in 'registerCustomManager'.
+--
+-- For example, let's implement a custom UDS manager which will serve
+-- connections via Unix Domain Sockets as in the previous section.
+--
+-- ==== File /test_tools_extra_subrequest_custom_manager.hs/
+-- @
+-- {-\# LANGUAGE TemplateHaskell, OverloadedStrings \#-}
+--
+-- module TestToolsExtraSubrequestCustomManager where
+--
+-- import           NgxExport.Tools
+-- import           NgxExport.Tools.Subrequest
+--
+-- import           Data.ByteString (ByteString)
+-- import qualified Data.ByteString.Lazy as L
+--
+-- import           Network.HTTP.Client
+-- import qualified Network.Socket as S
+-- import qualified Network.Socket.ByteString as SB
+-- import qualified Data.ByteString.Char8 as C8
+--
+-- configureUdsManager :: ByteString -> Bool -> IO L.ByteString
+-- __/configureUdsManager/__ = 'ignitionService' $ \\path -> 'voidHandler' $ do
+--     man <- newManager defaultManagerSettings
+--                { managerRawConnection = return $ openUDS path }
+--     'registerCustomManager' \"__myuds__\" man
+--     where openUDS path _ _ _ = do
+--               s <- S.socket S.AF_UNIX S.Stream S.defaultProtocol
+--               S.connect s (S.SockAddrUnix $ C8.unpack path)
+--               makeConnection (SB.recv s 4096) (SB.sendAll s) (S.close s)
+--
+-- 'ngxExportSimpleService' \'configureUdsManager 'SingleShotService'
+-- @
+--
+-- ==== File /nginx.conf/: configuring the custom manager
+-- @
+--     haskell_run_service __/simpleService_configureUdsManager/__ $hs_service_manager
+--             \'\/tmp\/myuds.sock\';
+-- @
+--
+-- ==== File /nginx.conf/: location /\/uds/ with the custom manager /myuds/
+-- @
+--         location \/uds {
+--             haskell_run_async __/makeSubrequest/__ $hs_subrequest
+--                     \'{\"uri\": \"http:\/\/backend_proxy\/\"
+--                      ,\"headers\": [[\"Custom-Header\", \"$arg_a\"]]
+--                      ,\"__/manager/__\": \"__myuds__\"
+--                      }\';
+--
+--             if ($hs_subrequest = \'\') {
+--                 echo_status 404;
+--                 echo \"Failed to perform subrequest\";
+--                 break;
+--             }
+--
+--             echo -n $hs_subrequest;
+--         }
+-- @
+
+-- | Register a custom HTTP manager with a given key.
+--
+-- Registered managers can be referred by the key from subrequest
+-- configurations in field /manager/ (in JSON-encoded configurations) or
+-- /srManager = Custom \"key\"/ (in /read/-encoded configurations).
+--
+-- Note that keys /default/ and /uds/ have special meaning in field /manager/:
+-- they denote internal HTTP and UDS managers respectively.
+registerCustomManager
+    :: ByteString       -- ^ Key
+    -> Manager          -- ^ Manager
+    -> IO ()
+registerCustomManager = (modifyIORef' httpCustomManager .) . HM.insert
 
 -- $gettingFullResponse
 --
@@ -904,7 +1014,7 @@ ngxExportHandler 'fromFullResponseWithException
 --                         }
 --                      ,\"__/sink/__\":
 --                         {\"uri\": \"http:\/\/sink_proxy\/echo\"
---                         ,\"useUDS\": true
+--                         ,\"manager\": \"uds\"
 --                         }
 --                      }\';
 --
@@ -1074,7 +1184,7 @@ bridgedSubrequestFull =
 -- >      }
 -- > ,"sink":
 -- >      {"uri": "http://sink_proxy/"
--- >      ,"useUDS": true
+-- >      ,"manager": "uds"
 -- >      }
 -- > }
 --
@@ -1111,7 +1221,7 @@ ngxExportAsyncIOYY 'makeBridgedSubrequest
 -- >       , srBody = ""
 -- >       , srHeaders = [("Header1", "Value1"), ("Header2", "Value2")]
 -- >       , srResponseTimeout = ResponseTimeout (Sec 10)
--- >       , srUseUDS = False
+-- >       , srManager = Default
 -- >       }
 -- > , bridgeSink = SubrequestConf
 -- >       { srMethod = ""
@@ -1119,7 +1229,7 @@ ngxExportAsyncIOYY 'makeBridgedSubrequest
 -- >       , srBody = ""
 -- >       , srHeaders = []
 -- >       , srResponseTimeout = ResponseTimeout (Sec 30)
--- >       , srUseUDS = False
+-- >       , srManager = Default
 -- >       }
 -- > }
 --

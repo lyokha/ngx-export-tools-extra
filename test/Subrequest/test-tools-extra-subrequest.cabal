@@ -14,6 +14,8 @@ library
                           , ngx-export-tools
                           , ngx-export-tools-extra
                           , bytestring
+                          , http-client
+                          , network
 
   ghc-options:             -Wall -O2
 
