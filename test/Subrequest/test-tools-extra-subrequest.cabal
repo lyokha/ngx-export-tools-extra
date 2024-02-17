@@ -11,7 +11,7 @@ library
   default-language:         Haskell2010
   build-depends:            base >= 4.8 && < 5
                           , ngx-export
-                          , ngx-export-tools
+                          , ngx-export-tools >= 1.2.2
                           , ngx-export-tools-extra
                           , bytestring
                           , http-client

@@ -1853,7 +1853,7 @@ import           NgxExport.Tools.Subrequest
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as L
 
-makeRequest :: ByteString -> Bool -> IO L.ByteString
+makeRequest :: ByteString -> NgxExportService
 makeRequest = const . makeSubrequest
 
 ngxExportSimpleService 'makeRequest $ PersistentService $ Just $ Sec 10
@@ -2073,7 +2073,7 @@ import qualified Network.Socket as S
 import qualified Network.Socket.ByteString as SB
 import qualified Data.ByteString.Char8 as C8
 
-configureUdsManager :: ByteString -> Bool -> IO L.ByteString
+configureUdsManager :: ByteString -> NgxExportService
 configureUdsManager = ignitionService $ \path -> voidHandler $ do
     man <- newManager defaultManagerSettings
                { managerRawConnection = return $ openUDS path }

@@ -4,7 +4,7 @@
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  NgxExport.Tools.Resolve
--- Copyright   :  (c) Alexey Radkov 2022-2023
+-- Copyright   :  (c) Alexey Radkov 2022-2024
 -- License     :  BSD-style
 --
 -- Maintainer  :  alexey.radkov@gmail.com
