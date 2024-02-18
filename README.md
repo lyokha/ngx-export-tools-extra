@@ -2048,8 +2048,8 @@ In backend, Custom-Header is 'Value'
 ---
 
 To serve subrequests, a custom HTTP manager can be implemented and then
-configured in a custom service handler with *registerCustomManager*. To
-enable this manager in the subrequest configuration, use field *manager*
+registered in a custom service handler with *registerCustomManager*. To
+enable this manager in a subrequest configuration, use field *manager*
 with the key that was bound to the manager in *registerCustomManager*.
 
 For example, let's implement a custom UDS manager which will serve
@@ -2093,7 +2093,7 @@ ngxExportSimpleService 'configureUdsManager SingleShotService
             '/tmp/myuds.sock';
 ```
 
-###### File *nginx.conf*: location */uds* with the custom manager *myuds*
+###### File *nginx.conf*: location */uds* with custom manager *myuds*
 
 ```nginx
         location /uds {

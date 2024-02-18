@@ -521,8 +521,8 @@ ngxExportSimpleServiceTyped 'configureUDS ''UDSConf SingleShotService
 -- $subrequestsWithCustomManager
 --
 -- To serve subrequests, a custom HTTP manager can be implemented and then
--- configured in a custom service handler with 'registerCustomManager'. To
--- enable this manager in the subrequest configuration, use field /manager/
+-- registered in a custom service handler with 'registerCustomManager'. To
+-- enable this manager in a subrequest configuration, use field /manager/
 -- with the key that was bound to the manager in 'registerCustomManager'.
 --
 -- For example, let's implement a custom UDS manager which will serve
@@ -564,7 +564,7 @@ ngxExportSimpleServiceTyped 'configureUDS ''UDSConf SingleShotService
 --             \'\/tmp\/myuds.sock\';
 -- @
 --
--- ==== File /nginx.conf/: location /\/uds/ with the custom manager /myuds/
+-- ==== File /nginx.conf/: location /\/uds/ with custom manager /myuds/
 -- @
 --         location \/uds {
 --             haskell_run_async __/makeSubrequest/__ $hs_subrequest
@@ -583,11 +583,17 @@ ngxExportSimpleServiceTyped 'configureUDS ''UDSConf SingleShotService
 --         }
 -- @
 
--- | Register a custom HTTP manager with a given key.
+-- | Registers a custom HTTP manager with a given key.
 --
--- Registered managers can be referred by the key from subrequest
--- configurations in field /manager/ (in JSON-encoded configurations) or
--- /srManager = Custom \"key\"/ (in /read/-encoded configurations).
+-- The right place to register a custom manager is a custom service handler that
+-- runs just after the start of an Nginx worker process. Registered managers can
+-- then be referred to from subrequest configurations by the key in field
+-- /manager/ (in JSON-encoded configurations) or as /srManager = Custom \"key\"/
+-- (in /read/-encoded configurations).
+--
+-- Below is an example of a JSON-encoded subrequest configuration.
+--
+-- > {"uri": "http://example.com/", "manager": "mymanager"}
 --
 -- Note that keys /default/ and /uds/ have special meaning in field /manager/:
 -- they denote internal HTTP and UDS managers respectively.

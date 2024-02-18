@@ -1,7 +1,9 @@
 ### 1.2.8
 
-- Module *NgxExport.Tools.Subrequest*: allow setting custom HTTP managers in
-  subrequest configurations.
+- Module *NgxExport.Tools.Subrequest*.
+  + Allow setting custom HTTP managers in subrequest configurations.
+  + In subrequest configurations, field *useUDS* / *srUseUDS* is no longer
+    accepted, use *"manager": "uds"* / *srManager = UDS* instead.
 
 ### 1.2.7
 
