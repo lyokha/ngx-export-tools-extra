@@ -2089,16 +2089,16 @@ ngxExportSimpleService 'configureUdsManager SingleShotService
 ###### File *nginx.conf*: configuring the custom manager
 
 ```nginx
-    haskell_run_service simpleService_configureUdsManager $hs_service_manager
+    haskell_run_service simpleService_configureUdsManager $hs_service_myuds
             '/tmp/myuds.sock';
 ```
 
-###### File *nginx.conf*: location */uds* with custom manager *myuds*
+###### File *nginx.conf*: new location */myuds* in server *main*
 
 ```nginx
-        location /uds {
+        location /myuds {
             haskell_run_async makeSubrequest $hs_subrequest
-                    '{"uri": "http://backend_proxy"
+                    '{"uri": "http://backend_proxy_myuds"
                      ,"headers": [["Custom-Header", "$arg_a"]]
                      ,"manager": "myuds"
                      }';
@@ -2111,6 +2111,19 @@ ngxExportSimpleService 'configureUdsManager SingleShotService
 
             echo -n $hs_subrequest;
         }
+```
+
+###### File *nginx.conf*: new virtual server *backend_proxy_myuds*
+
+```nginx
+    server {
+        listen       unix:/tmp/myuds.sock;
+        server_name  backend_proxy_myuds;
+
+        location / {
+            proxy_pass http://backend;
+        }
+    }
 ```
 
 ---

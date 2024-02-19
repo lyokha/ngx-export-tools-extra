@@ -560,15 +560,15 @@ ngxExportSimpleServiceTyped 'configureUDS ''UDSConf SingleShotService
 --
 -- ==== File /nginx.conf/: configuring the custom manager
 -- @
---     haskell_run_service __/simpleService_configureUdsManager/__ $hs_service_manager
+--     haskell_run_service __/simpleService_configureUdsManager/__ $hs_service_myuds
 --             \'\/tmp\/myuds.sock\';
 -- @
 --
--- ==== File /nginx.conf/: location /\/uds/ with custom manager /myuds/
+-- ==== File /nginx.conf/: new location /\/myuds/ in server /main/
 -- @
---         location \/uds {
+--         location \/myuds {
 --             haskell_run_async __/makeSubrequest/__ $hs_subrequest
---                     \'{\"uri\": \"http:\/\/backend_proxy\/\"
+--                     \'{\"uri\": \"http:\/\/backend_proxy_myuds\/\"
 --                      ,\"headers\": [[\"Custom-Header\", \"$arg_a\"]]
 --                      ,\"__/manager/__\": \"__myuds__\"
 --                      }\';
@@ -581,6 +581,18 @@ ngxExportSimpleServiceTyped 'configureUDS ''UDSConf SingleShotService
 --
 --             echo -n $hs_subrequest;
 --         }
+-- @
+--
+-- ==== File /nginx.conf/: new virtual server /backend_proxy_myuds/
+-- @
+--     server {
+--         listen       unix:\/tmp\/myuds.sock;
+--         server_name  backend_proxy_myuds;
+--
+--         location \/ {
+--             proxy_pass http:\/\/backend;
+--         }
+--     }
 -- @
 
 -- | Registers a custom HTTP manager with a given key.
