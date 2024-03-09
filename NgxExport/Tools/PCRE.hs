@@ -3,7 +3,7 @@
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  NgxExport.Tools.PCRE
--- Copyright   :  (c) Alexey Radkov 2021-2023
+-- Copyright   :  (c) Alexey Radkov 2021-2024
 -- License     :  BSD-style
 --
 -- Maintainer  :  alexey.radkov@gmail.com
@@ -161,7 +161,7 @@ regexes = unsafePerformIO $ newIORef HM.empty
 {-# NOINLINE regexes #-}
 
 declareRegexes :: InputRegexes -> NgxExportService
-declareRegexes = ignitionService $ voidHandler' $ return ()
+declareRegexes = voidService
 
 ngxExportSimpleServiceTyped 'declareRegexes ''InputRegexes SingleShotService
 

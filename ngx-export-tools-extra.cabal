@@ -1,5 +1,5 @@
 name:                       ngx-export-tools-extra
-version:                    1.2.8
+version:                    1.2.8.1
 synopsis:                   More extra tools for Nginx Haskell module
 description:                More extra tools for
         <https://github.com/lyokha/nginx-haskell-module Nginx Haskell module>.
@@ -40,7 +40,7 @@ library
                           , bytestring >= 0.10.0.0
                           , base64 >= 0.3.0.0
                           , ngx-export
-                          , ngx-export-tools >= 1.2.2
+                          , ngx-export-tools >= 1.2.3.1
                           , http-types >= 0.7.0
                           , http-client >= 0.5.3
                           , http-client-tls >= 0.3.4
