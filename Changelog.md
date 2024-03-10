@@ -1,4 +1,4 @@
-### 1.2.8.2
+### 1.2.8.1
 
 - Module *NgxExport.Tools.PCRE*.
   + Use *voidServer* from *ngx-export-tools &ge; 1.2.3*.
