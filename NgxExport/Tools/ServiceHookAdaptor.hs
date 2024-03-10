@@ -3,7 +3,7 @@
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  NgxExport.Tools.ServiceHookAdaptor
--- Copyright   :  (c) Alexey Radkov 2021-2023
+-- Copyright   :  (c) Alexey Radkov 2021-2024
 -- License     :  BSD-style
 --
 -- Maintainer  :  alexey.radkov@gmail.com
@@ -51,7 +51,15 @@ import           Control.Monad
 -- import qualified Data.ByteString as B
 -- import qualified Data.ByteString.Lazy as L
 -- import           Data.IORef
+-- import           Control.Monad
+-- import           Control.Exception
 -- import           System.IO.Unsafe
+--
+-- data SecretWordUnset = SecretWordUnset
+--
+-- instance Exception SecretWordUnset
+-- instance Show SecretWordUnset where
+--     show = const \"unset\"
 --
 -- secretWord :: IORef ByteString
 -- secretWord = unsafePerformIO $ newIORef ""
@@ -60,11 +68,10 @@ import           Control.Monad
 -- testSecretWord :: ByteString -> IO L.ByteString
 -- __/testSecretWord/__ v = do
 --     s <- readIORef secretWord
---     return $ if B.null s
---                  then \"null\"
---                  else if v == s
---                           then \"set\"
---                           else \"unset\"
+--     when (B.null s) $ throwIO SecretWordUnset
+--     return $ if v == s
+--                  then \"success\"
+--                  else \"\"
 -- 'NgxExport.ngxExportIOYY' 'testSecretWord
 --
 -- changeSecretWord :: ByteString -> IO L.ByteString
@@ -110,13 +117,13 @@ import           Control.Monad
 --         location \/ {
 --             haskell_run __/testSecretWord/__ $hs_secret_word $arg_s;
 --
---             if ($hs_secret_word = null) {
+--             if ($hs_secret_word = unset) {
 --                 echo_status 503;
 --                 echo \"Try later! The service is not ready!\";
 --                 break;
 --             }
 --
---             if ($hs_secret_word = set) {
+--             if ($hs_secret_word = success) {
 --                 echo_status 200;
 --                 echo \"Congrats! You know the secret word!\";
 --                 break;
@@ -181,6 +188,49 @@ import           Control.Monad
 --
 -- Our secret is still intact! This is because service hooks manage new worker
 -- processes so well as those that were running when a hook was triggered.
+--
+-- Note, however, that the order of service hooks execution in a restarted
+-- worker process is not well-defined which means that hooks that affect the
+-- same data should be avoided. For example, we could declare another service
+-- hook to reset the secret word.
+--
+-- ==== File /test_tools_extra_servicehookadaptor.hs/: reset the secret word
+-- @
+-- resetSecretWord :: ByteString -> IO L.ByteString
+-- __/resetSecretWord/__ = const $ do
+--     writeIORef secretWord \"\"
+--     return \"The secret word was reset\"
+-- 'NgxExport.ngxExportServiceHook' \'resetSecretWord
+-- @
+--
+-- ==== File /nginx.conf/: new location /\/reset_sw/ in server /main/
+-- @
+--         location \/reset_sw {
+--             allow 127.0.0.1;
+--             deny all;
+--
+--             haskell_service_hook __/resetSecretWord/__ $hs_hook_adaptor;
+--         }
+-- @
+--
+-- Both /changeSecretWord/ and /resetSecretWord/ alter the /secretWord/ storage.
+-- The order of their execution in a restarted worker process is not defined,
+-- and therefore the state of /secretWord/ can get altered in the new worker.
+--
+-- To fix this issue in this example, get rid of hook /resetSecretWord/ and use
+-- directive /rewrite/.
+--
+-- ==== File /nginx.conf/: reset the secret word by /rewrite/
+-- @
+--         location \/reset_sw {
+--             allow 127.0.0.1;
+--             deny all;
+--
+--             rewrite ^ \/change_sw last;
+--         }
+-- @
+--
+-- You may also want to add a proper message for reset in /changeSecretWord/.
 
 hookAdaptor :: ByteString -> NgxExportService
 hookAdaptor = ignitionService $

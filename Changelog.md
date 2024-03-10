@@ -1,3 +1,10 @@
+### 1.2.8.2
+
+- Module *NgxExport.Tools.PCRE*.
+  + Use *voidServer* from *ngx-export-tools &ge; 1.2.3*.
+- Module *NgxExport.Tools.ServiceHookAdaptor*.
+  + The test example was improved and extended.
+
 ### 1.2.8
 
 - Module *NgxExport.Tools.Subrequest*.
