@@ -35,10 +35,8 @@ ngxExportIOYY 'testSecretWord
 changeSecretWord :: ByteString -> IO L.ByteString
 changeSecretWord s = do
     writeIORef secretWord s
-    return $ L.concat ["The secret word was "
-                      ,if B.null s
-                           then "reset"
-                           else "changed"
-                      ]
+    return $ "The secret word was " `L.append` if B.null s
+                                                   then "reset"
+                                                   else "changed"
 ngxExportServiceHook 'changeSecretWord
 

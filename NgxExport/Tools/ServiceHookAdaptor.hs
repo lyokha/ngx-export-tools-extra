@@ -218,9 +218,8 @@ import           Control.Monad
 -- and therefore the state of /secretWord/ can get altered in the new worker.
 --
 -- To fix this issue in this example, get rid of hook /resetSecretWord/ and use
--- directive /rewrite/.
+-- directive /rewrite/ to process the reset request in location /\/change_sw/.
 --
--- ==== File /nginx.conf/: reset the secret word by /rewrite/
 -- @
 --         location \/reset_sw {
 --             allow 127.0.0.1;
@@ -230,7 +229,17 @@ import           Control.Monad
 --         }
 -- @
 --
--- You may also want to add a proper message for reset in /changeSecretWord/.
+-- You may also want to change the hook message in /changeSecretWord/ to
+-- properly log the reset case.
+--
+-- @
+-- changeSecretWord :: ByteString -> IO L.ByteString
+-- __/changeSecretWord/__ s = do
+--     writeIORef secretWord s
+--     return $ \"The secret word was \" \`L.append\` if B.null s
+--                                                    then \"reset\"
+--                                                    else \"changed\"
+-- @
 
 hookAdaptor :: ByteString -> NgxExportService
 hookAdaptor = ignitionService $
