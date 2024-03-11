@@ -1863,8 +1863,9 @@ ngxExportServiceHook 'resetSecretWord
 ```
 
 Both *changeSecretWord* and *resetSecretWord* alter the *secretWord* storage.
-The order of their execution in a restarted worker process is not defined,
-and therefore the state of *secretWord* can get altered in the new worker.
+The order of their execution in a restarted worker process may differ from
+the order they had happened before the new worker started, and therefore the
+state of *secretWord* can get altered in the new worker.
 
 To fix this issue in this example, get rid of hook *resetSecretWord* and use
 directive *rewrite* to process the reset request in location */change_sw*.
