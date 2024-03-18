@@ -381,9 +381,6 @@ sendAggregate a = const $ do
 -- have already been terminated. The inactive PIDs get checked every
 -- /asPurgeInterval/, and data which correspond to PIDs with timestamps older
 -- than /asPurgeInterval/ get removed.
---
--- Be aware that due to limitations of Template Haskell, this name must be
--- imported unqualified!
 data AggregateServerConf =
     AggregateServerConf { asPort          :: Int
                         , asPurgeInterval :: TimeInterval
@@ -509,9 +506,6 @@ ngxExportAggregateService f a = do
                 ]
             ]
 #ifdef SNAP_AGGREGATE_SERVER
-        -- FIXME: name AggregateServerConf must be imported from the user's
-        -- module unqualified (see details in NgxExport/Tools/SimpleService.hs,
-        -- function ngxExportSimpleService')!
         ,ngxExportSimpleServiceTyped
             fName ''AggregateServerConf SingleShotService
 #endif
