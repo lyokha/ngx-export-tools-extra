@@ -597,11 +597,12 @@ ngxExportSimpleServiceTyped 'configureUDS ''UDSConf SingleShotService
 
 -- | Registers a custom HTTP manager with a given key.
 --
--- The right place to register a custom manager is a custom service handler that
--- runs just after the start of an Nginx worker process. Registered managers can
--- then be referred to from subrequest configurations by the key in field
--- /manager/ (in JSON-encoded configurations) or as /srManager = Custom \"key\"/
--- (in /read/-encoded configurations).
+-- The right place to register a custom manager is a custom service handler or
+-- the initialization hook (see 'ngxExportInitHook') which runs soon after the
+-- start of an Nginx worker process. Registered managers can then be referred to
+-- from subrequest configurations by the key in field /manager/ (in JSON-encoded
+-- configurations) or as /srManager = Custom \"key\"/ (in /read/-encoded
+-- configurations).
 --
 -- Below is an example of a JSON-encoded subrequest configuration.
 --

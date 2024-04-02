@@ -32,11 +32,9 @@ jobs:
           GHCVER: ${{ matrix.ghc }}
           CABALVER: ${{ matrix.cabal }}
         run: |
-          set -e
           cabal --version
           echo "$(ghc --version) "`
               `"[$(ghc --print-project-git-commit-id 2>/dev/null || echo '?')]"
           cabal update
           cabal build
-          set +e
 
