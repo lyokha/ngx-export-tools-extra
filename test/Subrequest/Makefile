@@ -23,6 +23,7 @@ GHC := ghc
 CABAL := cabal
 GHCVER := $(shell $(GHC) --numeric-version)
 GHCENV := .ghc.environment.$(MACHINE)-$(KERNEL)-$(GHCVER)
+GHCENVLNK := .ghc.environment.lnk
 DEPLIBS := $(MACHINE)-$(KERNEL)-ghc-$(GHCVER)
 BUILDDIR := dist-nhm
 SETUPCONFIG := $(BUILDDIR)/setup-config
@@ -34,11 +35,12 @@ INPLACE := $(shell grep -q '^packages:.*\.\./\.\./ngx-export-tools-extra' \
 
 all: $(DISTR)
 
-env: $(GHCENV)
+env: $(GHCENVLNK)
 
 config: $(SETUPCONFIG)
 
-$(GHCENV): cabal.project $(PKGNAME).cabal
+$(GHCENVLNK): cabal.project $(PKGNAME).cabal
+	rm -f $(GHCENVLNK)
 	$(CABAL) install --builddir="$(BUILDDIR)" --lib --only-dependencies \
 	  --package-env .
 ifeq ($(INPLACE),1)
@@ -53,8 +55,9 @@ endif
 	    --builddir="$(BUILDDIR)")):$$PATH; \
 	fi; \
 	$(NHMTOOL) deps $(PKGNAME) -d "$(BUILDDIR)" >> $(GHCENV)
+	ln -sf $(GHCENV) $(GHCENVLNK)
 
-$(SETUPCONFIG): $(GHCENV)
+$(SETUPCONFIG): $(GHCENVLNK)
 	if test "$(NHMTOOL)" = nhm-tool && ! command -v nhm-tool >/dev/null; \
 	then \
 	  PATH=$$(dirname $$($(CABAL) list-bin $(PKGDISTR) \
@@ -93,5 +96,5 @@ clean:
 
 clean-all: clean
 	rm -rf $(BUILDDIR)
-	rm -f $(GHCENV) $(DISTR)
+	rm -f $(GHCENV) $(GHCENVLNK) $(DISTR)
 

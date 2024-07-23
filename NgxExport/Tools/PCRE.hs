@@ -308,7 +308,7 @@ ngxExportIOYY 'matchRegex
 --
 -- > $ curl 'http://localhost:8010/erase/area?user=peter|98'
 -- > User without area: peter
--- > $ curl 'http://localhost:8010/swap?kv=kid|v0012a
+-- > $ curl 'http://localhost:8010/swap?kv=kid|v0012a'
 -- > Swap kid|v0012a = v0012a|kid
 
 -- | Type of functions to perform /functional/ substitutions.
