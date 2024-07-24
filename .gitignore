@@ -9,6 +9,10 @@ cabal.project.local~
 
 dist/
 dist-newstyle/
+dist-nhm/
+/test/*/t/servroot/
+
+/test/*/*.tar.gz
 
 tags
 

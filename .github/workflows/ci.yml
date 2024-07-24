@@ -11,16 +11,24 @@ jobs:
       matrix:
         ghc: ['8.2', '8.4', '8.6', '8.8', '8.10', '9.0', '9.2', '9.4']
         cabal: ['3.8']
+        nginx: [1.20.2]
+        nginx-haskell-module: [3.4.1]
         experimental: [false]
         include:
           - ghc: '9.10'
             cabal: '3.12'
+            nginx: 1.26.1
+            nginx-haskell-module: head
             experimental: false
           - ghc: '9.8'
             cabal: '3.10'
+            nginx: 1.26.1
+            nginx-haskell-module: head
             experimental: false
           - ghc: '9.6'
             cabal: '3.10'
+            nginx: 1.26.1
+            nginx-haskell-module: head
             experimental: false
     steps:
       - name: Checkout
@@ -30,14 +38,94 @@ jobs:
         with:
           ghc-version: ${{ matrix.ghc }}
           cabal-version: ${{ matrix.cabal }}
-      - name: Install
+      - name: Install prove
+        uses: perl-actions/install-with-cpanm@v1.7
+        with:
+          install: "Test::Nginx"
+          tests: false
+      - name: Install and test
         env:
           GHCVER: ${{ matrix.ghc }}
+          NGXVER: ${{ matrix.nginx }}
           CABALVER: ${{ matrix.cabal }}
+          NGXHMVER: ${{ matrix.nginx-haskell-module }}
         run: |
           cabal --version
           echo "$(ghc --version) "`
               `"[$(ghc --print-project-git-commit-id 2>/dev/null || echo '?')]"
+
           cabal update
           cabal build
+
+          if [ "$NGXVER" = head ]
+          then
+              git clone https://github.com/nginx/nginx.git nginx-head
+          else
+              wget http://nginx.org/download/nginx-${NGXVER}.tar.gz &&
+                  tar xzvf nginx-${NGXVER}.tar.gz
+          fi
+
+          if [ "$NGXHMVER" = head ]
+          then
+              git clone https://github.com/lyokha/nginx-haskell-module.git \
+                  nginx-haskell-module-head
+          else
+              wget "https://github.com/lyokha/nginx-haskell-module/"`
+                  `"archive/refs/tags/${NGXHMVER}.tar.gz" \
+                      -O nginx-haskell-module-${NGXHMVER}.tar.gz &&
+                      tar xzvf nginx-haskell-module-${NGXHMVER}.tar.gz
+          fi
+          git clone https://github.com/openresty/echo-nginx-module.git
+
+          export TEST_NGINX_TELIB_DIR="$(pwd)/var/lib/nginx"
+          install -d "$TEST_NGINX_TELIB_DIR"
+
+          cd nginx-${NGXVER}/
+          if [ "$NGXVER" = head ]
+          then
+              NGX_CONFIGURE=./auto/configure
+          else
+              NGX_CONFIGURE=./configure
+          fi
+          $NGX_CONFIGURE --add-module=../nginx-haskell-module-${NGXHMVER} \
+                         --add-module=../echo-nginx-module
+          make -j2
+          export PATH="$(pwd)/objs:$PATH"
+          cd -
+
+          cd test
+          echo "$GHCVER" | grep -q '^8\.' &&
+              LINKRTS="LINKRTS=-lHSrts_thr-ghc$(ghc --numeric-version)"
+
+          cd Aggregate
+          sed -i 's/^packages: .\+/& ..\/..\/ngx-export-tools-extra.cabal/' \
+              cabal.project
+          make PREFIX="$TEST_NGINX_TELIB_DIR" INPLACE=1 $LINKRTS
+          make PREFIX="$TEST_NGINX_TELIB_DIR" install
+          prove -r t
+          cd -
+
+          cd EDE
+          sed -i 's/^packages: .\+/& ..\/..\/ngx-export-tools-extra.cabal/' \
+              cabal.project
+          make PREFIX="$TEST_NGINX_TELIB_DIR" INPLACE=1 $LINKRTS
+          make PREFIX="$TEST_NGINX_TELIB_DIR" install
+          prove -r t
+          cd -
+
+          cd PCRE
+          sed -i 's/^packages: .\+/& ..\/..\/ngx-export-tools-extra.cabal/' \
+              cabal.project
+          make PREFIX="$TEST_NGINX_TELIB_DIR" INPLACE=1 $LINKRTS
+          make PREFIX="$TEST_NGINX_TELIB_DIR" install
+          prove -r t
+          cd -
+
+          cd ServiceHookAdaptor
+          sed -i 's/^packages: .\+/& ..\/..\/ngx-export-tools-extra.cabal/' \
+              cabal.project
+          make PREFIX="$TEST_NGINX_TELIB_DIR" INPLACE=1 $LINKRTS
+          make PREFIX="$TEST_NGINX_TELIB_DIR" install
+          prove -r t
+          cd -
 
