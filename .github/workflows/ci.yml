@@ -97,35 +97,14 @@ jobs:
           echo "$GHCVER" | grep -q '^8\.' &&
               LINKRTS="LINKRTS=-lHSrts_thr-ghc$(ghc --numeric-version)"
 
-          cd Aggregate
-          sed -i 's/^packages: .\+/& ..\/..\/ngx-export-tools-extra.cabal/' \
-              cabal.project
-          make PREFIX="$TEST_NGINX_TELIB_DIR" INPLACE=1 $LINKRTS
-          make PREFIX="$TEST_NGINX_TELIB_DIR" install
-          prove -r t
-          cd -
-
-          cd EDE
-          sed -i 's/^packages: .\+/& ..\/..\/ngx-export-tools-extra.cabal/' \
-              cabal.project
-          make PREFIX="$TEST_NGINX_TELIB_DIR" INPLACE=1 $LINKRTS
-          make PREFIX="$TEST_NGINX_TELIB_DIR" install
-          prove -r t
-          cd -
-
-          cd PCRE
-          sed -i 's/^packages: .\+/& ..\/..\/ngx-export-tools-extra.cabal/' \
-              cabal.project
-          make PREFIX="$TEST_NGINX_TELIB_DIR" INPLACE=1 $LINKRTS
-          make PREFIX="$TEST_NGINX_TELIB_DIR" install
-          prove -r t
-          cd -
-
-          cd ServiceHookAdaptor
-          sed -i 's/^packages: .\+/& ..\/..\/ngx-export-tools-extra.cabal/' \
-              cabal.project
-          make PREFIX="$TEST_NGINX_TELIB_DIR" INPLACE=1 $LINKRTS
-          make PREFIX="$TEST_NGINX_TELIB_DIR" install
-          prove -r t
-          cd -
+          for dir in Aggregate EDE PCRE ServiceHookAdaptor
+          do
+              cd $dir
+              sed -i 's/^packages: .\+/'`
+                    `'& ..\/..\/ngx-export-tools-extra.cabal/' cabal.project
+              make PREFIX="$TEST_NGINX_TELIB_DIR" INPLACE=1 $LINKRTS
+              make PREFIX="$TEST_NGINX_TELIB_DIR" install
+              prove -r t
+              cd -
+          done
 
