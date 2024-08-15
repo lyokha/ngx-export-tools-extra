@@ -1,5 +1,5 @@
 {-# LANGUAGE TemplateHaskell, RecordWildCards, BangPatterns, NumDecimals #-}
-{-# LANGUAGE TupleSections, OverloadedStrings #-}
+{-# LANGUAGE DeriveFoldable, TupleSections, OverloadedStrings #-}
 
 -----------------------------------------------------------------------------
 -- |
@@ -23,6 +23,8 @@ module NgxExport.Tools.Resolve (
     -- * Exported type declarations
                                 UName
                                ,SAddress
+                               ,WeightedList (..)
+                               ,NameList
                                ,UQuery (..)
                                ,PriorityPolicy (..)
                                ,UData (..)
@@ -257,16 +259,24 @@ type UName = Text
 -- | Domain name or IP address with or without port.
 type SAddress = Text
 
+-- | Weighted list.
+data WeightedList a = PlainList [a]             -- ^ Plain list without weights
+                    | WeightedList [(a, Word)]  -- ^ Weighted list
+                    deriving (Read, Foldable)
+
+-- | Weighted list of domain names.
+type NameList = WeightedList Name
+
 -- | DNS query model of the upstream(s).
 --
 -- There are 3 ways to get the list of server addresses:
 --
--- - query /A/ records for a list of domain names,
+-- - query /A/ records for a weighted list of domain names,
 -- - query an /SRV/ record for a single service name and then query /A/ records
 --   for the collected list of domain names,
 -- - the same as the previous, but distribute collected servers among a list of
 --   upstreams according to the collected priorities.
-data UQuery = QueryA [Name] UName                   -- ^ Query /A/ records
+data UQuery = QueryA NameList UName                 -- ^ Query /A/ records
             | QuerySRV Name (PriorityPolicy UName)  -- ^ Query an /SRV/ record
             deriving Read
 
@@ -283,10 +293,10 @@ data PriorityPolicy a = SinglePriority a  -- ^ All items go to a single element
 --
 -- Includes DNS query model and parameters for Nginx /server/ description.
 -- Values of /uMaxFails/ and /uFailTimeout/ get assigned to each collected
--- server as /max_fails/ and /fail_timeout/ respectively. The weight of an
--- individual server gets picked from the value of 'srvWeight' collected in
--- /SRV/ queries. Note that setting of parameters /max_conns/, /backup/ and
--- /down/ is not supported.
+-- server as /max_fails/ and /fail_timeout/ respectively. For /SRV/ queries,
+-- weights of individual servers will be picked from the values of 'srvWeight'
+-- collected in the query. Note that setting of parameters /max_conns/,
+-- /backup/ and /down/ is not supported.
 data UData = UData { uQuery       :: UQuery  -- ^ DNS query model
                    , uMaxFails    :: Int     -- ^ /max_fails/
                    , uFailTimeout :: Int     -- ^ /fail_timeout/
@@ -393,10 +403,10 @@ showIPv4 (IPv4 w) =
   shows ( w                    .&. 0xff)
   ""
 
-ipv4ToServerData :: UData -> Name -> IPv4 -> ServerData
-ipv4ToServerData UData {..} (Name n) i =
+ipv4ToServerData :: UData -> Name -> Maybe Word -> IPv4 -> ServerData
+ipv4ToServerData UData {..} (Name n) weight i =
     ServerData (T.pack $ show i) (T.decodeUtf8 n)
-        Nothing (Just uMaxFails) (Just uFailTimeout)
+        (fromIntegral <$> weight) (Just uMaxFails) (Just uFailTimeout)
 
 srvToServerData :: UData -> SRV (Name, IPv4) -> ServerData
 srvToServerData UData {..} SRV {..} =
@@ -415,18 +425,21 @@ collectServerData
     :: TTL                      -- ^ Fallback TTL value
     -> UData                    -- ^ Upstream configuration
     -> IO (TTL, CollectedServerData)
-collectServerData lTTL (UData (QueryA [] _) _ _) =
-    return (lTTL, M.empty)
+collectServerData lTTL (UData (QueryA ns _) _ _)
+    | null ns = return (lTTL, M.empty)
 collectServerData lTTL ud@(UData (QueryA ns u) _ _) = do
-    a <- mapConcurrently (\n -> (n, ) <$> collectA lTTL n) ns
+    let ns' = case ns of
+                  PlainList ns'' -> map (, Nothing) ns''
+                  WeightedList ns'' -> map (second Just) ns''
+    a <- mapConcurrently (\nw@(n, _) -> (nw, ) <$> collectA lTTL n) ns'
     return $
         minimum *** M.singleton u . concat $
-            foldr (\(n, (t, s)) (ts, ss) ->
+            foldr (\((n, w), (t, s)) (ts, ss) ->
                       -- sort is required because resolver may rotate servers
                       -- which means that the same data may differ after every
                       -- single check; this note regards to other clauses of
                       -- this function as well
-                      (t : ts, sort (map (ipv4ToServerData ud n) s) : ss)
+                      (t : ts, sort (map (ipv4ToServerData ud n w) s) : ss)
                   ) ([], []) a
 collectServerData lTTL ud@(UData (QuerySRV n (SinglePriority u)) _ _) = do
     (wt, srv) <- collectSRV lTTL n

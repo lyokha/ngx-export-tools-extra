@@ -1,3 +1,8 @@
+### 1.2.8.2
+
+- Module *NgxExport.Tools.Resolve*.
+  + Allow setting weights for names collected in DNS *A* queries.
+
 ### 1.2.8.1
 
 - Module *NgxExport.Tools.PCRE*.
