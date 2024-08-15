@@ -23,9 +23,9 @@ module NgxExport.Tools.Resolve (
     -- * Exported type declarations
                                 UName
                                ,SAddress
+                               ,UQuery (..)
                                ,WeightedList (..)
                                ,NameList
-                               ,UQuery (..)
                                ,PriorityPolicy (..)
                                ,UData (..)
                                ,ServerData (..)
@@ -231,15 +231,15 @@ import           System.Timeout
 --
 -- ==== File /nginx.conf/: upstrand /utest/
 -- @
---     upstream utest1 {
+--     upstream __/utest1/__ {
 --         zone utest1 64k;
 --         upconf_round_robin;
 --         server localhost:9000;
 --     }
 --
 --     __/upstrand utest/__ {
---         upstream utest;
---         upstream utest1;
+--         upstream __/utest/__;
+--         upstream __/utest1/__;
 --         order per_request;
 --         next_upstream_statuses error timeout 5xx;
 --         next_upstream_timeout 60s;
@@ -259,14 +259,6 @@ type UName = Text
 -- | Domain name or IP address with or without port.
 type SAddress = Text
 
--- | Weighted list.
-data WeightedList a = PlainList [a]             -- ^ Plain list without weights
-                    | WeightedList [(a, Word)]  -- ^ Weighted list
-                    deriving (Read, Foldable)
-
--- | Weighted list of domain names.
-type NameList = WeightedList Name
-
 -- | DNS query model of the upstream(s).
 --
 -- There are 3 ways to get the list of server addresses:
@@ -279,6 +271,17 @@ type NameList = WeightedList Name
 data UQuery = QueryA NameList UName                 -- ^ Query /A/ records
             | QuerySRV Name (PriorityPolicy UName)  -- ^ Query an /SRV/ record
             deriving Read
+
+-- | Weighted list.
+--
+-- A list of elements optionally annotated by weight values.
+data WeightedList a = Singleton a               -- ^ List with a single element
+                    | PlainList [a]             -- ^ Plain list without weights
+                    | WeightedList [(a, Word)]  -- ^ Weighted list
+                    deriving (Read, Foldable)
+
+-- | Weighted list of domain names.
+type NameList = WeightedList Name
 
 -- | Priority policy.
 --
@@ -429,6 +432,7 @@ collectServerData lTTL (UData (QueryA ns _) _ _)
     | null ns = return (lTTL, M.empty)
 collectServerData lTTL ud@(UData (QueryA ns u) _ _) = do
     let ns' = case ns of
+                  Singleton n -> pure (n, Nothing)
                   PlainList ns'' -> map (, Nothing) ns''
                   WeightedList ns'' -> map (second Just) ns''
     a <- mapConcurrently (\nw@(n, _) -> (nw, ) <$> collectA lTTL n) ns'
