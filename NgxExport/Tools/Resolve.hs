@@ -1,5 +1,5 @@
 {-# LANGUAGE TemplateHaskell, RecordWildCards, BangPatterns, NumDecimals #-}
-{-# LANGUAGE DeriveFoldable, TupleSections, OverloadedStrings #-}
+{-# LANGUAGE DeriveFoldable, TupleSections, LambdaCase, OverloadedStrings #-}
 
 -----------------------------------------------------------------------------
 -- |
@@ -381,22 +381,18 @@ collectSRV
 collectSRV lTTL name = do
     !srv <- querySRV name
     !srv' <- mapConcurrently
-                 ((\s@SRV {..} -> do
-                     (t, is) <- collectA lTTL srvTarget
-                     return (t
-                            ,map (\v ->
-                                     s { srvTarget =
-                                           (removeTrailingDot srvTarget, v)
-                                       }
-                                 ) is
-                            )
+                 ((\s@SRV {..} ->
+                     second (map $ \v ->
+                                fmap ((, v) . removeTrailingDot) s
+                            ) <$> collectA lTTL srvTarget
                   ) . snd
                  ) srv
     return (min (minimumTTL lTTL $ map fst srv)
                 (minimumTTL lTTL $ map fst srv')
            ,concatMap snd srv'
            )
-    where removeTrailingDot (Name v) = Name $ maybe v fst $ C8.unsnoc v
+    where removeTrailingDot (Name v) = Name $
+              maybe v (\case (v', '.') -> v'; _ -> v) $ C8.unsnoc v
 
 showIPv4 :: IPv4 -> String
 showIPv4 (IPv4 w) =
