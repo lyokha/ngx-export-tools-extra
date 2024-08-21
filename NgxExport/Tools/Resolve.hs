@@ -382,9 +382,8 @@ collectSRV lTTL name = do
     !srv <- querySRV name
     !srv' <- mapConcurrently
                  ((\s@SRV {..} ->
-                     second (map $ \v ->
-                                fmap ((, v) . removeTrailingDot) s
-                            ) <$> collectA lTTL srvTarget
+                     second (map $ \v -> (, v) . removeTrailingDot <$> s) <$>
+                         collectA lTTL srvTarget
                   ) . snd
                  ) srv
     return (min (minimumTTL lTTL $ map fst srv)
