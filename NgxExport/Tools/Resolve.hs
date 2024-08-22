@@ -27,6 +27,7 @@ module NgxExport.Tools.Resolve (
                                ,WeightedList (..)
                                ,NameList
                                ,PriorityPolicy (..)
+                               ,UNamePriorityPolicy
                                ,UData (..)
                                ,ServerData (..)
                                ,CollectedServerData
@@ -77,9 +78,9 @@ import           System.Timeout
 -- __/collectUpstreams/__ and signals about this in service callback
 -- __/signalUpconf/__. Collecting upstreams encompasses DNS queries of /A/ and
 -- /SRV/ records. The queries are configured independently for each managed
--- upstream. With /SRV/ queries, the module allows configuration of complex
--- hierarchies of priorities given that compound upstream containers named
--- /upstrands/ are in use (they are implemented in
+-- upstream. With both /A/ and /SRV/ queries, the module allows configuration
+-- of complex hierarchies of priorities given that compound upstream containers
+-- named /upstrands/ are in use (they are implemented in
 -- [nginx-combined-upstreams-module](https://github.com/lyokha/nginx-combined-upstreams-module)).
 --
 -- Additionally, the module exports a number of functions and data types which
@@ -224,7 +225,13 @@ import           System.Timeout
 -- priority list may contain more than two upstreams, in which case upstreams
 -- at the beginning of the list will take higher priorities found in the
 -- collected servers, while the last upstream will take the remainder of the
--- priorities.
+-- priorities. Generally, given the number of upstreams in the priority list is
+-- /N/ and the number of all variations of server priorities collected in the
+-- response is /M/, and /N/ is less than /M/, then the remainder of servers with
+-- the lowest priorities will inhabit the last upstream in the priority list,
+-- and vice versa, if /N/ is greater than /M/, then more than one upstreams at
+-- the end of the priority list will contain the same servers of the lowest
+-- priority.
 --
 -- Upstreams in the priority list can be put inside of an /upstrand/ to form the
 -- main and the backup layers of servers.
@@ -261,15 +268,25 @@ type SAddress = Text
 
 -- | DNS query model of the upstream(s).
 --
--- There are 3 ways to get the list of server addresses:
+-- There are 4 ways to get the list of server addresses:
 --
--- - query /A/ records for a weighted list of domain names,
--- - query an /SRV/ record for a single service name and then query /A/ records
---   for the collected list of domain names,
+-- - query /A/ records on a weighted list of domain names,
+-- - the same as the previous, but distribute collected servers among a list of
+--   upstreams according to the weights set in the name list,
+-- - query an /SRV/ record on a single service name and then query /A/ records
+--   on the collected list of domain names,
 -- - the same as the previous, but distribute collected servers among a list of
 --   upstreams according to the collected priorities.
-data UQuery = QueryA NameList UName                 -- ^ Query /A/ records
-            | QuerySRV Name (PriorityPolicy UName)  -- ^ Query an /SRV/ record
+--
+-- Note that
+--
+-- - names in /QueryA/ name list may contain suffix /:port/ (a port number)
+--   which is ignored in 'collectA' and only appended to values of 'sAddr'
+--   collected by 'collectServerData',
+-- - when priority policy is 'PriorityList', vaues of 'sWeight' collected by
+--   'collectServerData' are deliberately /Nothing/.
+data UQuery = QueryA NameList UNamePriorityPolicy  -- ^ Query /A/ records
+            | QuerySRV Name UNamePriorityPolicy    -- ^ Query an /SRV/ record
             deriving Read
 
 -- | Weighted list.
@@ -291,6 +308,9 @@ type NameList = WeightedList Name
 data PriorityPolicy a = SinglePriority a  -- ^ All items go to a single element
                       | PriorityList [a]  -- ^ Distribute items by priorities
                       deriving Read
+
+-- | Priority policy of upstream names.
+type UNamePriorityPolicy = PriorityPolicy UName
 
 -- | Upstream configuration.
 --
@@ -361,8 +381,8 @@ collectA
     :: TTL                      -- ^ Fallback TTL value
     -> Name                     -- ^ Domain name
     -> IO (TTL, [IPv4])
-collectA lTTL name = do
-    !srv <- queryA name
+collectA lTTL (Name n) = do
+    !srv <- queryA $ Name $ C8.takeWhile (':' /=) n
     return (minimumTTL lTTL $ map fst srv, map snd srv)
 
 -- | Queries an /SRV/ record for the given service name.
@@ -401,17 +421,43 @@ showIPv4 (IPv4 w) =
   shows ( w                    .&. 0xff)
   ""
 
-ipv4ToServerData :: UData -> Name -> Maybe Word -> IPv4 -> ServerData
-ipv4ToServerData UData {..} (Name n) weight i =
-    ServerData (T.pack $ show i) (T.decodeUtf8 n)
-        (fromIntegral <$> weight) (Just uMaxFails) (Just uFailTimeout)
+partitionByPriority :: (Eq b, Ord b) => (a -> b) -> [a] -> [[a]]
+partitionByPriority f = groupBy ((==) `on` f) . sortOn f
 
-srvToServerData :: UData -> SRV (Name, IPv4) -> ServerData
-srvToServerData UData {..} SRV {..} =
+zipWithPriorityList :: UNamePriorityPolicy -> [a] -> [(UName, a)]
+zipWithPriorityList (PriorityList []) _ = []
+zipWithPriorityList (PriorityList _) [] = []
+zipWithPriorityList (PriorityList pl) vs =
+    let (lpl, lastp) = lengthAndLast pl
+        (lvs, lastv) = lengthAndLast vs
+    in uncurry zip $ if lpl > lvs
+                         then (pl, vs ++ repeat lastv)
+                         else (pl ++ repeat lastp, vs)
+    where lengthAndLast =
+              foldl' (\(l, _) v -> (succ l, v)) (0 :: Int, undefined)
+zipWithPriorityList _ _ = undefined
+
+ipv4ToServerData :: UData -> UNamePriorityPolicy -> Name -> Maybe Word ->
+    IPv4 -> ServerData
+ipv4ToServerData UData {..} policy (Name n) weight a =
+    let (n', port) = C8.span (':' /=) n
+        showAddr i p = showIPv4 i ++ C8.unpack p
+    in ServerData (T.pack $ showAddr a port) (T.decodeUtf8 n')
+           (case policy of
+                  SinglePriority _ -> fromIntegral <$> weight
+                  PriorityList _ -> Nothing
+           ) (Just uMaxFails) (Just uFailTimeout)
+
+srvToServerData :: UData -> UNamePriorityPolicy -> SRV (Name, IPv4) ->
+    ServerData
+srvToServerData UData {..} policy SRV {..} =
     let (Name n, a) = srvTarget
         showAddr i p = showIPv4 i ++ ':' : show p
     in ServerData (T.pack $ showAddr a srvPort) (T.decodeUtf8 n)
-          (Just $ fromIntegral srvWeight) (Just uMaxFails) (Just uFailTimeout)
+          (case policy of
+               SinglePriority _ -> Just $ fromIntegral srvWeight
+               PriorityList _ -> Nothing
+          ) (Just uMaxFails) (Just uFailTimeout)
 
 -- | Collects server data for the given upstream configuration.
 --
@@ -423,37 +469,55 @@ collectServerData
     :: TTL                      -- ^ Fallback TTL value
     -> UData                    -- ^ Upstream configuration
     -> IO (TTL, CollectedServerData)
-collectServerData lTTL (UData (QueryA ns _) _ _)
+collectServerData lTTL (UData (QueryA ns p) _ _)
     | null ns = return (lTTL, M.empty)
-collectServerData lTTL ud@(UData (QueryA ns u) _ _) = do
+    | PriorityList [] <- p = return (lTTL, M.empty)
+collectServerData lTTL ud@(UData (QueryA
+                                     (WeightedList ns) p@(PriorityList _)
+                                 ) _ _
+                          ) = do
+    a <- mapConcurrently (\nw@(n, _) -> (nw, ) <$> collectA lTTL n) ns
+    return $
+        minimum ***
+            M.fromList . zipWithPriorityList p
+            . map (map snd) . partitionByPriority fst . concat $
+                foldr (\((n, w), (t, s)) (ts, ss) ->
+                          (t : ts
+                           -- sort is required because resolver may rotate
+                           -- servers which means that the same data may differ
+                           -- after every single check; this note regards to
+                           -- other clauses of this function as well
+                          ,sort (map ((w ,) .
+                                         ipv4ToServerData ud p n (Just w)
+                                     ) s
+                                ) : ss
+                          )
+                      ) ([], []) a
+collectServerData lTTL ud@(UData (QueryA ns p) _ _) = do
     let ns' = case ns of
                   Singleton n -> pure (n, Nothing)
                   PlainList ns'' -> map (, Nothing) ns''
                   WeightedList ns'' -> map (second Just) ns''
     a <- mapConcurrently (\nw@(n, _) -> (nw, ) <$> collectA lTTL n) ns'
+    let f = case p of
+                SinglePriority u -> M.singleton u
+                PriorityList pl -> \v -> M.fromList $ map (, v) pl
     return $
-        minimum *** M.singleton u . concat $
+        minimum *** f . concat $
             foldr (\((n, w), (t, s)) (ts, ss) ->
-                      -- sort is required because resolver may rotate servers
-                      -- which means that the same data may differ after every
-                      -- single check; this note regards to other clauses of
-                      -- this function as well
-                      (t : ts, sort (map (ipv4ToServerData ud n w) s) : ss)
+                      (t : ts, sort (map (ipv4ToServerData ud p n w) s) : ss)
                   ) ([], []) a
-collectServerData lTTL ud@(UData (QuerySRV n (SinglePriority u)) _ _) = do
+collectServerData lTTL ud@(UData (QuerySRV n p@(SinglePriority u)) _ _) = do
     (wt, srv) <- collectSRV lTTL n
-    return (wt, M.singleton u $ sort $ map (srvToServerData ud) srv)
+    return (wt, M.singleton u $ sort $ map (srvToServerData ud p) srv)
 collectServerData lTTL (UData (QuerySRV _ (PriorityList [])) _ _) =
     return (lTTL, M.empty)
-collectServerData lTTL ud@(UData (QuerySRV n (PriorityList pl)) _ _ ) = do
+collectServerData lTTL ud@(UData (QuerySRV n p@(PriorityList _)) _ _ ) = do
     (wt, srv) <- collectSRV lTTL n
-    let srv' = zip (withTrail pl) $ partitionByPriority srv
+    let srv' = zipWithPriorityList p $ partitionByPriority srvPriority srv
     return (wt
-           ,M.fromList $ map (second $ sort . map (srvToServerData ud)) srv'
+           ,M.fromList $ map (second $ sort . map (srvToServerData ud p)) srv'
            )
-    where partitionByPriority =
-              groupBy ((==) `on` srvPriority) . sortOn srvPriority
-          withTrail = uncurry (++) . (id &&& repeat . last)
 
 collectUpstreams :: Conf -> NgxExportService
 collectUpstreams Conf {..} = const $ do

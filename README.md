@@ -1472,9 +1472,9 @@ updates the variable with the upstreams layout in service
 *collectUpstreams* and signals about this in service callback
 *signalUpconf*. Collecting upstreams encompasses DNS queries of *A* and
 *SRV* records. The queries are configured independently for each managed
-upstream. With *SRV* queries, the module allows configuration of complex
-hierarchies of priorities given that compound upstream containers named
-*upstrands* are in use (they are implemented in
+upstream. With both *A* and *SRV* queries, the module allows configuration
+of complex hierarchies of priorities given that compound upstream containers
+named *upstrands* are in use (they are implemented in
 [nginx-combined-upstreams-module](https://github.com/lyokha/nginx-combined-upstreams-module)).
 
 Additionally, the module exports a number of functions and data types which
@@ -1629,7 +1629,13 @@ upstream *utest*, while servers with lesser priorities will inhabit upstream
 priority list may contain more than two upstreams, in which case upstreams
 at the beginning of the list will take higher priorities found in the
 collected servers, while the last upstream will take the remainder of the
-priorities.
+priorities.Generally, given the number of upstreams in the priority list is
+*N* and the number of all variations of server priorities collected in the
+response is *M*, and *N* is less than *M*, then the remainder of servers with
+the lowest priorities will inhabit the last upstream in the priority list,
+and vice versa, if *N* is greater than *M*, then more than one upstreams at
+the end of the priority list will contain the same servers of the lowest
+priority.
 
 Upstreams in the priority list can be put inside of an *upstrand* to form the
 main and the backup layers of servers.
