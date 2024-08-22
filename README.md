@@ -1629,7 +1629,7 @@ upstream *utest*, while servers with lesser priorities will inhabit upstream
 priority list may contain more than two upstreams, in which case upstreams
 at the beginning of the list will take higher priorities found in the
 collected servers, while the last upstream will take the remainder of the
-priorities.Generally, given the number of upstreams in the priority list is
+priorities. Generally, given the number of upstreams in the priority list is
 *N* and the number of all variations of server priorities collected in the
 response is *M*, and *N* is less than *M*, then the remainder of servers with
 the lowest priorities will inhabit the last upstream in the priority list,
