@@ -1,3 +1,13 @@
+### 1.2.9.1
+
+- Module *NgxExport.Tools.Resolve*.
+  + By mistake, servers with less weights had higher priorities in *A* queries.
+  + With the *PriorityList* policy, weights of servers in the collected data are
+    deliberately not specified in *A* queries. In *SRV* queries, conversely,
+    weights are not specified with the *SinglePriority* policy as it is not
+    clear how to choose them correctly from the two parameters *priority* and
+    *weight* of the *SRV* record.
+
 ### 1.2.9
 
 - Module *NgxExport.Tools.Resolve*.

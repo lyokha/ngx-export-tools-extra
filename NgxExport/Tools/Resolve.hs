@@ -59,6 +59,7 @@ import           Data.Aeson
 import           Data.Function
 import           Data.List
 import           Data.Bits
+import           Data.Ord
 import           Control.Concurrent.Async
 import           Control.Exception
 import           Control.Exception.Safe (handleAny)
@@ -278,13 +279,25 @@ type SAddress = Text
 -- - the same as the previous, but distribute collected servers among a list of
 --   upstreams according to the collected priorities.
 --
--- Note that
+-- Particularly, in /SRV/ queries priorities are taken from values of
+-- 'srvPriority', the less this value the higher the priority. In /A/ queries
+-- priorities are taken from v'WeightedList', the higher the weight the higher
+-- the priority.
 --
--- - names in /QueryA/ name list may contain suffix /:port/ (a port number)
---   which is ignored in 'collectA' and only appended to values of 'sAddr'
---   collected by 'collectServerData',
--- - when priority policy is 'PriorityList', vaues of 'sWeight' collected by
---   'collectServerData' are deliberately /Nothing/.
+-- Weights of individual servers depend on both priority policy and type of the
+-- query:
+--
+-- - /single priority, A query/: weights are taken from v'WeightedList',
+-- - /priority list, A query/: no weights are specified as the values from
+--   v'WeightedList' are used for the priority list parameterization,
+-- - /single priority, SRV query/: no weights are specified as it is not clear
+--   how to choose them correctly from the two parameters 'srvPriority' and
+--   'srvWeight',
+-- - /priority list, SRV query/: weights are taken from 'srvWeight'.
+--
+-- Names in the /QueryA/ name list may contain suffix /:port/ (a port number)
+-- which is ignored in 'collectA' and only appended to values of 'sAddr'
+-- collected by 'collectServerData'.
 data UQuery = QueryA NameList UNamePriorityPolicy  -- ^ Query /A/ records
             | QuerySRV Name UNamePriorityPolicy    -- ^ Query an /SRV/ record
             deriving Read
@@ -316,10 +329,8 @@ type UNamePriorityPolicy = PriorityPolicy UName
 --
 -- Includes DNS query model and parameters for Nginx /server/ description.
 -- Values of /uMaxFails/ and /uFailTimeout/ get assigned to each collected
--- server as /max_fails/ and /fail_timeout/ respectively. For /SRV/ queries,
--- weights of individual servers will be picked from the values of 'srvWeight'
--- collected in the query. Note that setting of parameters /max_conns/,
--- /backup/ and /down/ is not supported.
+-- server as /max_fails/ and /fail_timeout/ respectively. Note that setting of
+-- parameters /max_conns/, /backup/ and /down/ is not supported.
 data UData = UData { uQuery       :: UQuery  -- ^ DNS query model
                    , uMaxFails    :: Int     -- ^ /max_fails/
                    , uFailTimeout :: Int     -- ^ /fail_timeout/
@@ -455,8 +466,8 @@ srvToServerData UData {..} policy SRV {..} =
         showAddr i p = showIPv4 i ++ ':' : show p
     in ServerData (T.pack $ showAddr a srvPort) (T.decodeUtf8 n)
           (case policy of
-               SinglePriority _ -> Just $ fromIntegral srvWeight
-               PriorityList _ -> Nothing
+               SinglePriority _ -> Nothing
+               PriorityList _ -> Just $ fromIntegral srvWeight
           ) (Just uMaxFails) (Just uFailTimeout)
 
 -- | Collects server data for the given upstream configuration.
@@ -480,7 +491,7 @@ collectServerData lTTL ud@(UData (QueryA
     return $
         minimum ***
             M.fromList . zipWithPriorityList p
-            . map (map snd) . partitionByPriority fst . concat $
+            . map (map snd) . partitionByPriority (Down . fst) . concat $
                 foldr (\((n, w), (t, s)) (ts, ss) ->
                           (t : ts
                            -- sort is required because resolver may rotate
