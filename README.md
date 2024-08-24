@@ -1624,18 +1624,14 @@ upstreams, we can use *PriorityList*.
 ```
 
 With this configuration, servers with the highest priority will inhabit
-upstream *utest*, while servers with lesser priorities will inhabit upstream
-*utest1*. Upstream *utest1* must also be managed by the *upconf* module. The
-priority list may contain more than two upstreams, in which case upstreams
-at the beginning of the list will take higher priorities found in the
-collected servers, while the last upstream will take the remainder of the
-priorities. Generally, given the number of upstreams in the priority list is
-*N* and the number of all variations of server priorities collected in the
-response is *M*, and *N* is less than *M*, then the remainder of servers with
-the lowest priorities will inhabit the last upstream in the priority list,
-and vice versa, if *N* is greater than *M*, then more than one upstreams at
-the end of the priority list will contain the same servers of the lowest
-priority.
+upstream *utest*, while servers with the less priority will inhabit upstream
+*utest1*. Upstream *utest1* must also be managed by the *upconf* module.
+Generally, given the number of upstreams in the priority list is $N$ and
+the number of all variations of server priorities collected in the response
+is $M$, and $N$ is less than $M$, then remaining $M - N$ servers with
+the lowest priorities won't be used in the upstreams at all, otherwise, if
+$N$ is greater than $M$, then remaining $N - M$ upstreams at the end of
+the priority list will contain the same servers of the lowest priority.
 
 Upstreams in the priority list can be put inside of an *upstrand* to form the
 main and the backup layers of servers.

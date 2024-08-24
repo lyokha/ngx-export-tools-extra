@@ -221,18 +221,14 @@ import           System.Timeout
 -- @
 --
 -- With this configuration, servers with the highest priority will inhabit
--- upstream /utest/, while servers with lesser priorities will inhabit upstream
--- /utest1/. Upstream /utest1/ must also be managed by the /upconf/ module. The
--- priority list may contain more than two upstreams, in which case upstreams
--- at the beginning of the list will take higher priorities found in the
--- collected servers, while the last upstream will take the remainder of the
--- priorities. Generally, given the number of upstreams in the priority list is
--- /N/ and the number of all variations of server priorities collected in the
--- response is /M/, and /N/ is less than /M/, then the remainder of servers with
--- the lowest priorities will inhabit the last upstream in the priority list,
--- and vice versa, if /N/ is greater than /M/, then more than one upstreams at
--- the end of the priority list will contain the same servers of the lowest
--- priority.
+-- upstream /utest/, while servers with the less priority will inhabit upstream
+-- /utest1/. Upstream /utest1/ must also be managed by the /upconf/ module.
+-- Generally, given the number of upstreams in the priority list is \(N\) and
+-- the number of all variations of server priorities collected in the response
+-- is \(M\), and \(N\) is less than \(M\), then remaining \(M - N\) servers with
+-- the lowest priorities won't be used in the upstreams at all, otherwise, if
+-- \(N\) is greater than \(M\), then remaining \(N - M\) upstreams at the end of
+-- the priority list will contain the same servers of the lowest priority.
 --
 -- Upstreams in the priority list can be put inside of an /upstrand/ to form the
 -- main and the backup layers of servers.
@@ -435,18 +431,9 @@ showIPv4 (IPv4 w) =
 partitionByPriority :: (Eq b, Ord b) => (a -> b) -> [a] -> [[a]]
 partitionByPriority f = groupBy ((==) `on` f) . sortOn f
 
-zipWithPriorityList :: UNamePriorityPolicy -> [a] -> [(UName, a)]
-zipWithPriorityList (PriorityList []) _ = []
-zipWithPriorityList (PriorityList _) [] = []
-zipWithPriorityList (PriorityList pl) vs =
-    let (lpl, lastp) = lengthAndLast pl
-        (lvs, lastv) = lengthAndLast vs
-    in uncurry zip $ if lpl > lvs
-                         then (pl, vs ++ repeat lastv)
-                         else (pl ++ repeat lastp, vs)
-    where lengthAndLast =
-              foldl' (\(l, _) v -> (succ l, v)) (0 :: Int, undefined)
-zipWithPriorityList _ _ = undefined
+zipWithOtherRepeatLast :: [a] -> [b] -> [(a, b)]
+zipWithOtherRepeatLast _ [] = []
+zipWithOtherRepeatLast xs other = zip xs $ other ++ repeat (last other)
 
 ipv4ToServerData :: UData -> UNamePriorityPolicy -> Name -> Maybe Word ->
     IPv4 -> ServerData
@@ -484,13 +471,13 @@ collectServerData lTTL (UData (QueryA ns p) _ _)
     | null ns = return (lTTL, M.empty)
     | PriorityList [] <- p = return (lTTL, M.empty)
 collectServerData lTTL ud@(UData (QueryA
-                                     (WeightedList ns) p@(PriorityList _)
+                                     (WeightedList ns) p@(PriorityList pl)
                                  ) _ _
                           ) = do
     a <- mapConcurrently (\nw@(n, _) -> (nw, ) <$> collectA lTTL n) ns
     return $
         minimum ***
-            M.fromList . zipWithPriorityList p
+            M.fromList . zipWithOtherRepeatLast pl
             . map (map snd) . partitionByPriority (Down . fst) . concat $
                 foldr (\((n, w), (t, s)) (ts, ss) ->
                           (t : ts
@@ -499,7 +486,7 @@ collectServerData lTTL ud@(UData (QueryA
                            -- after every single check; this note regards to
                            -- other clauses of this function as well
                           ,sort (map ((w ,) .
-                                         ipv4ToServerData ud p n (Just w)
+                                         ipv4ToServerData ud p n Nothing
                                      ) s
                                 ) : ss
                           )
@@ -523,9 +510,9 @@ collectServerData lTTL ud@(UData (QuerySRV n p@(SinglePriority u)) _ _) = do
     return (wt, M.singleton u $ sort $ map (srvToServerData ud p) srv)
 collectServerData lTTL (UData (QuerySRV _ (PriorityList [])) _ _) =
     return (lTTL, M.empty)
-collectServerData lTTL ud@(UData (QuerySRV n p@(PriorityList _)) _ _ ) = do
+collectServerData lTTL ud@(UData (QuerySRV n p@(PriorityList pl)) _ _ ) = do
     (wt, srv) <- collectSRV lTTL n
-    let srv' = zipWithPriorityList p $ partitionByPriority srvPriority srv
+    let srv' = zipWithOtherRepeatLast pl $ partitionByPriority srvPriority srv
     return (wt
            ,M.fromList $ map (second $ sort . map (srvToServerData ud p)) srv'
            )

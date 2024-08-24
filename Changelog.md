@@ -2,6 +2,10 @@
 
 - Module *NgxExport.Tools.Resolve*.
   + By mistake, servers with less weights had higher priorities in *A* queries.
+  + If the number of upstreams in the priority list is less than the number of
+    variations of priorities collected in *SRV* queries or weights set in
+    *QueryA* data, then remaining servers with the lowest priorities or weights
+    won't be used in the upstreams.
   + With the *PriorityList* policy, weights of servers in the collected data are
     deliberately not specified in *A* queries. In *SRV* queries, conversely,
     weights are not specified with the *SinglePriority* policy as it is not
@@ -14,12 +18,13 @@
   + Correctly print IP addresses in the server data collected in *A* queries.
   + Allow setting weights to names in *QueryA* data.
   + Allow priority policies in *QueryA* data.
-  + Now, if the number of upstreams in the priority list is greater than the
-    number of variations of weights collected in *SRV* queries or set in
-    *QueryA* data, the remainder of upstreams get servers with the lowest
-    weight rather than not being specified at all in the collected data.
-  + Now, with the *PriorityList* policy, weights of servers in the collected
-    data are deliberately not specified.
+  + If the number of upstreams in the priority list is greater than the number
+    of variations of priorities collected in *SRV* queries or weights set in
+    *QueryA* data, then remaining upstreams will contain the same servers with
+    the lowest priority or weight rather than not being specified at all in the
+    collected data.
+  + With the *PriorityList* policy, weights of servers in the collected data are
+    deliberately not specified.
   + Names in the *QueryA* name list may contain suffix *:port* where *port* is
     a port number, this suffix is ignored at resolving step in *collectA* and
     only appended to values of the collected server addresses.
