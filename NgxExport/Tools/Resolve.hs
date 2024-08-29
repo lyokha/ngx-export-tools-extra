@@ -438,9 +438,9 @@ zipWithOtherRepeatLast xs other = zip xs $ other ++ repeat (last other)
 ipv4ToServerData :: UData -> UNamePriorityPolicy -> Name -> Maybe Word ->
     IPv4 -> ServerData
 ipv4ToServerData UData {..} policy (Name n) weight a =
-    let (n', port) = C8.span (':' /=) n
+    let port = snd $ C8.span (':' /=) n
         showAddr i p = showIPv4 i ++ C8.unpack p
-    in ServerData (T.pack $ showAddr a port) (T.decodeUtf8 n')
+    in ServerData (T.pack $ showAddr a port) (T.decodeUtf8 n)
            (case policy of
                   SinglePriority _ -> fromIntegral <$> weight
                   PriorityList _ -> Nothing

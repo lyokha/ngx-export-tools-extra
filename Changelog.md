@@ -1,3 +1,9 @@
+### 1.2.9.2
+
+- Module *NgxExport.Tools.Resolve*.
+  + Append port numbers to values of collected host names as Nginx directive
+    *server* accepts such a notation.
+
 ### 1.2.9.1
 
 - Module *NgxExport.Tools.Resolve*.
