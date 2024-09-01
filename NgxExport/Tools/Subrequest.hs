@@ -54,7 +54,7 @@ import           NgxExport.Tools.Combinators
 import           NgxExport.Tools.SimpleService
 import           NgxExport.Tools.TimeInterval
 
-import           Network.HTTP.Client hiding (ResponseTimeout)
+import           Network.HTTP.Client hiding (ResponseTimeout, path)
 import qualified Network.HTTP.Client (HttpExceptionContent (ResponseTimeout))
 import           Network.HTTP.Client.TLS (newTlsManager)
 import           Network.HTTP.Client.BrReadWithTimeout
@@ -540,7 +540,7 @@ ngxExportSimpleServiceTyped 'configureUDS ''UDSConf SingleShotService
 -- import           Data.ByteString (ByteString)
 -- import qualified Data.ByteString.Lazy as L
 --
--- import           Network.HTTP.Client
+-- import           Network.HTTP.Client hiding (path)
 -- import qualified Network.Socket as S
 -- import qualified Network.Socket.ByteString as SB
 -- import qualified Data.ByteString.Char8 as C8

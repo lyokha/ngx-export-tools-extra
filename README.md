@@ -2132,7 +2132,7 @@ import           NgxExport.Tools.Subrequest
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as L
 
-import           Network.HTTP.Client
+import           Network.HTTP.Client hiding (path)
 import qualified Network.Socket as S
 import qualified Network.Socket.ByteString as SB
 import qualified Data.ByteString.Char8 as C8
