@@ -102,7 +102,7 @@ jobs:
           echo "$GHCVER" | grep -q '^8\.' &&
               LINKRTS="LINKRTS=-lHSrts_thr-ghc$(ghc --numeric-version)"
 
-          for dir in Aggregate EDE PCRE ServiceHookAdaptor
+          for dir in Aggregate EDE PCRE ServiceHookAdaptor Subrequest
           do
               cd $dir
               sed -i 's/^packages: .\+/'`

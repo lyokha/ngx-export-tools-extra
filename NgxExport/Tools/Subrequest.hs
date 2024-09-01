@@ -212,8 +212,8 @@ import           System.IO.Unsafe
 -- > $ curl 'http://localhost:8010/?a=Value'
 -- > In backend, Custom-Header is 'Value'
 --
--- Let's do a nasty thing. By injecting a comma into the argument /a/ we shall
--- break JSON parsing.
+-- Let's do a nasty thing. By injecting a double quote into the argument /a/ we
+-- shall break JSON parsing.
 --
 -- > $ curl -D- 'http://localhost:8010/?a=Value"'
 -- > HTTP/1.1 404 Not Found
@@ -696,7 +696,7 @@ registerCustomManager = (modifyIORef' httpCustomManager .) . HM.insert
 --
 -- ==== A simple test
 --
--- > $ curl -D- 'http://localhost:8010/full/?a=Value"'
+-- > $ curl -D- 'http://localhost:8010/full?a=Value"'
 -- > HTTP/1.1 400 Bad Request
 -- > Server: nginx/1.17.9
 -- > Date: Sat, 04 Apr 2020 12:44:36 GMT
@@ -706,9 +706,10 @@ registerCustomManager = (modifyIORef' httpCustomManager .) . HM.insert
 -- >
 -- > Bad request
 --
--- Good. Now we see that adding a comma into a JSON field is a bad request.
+-- Good. Now we see that injecting a double quote into a JSON field makes a bad
+-- request.
 --
--- > $ curl -D- 'http://localhost:8010/full/?a=Value'
+-- > $ curl -D- 'http://localhost:8010/full?a=Value'
 -- > HTTP/1.1 500 Internal Server Error
 -- > Server: nginx/1.17.9
 -- > Date: Sat, 04 Apr 2020 12:47:11 GMT
@@ -722,7 +723,7 @@ registerCustomManager = (modifyIORef' httpCustomManager .) . HM.insert
 -- argument /$arg_p/. Skipping this makes URI look unparsable
 -- (/http:\/\/127.0.0.1:\//) which leads to the error.
 --
--- > $ curl -D- 'http://localhost:8010/full/?a=Value&p=8020'
+-- > $ curl -D- 'http://localhost:8010/full?a=Value&p=8020'
 -- > HTTP/1.1 200 OK
 -- > Server: nginx/1.17.9
 -- > Date: Sat, 04 Apr 2020 12:52:03 GMT
@@ -739,7 +740,7 @@ registerCustomManager = (modifyIORef' httpCustomManager .) . HM.insert
 --
 -- Let's try another port.
 --
--- > $ curl -D- 'http://localhost:8010/full/?a=Value&p=8021'
+-- > $ curl -D- 'http://localhost:8010/full?a=Value&p=8021'
 -- > HTTP/1.1 502 Bad Gateway
 -- > Server: nginx/1.17.9
 -- > Date: Sat, 04 Apr 2020 12:56:02 GMT
@@ -883,7 +884,7 @@ ngxExportYY 'extractExceptionFromFullResponse
 --
 -- ==== A simple test
 --
--- > $ curl -D- 'http://localhost:8010/full/?a=Value&p=8020&proxy=yes'
+-- > $ curl -D- 'http://localhost:8010/full?a=Value&p=8020&proxy=yes'
 -- > HTTP/1.1 200 OK
 -- > Server: nginx/1.17.9
 -- > Date: Fri, 24 Jul 2020 13:14:33 GMT
@@ -897,7 +898,7 @@ ngxExportYY 'extractExceptionFromFullResponse
 -- Now let's get an error message in the response after feeding a wrong port
 -- value.
 --
--- > $ curl -D- 'http://localhost:8010/full/?a=Value&p=8021&proxy=yes&exc=yes'
+-- > $ curl -D- 'http://localhost:8010/full?a=Value&p=8021&proxy=yes&exc=yes'
 -- > HTTP/1.1 502 Bad Gateway
 -- > Server: nginx/1.19.4
 -- > Date: Mon, 14 Dec 2020 08:24:22 GMT
