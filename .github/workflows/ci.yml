@@ -123,9 +123,14 @@ jobs:
           done
 
           cd Resolve
+          sudo systemctl disable systemd-resolved
+          sudo systemctl stop systemd-resolved
+          sudo systemctl mask systemd-resolved
           sudo unlink /etc/resolv.conf
           echo nameserver 127.0.0.1 | sudo tee /etc/resolv.conf
           sudo cp dnsmasq.conf /etc
+          echo port=53 | sudo tee -a /etc/dnsmasq.conf
+          echo listen-address=127.0.0.1 | sudo tee -a /etc/dnsmasq.conf
           sudo systemctl restart dnsmasq
           sed -i 's/^packages: .\+/'`
                 `'& ..\/..\/ngx-export-tools-extra.cabal/' cabal.project
