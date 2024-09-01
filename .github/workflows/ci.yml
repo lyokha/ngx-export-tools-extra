@@ -57,7 +57,9 @@ jobs:
           GHCVER: ${{ matrix.ghc }}
           NGXVER: ${{ matrix.nginx }}
           CABALVER: ${{ matrix.cabal }}
+          JSMN_REV: 25647e692c7906b96ffd2b05ca54c097948e879c
           NGXHMVER: ${{ matrix.nginx-haskell-module }}
+          UPCONF_MODULE_PATH: examples/dynamicUpstreams/nginx-upconf-module
         run: |
           cabal --version
           echo "$(ghc --version) "`
@@ -99,7 +101,7 @@ jobs:
               NGX_CONFIGURE=./configure
           fi
           $NGX_CONFIGURE --add-module=../nginx-haskell-module-${NGXHMVER} \
-                         --add-module=../nginx-haskell-module-${NGXHMVER}/examples/dynamicUpstreams/nginx-upconf-module \
+                         --add-module=../nginx-haskell-module-${NGXHMVER}/$UPCONF_MODULE_PATH \
                          --add-module=../echo-nginx-module
           make -j2
           export PATH="$(pwd)/objs:$PATH"

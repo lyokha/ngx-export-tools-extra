@@ -84,7 +84,7 @@ __DATA__
 #         'Conf { upstreams =
 #                     [UData { uQuery =
 #                                  QuerySRV
-#                                      (Name "_http._tcp.pkg.freebsd.org")
+#                                      (Name "_http._tcp.resolve.test")
 #                                          (PriorityList
 #                                              ["utest_srv", "utest1_srv"]
 #                                          )
