@@ -1,6 +1,8 @@
 ### 1.2.9.2
 
 - Module *NgxExport.Tools.Resolve*.
+  + Parameterize collected server data by query data to avoid getting wrong
+    values when multiple resolve services are running.
   + Append port numbers to values of collected host names as Nginx directive
     *server* accepts such a notation.
 

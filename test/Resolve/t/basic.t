@@ -1,21 +1,18 @@
-# this nginx configuration file is for demonstration purpose only
+# vi:filetype=
 
-user                    nginx;
-worker_processes        4;
+use Test::Nginx::Socket;
 
-events {
-    worker_connections  1024;
-}
+repeat_each(2);
+plan tests => repeat_each() * (2 * blocks());
 
-error_log               /tmp/nginx-test-upconf-error.log notice;
+no_shuffle();
+no_root_location();
+run_tests();
 
-http {
-    default_type        application/octet-stream;
-    sendfile            on;
+__DATA__
 
-    error_log           /tmp/nginx-test-upconf-error.log notice;
-    access_log          /tmp/nginx-test-upconf-access.log;
-
+=== TEST 1: upstreams
+--- http_config
     upstream utest {
         zone utest 64k;
         upconf_round_robin;
@@ -48,7 +45,7 @@ http {
         server localhost:9000;
     }
 
-    haskell load /var/lib/nginx/test_tools_extra_resolve.so;
+    haskell load $TEST_NGINX_TELIB_DIR/test_tools_extra_resolve.so;
 
     haskell_run_service simpleService_collectUpstreams $hs_upstreams
         'Conf { upstreams =
@@ -111,9 +108,33 @@ http {
         $hs_upstreams_srv '["http://127.0.0.1:8010/upconf_srv"]';
 
     server {
-        listen          127.0.0.1:8010;
-        server_name     main;
+        listen          127.0.0.1:9000;
+        server_name     backend9000;
 
+        location / {
+            echo_status 503;
+            echo "Not configured";
+        }
+    }
+
+    server {
+        listen          127.0.0.2:8020;
+        server_name     www.resolve.test;
+
+        location / {
+            echo "In www.resolve.test";
+        }
+    }
+
+    server {
+        listen          127.0.0.3:8030;
+        server_name     www.resolve1.test;
+
+        location / {
+            echo "In www.resolve1.test";
+        }
+    }
+--- config
         location /upconf {
             upconf $hs_upstreams;
 
@@ -163,35 +184,45 @@ http {
 #         location /upstrand {
 #             proxy_pass http://$upstrand_utest;
 #         }
-    }
+--- init: sleep 1
+--- request
+    GET /upstreams
+--- response_body
+{"utest":[{"addr":"127.0.0.2:8020","fail_timeout":10,"host":"www.resolve.test:8020","max_fails":1}],"utest1":[{"addr":"127.0.0.3:8030","fail_timeout":10,"host":"www.resolve1.test:8030","max_fails":1}]}
+--- error_code: 200
 
-    server {
-        listen          127.0.0.1:9000;
-        server_name     backend9000;
+=== TEST 2: upstreams_srv
+--- request
+    GET /upstreams_srv
+--- response_body
+{"utest_srv":[{"addr":"127.0.0.2:8020","fail_timeout":10,"host":"www.resolve.test","max_fails":1}]}
+--- error_code: 200
 
-        location / {
-            echo_status 503;
-            echo "Not configured";
-        }
-    }
+=== TEST 3: utest
+--- request
+    GET /utest
+--- response_body
+In www.resolve.test
+--- error_code: 200
 
-    server {
-        listen          127.0.0.2:8020;
-        server_name     www.resolve.test;
+=== TEST 4: utest1
+--- request
+    GET /utest1
+--- response_body
+In www.resolve1.test
+--- error_code: 200
 
-        location / {
-            echo "In www.resolve.test";
-        }
-    }
+=== TEST 5: utest_srv
+--- request
+    GET /utest_srv
+--- response_body
+In www.resolve.test
+--- error_code: 200
 
-    server {
-        listen          127.0.0.3:8030;
-        server_name     www.resolve1.test;
+=== TEST 6: utest1_srv
+--- request
+    GET /utest1_srv
+--- response_body
+Not configured
+--- error_code: 503
 
-        location / {
-            echo "In www.resolve1.test";
-        }
-    }
-}
-
-# vim: ft=nginx

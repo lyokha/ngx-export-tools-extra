@@ -55,6 +55,7 @@ library
                           , case-insensitive
                           , containers
                           , unordered-containers
+                          , hashable
                           , array
                           , text
                           , safe

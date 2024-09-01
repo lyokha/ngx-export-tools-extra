@@ -1,5 +1,6 @@
 {-# LANGUAGE TemplateHaskell, RecordWildCards, BangPatterns, NumDecimals #-}
-{-# LANGUAGE DeriveFoldable, TupleSections, LambdaCase, OverloadedStrings #-}
+{-# LANGUAGE DerivingStrategies, DeriveAnyClass, DeriveFoldable #-}
+{-# LANGUAGE DeriveGeneric, TupleSections, LambdaCase, OverloadedStrings #-}
 
 -----------------------------------------------------------------------------
 -- |
@@ -46,10 +47,14 @@ import           Network.DNS
 import           Network.HTTP.Client
 import           Network.HTTP.Client.TLS (newTlsManager)
 import           Network.HTTP.Client.BrReadWithTimeout
+import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as L
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
+import qualified Data.HashMap.Strict as HM
+import           Data.HashMap.Strict (HashMap)
+import           Data.Hashable
 import           Data.IORef
 import           Data.Text (Text)
 import qualified Data.Text as T
@@ -60,6 +65,7 @@ import           Data.Function
 import           Data.List
 import           Data.Bits
 import           Data.Ord
+import           Data.Coerce
 import           Control.Concurrent.Async
 import           Control.Exception
 import           Control.Exception.Safe (handleAny)
@@ -67,6 +73,7 @@ import           Control.Arrow
 import           Control.Monad
 import           System.IO.Unsafe
 import           System.Timeout
+import           GHC.Generics
 
 -- $dynamicUpstreams
 --
@@ -298,13 +305,20 @@ data UQuery = QueryA NameList UNamePriorityPolicy  -- ^ Query /A/ records
             | QuerySRV Name UNamePriorityPolicy    -- ^ Query an /SRV/ record
             deriving Read
 
+-- FIXME: an awkward hack to avoid using orphan instance Hashable Name
+data HashUQuery = HashUQueryA (WeightedList ByteString) UNamePriorityPolicy
+                | HashUQuerySRV ByteString UNamePriorityPolicy
+                deriving (Read, Eq, Generic)
+                deriving anyclass Hashable
+
 -- | Weighted list.
 --
 -- A list of elements optionally annotated by weight values.
 data WeightedList a = Singleton a               -- ^ List with a single element
                     | PlainList [a]             -- ^ Plain list without weights
                     | WeightedList [(a, Word)]  -- ^ Weighted list
-                    deriving (Read, Foldable)
+                    deriving (Read, Eq, Generic, Foldable)
+                    deriving anyclass Hashable
 
 -- | Weighted list of domain names.
 type NameList = WeightedList Name
@@ -316,7 +330,8 @@ type NameList = WeightedList Name
 -- the given upstreams.
 data PriorityPolicy a = SinglePriority a  -- ^ All items go to a single element
                       | PriorityList [a]  -- ^ Distribute items by priorities
-                      deriving Read
+                      deriving (Read, Eq, Generic)
+                      deriving anyclass Hashable
 
 -- | Priority policy of upstream names.
 type UNamePriorityPolicy = PriorityPolicy UName
@@ -360,9 +375,20 @@ instance ToJSON ServerData where
 -- | Collected server data.
 type CollectedServerData = Map UName [ServerData]
 
-collectedServerData :: IORef (TimeInterval, CollectedServerData)
-collectedServerData = unsafePerformIO $ newIORef (Unset, M.empty)
+collectedServerData ::
+    IORef (TimeInterval, HashMap HashUQuery CollectedServerData)
+collectedServerData = unsafePerformIO $ newIORef (Unset, HM.empty)
 {-# NOINLINE collectedServerData #-}
+
+hashUQuery :: UQuery -> HashUQuery
+hashUQuery (QueryA (Singleton (Name n)) pl) =
+    HashUQueryA (Singleton n) pl
+hashUQuery (QueryA (PlainList ns) pl) =
+    HashUQueryA (PlainList $ map coerce ns) pl
+hashUQuery (QueryA (WeightedList ns) pl) =
+    HashUQueryA (WeightedList $ map (first coerce) ns) pl
+hashUQuery (QuerySRV (Name n) pl) =
+    HashUQuerySRV n pl
 
 httpManager :: Manager
 httpManager = unsafePerformIO newTlsManager
@@ -523,21 +549,27 @@ collectUpstreams Conf {..} = const $ do
     when (wt /= Unset) $ threadDelaySec $ toSec wt
     let (lTTL, hTTL) = (toTTL waitOnException, toTTL maxWait)
     srv <- handleCollectErrors $
-        mapConcurrently (withTimeout . collectServerData lTTL) upstreams
-    let nwt = fromTTL $ max (TTL 1) $ min hTTL $ minimumTTL lTTL $ map fst srv
-        new = mconcat $ map snd srv
-    if new == old
+        mapConcurrently (\u -> (hashUQuery (uQuery u), ) <$>
+                            withTimeout (collectServerData lTTL u)
+                        ) upstreams
+    let nwt = fromTTL $ max (TTL 1) $ min hTTL $ minimumTTL lTTL $
+            map (fst . snd) srv
+        new = HM.fromList $ map (second snd) srv
+    if new `HM.isSubmapOf` old
         then do
             when (nwt /= wt) $
-                modifyIORef' collectedServerData $ first $ const nwt
+                atomicModifyIORef' collectedServerData $
+                    (, ()) . first (const nwt)
             return ""
         else do
-            writeIORef collectedServerData (nwt, new)
-            return $ encode new
+            atomicModifyIORef' collectedServerData $
+                (, ()) . (const nwt *** (new `HM.union`))
+            return $ encode $ M.unions $ HM.elems new
     where toTTL = TTL . fromIntegral . toSec
           fromTTL (TTL ttl) = Sec $ fromIntegral ttl
           handleCollectErrors = handleAny $ \e -> do
-              writeIORef collectedServerData (waitOnException, M.empty)
+              atomicModifyIORef' collectedServerData $
+                    (, ()) . first (const waitOnException)
               throwIO e
           withTimeout act = do
               r <- timeout (toTimeout responseTimeout) act

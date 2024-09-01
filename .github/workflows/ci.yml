@@ -48,6 +48,10 @@ jobs:
         with:
           install: "Test::Nginx"
           tests: false
+      - name: Install dnsmasq
+        run: |
+          sudo apt-get update 
+          sudo apt-get install -y dnsmasq
       - name: Install and test
         env:
           GHCVER: ${{ matrix.ghc }}
@@ -80,6 +84,8 @@ jobs:
                       -O nginx-haskell-module-${NGXHMVER}.tar.gz &&
                       tar xzvf nginx-haskell-module-${NGXHMVER}.tar.gz
           fi
+          sudo wget -P /usr/include \
+              https://raw.githubusercontent.com/zserge/jsmn/$JSMN_REV/jsmn.h
           git clone https://github.com/openresty/echo-nginx-module.git
 
           export TEST_NGINX_TELIB_DIR="$(pwd)/var/lib/nginx"
@@ -93,6 +99,7 @@ jobs:
               NGX_CONFIGURE=./configure
           fi
           $NGX_CONFIGURE --add-module=../nginx-haskell-module-${NGXHMVER} \
+                         --add-module=../nginx-haskell-module-${NGXHMVER}/examples/dynamicUpstreams/nginx-upconf-module \
                          --add-module=../echo-nginx-module
           make -j2
           export PATH="$(pwd)/objs:$PATH"
@@ -112,4 +119,15 @@ jobs:
               prove -r t
               cd -
           done
+
+          cd Resolve
+          sudo unlink /etc/resolv.conf
+          echo nameserver 127.0.0.1 | sudo tee /etc/resolv.conf
+          sudo cp dnsmasq.conf /etc
+          sudo systemctl restart dnsmasq
+          sed -i 's/^packages: .\+/'`
+                `'& ..\/..\/ngx-export-tools-extra.cabal/' cabal.project
+          make PREFIX="$TEST_NGINX_TELIB_DIR" INPLACE=1 $LINKRTS
+          make PREFIX="$TEST_NGINX_TELIB_DIR" install
+          prove -r t
 
