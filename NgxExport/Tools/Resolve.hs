@@ -65,7 +65,6 @@ import           Data.Function
 import           Data.List
 import           Data.Bits
 import           Data.Ord
-import           Data.Coerce
 import           Control.Concurrent.Async
 import           Control.Exception
 import           Control.Exception.Safe (handleAny)
@@ -73,6 +72,7 @@ import           Control.Arrow
 import           Control.Monad
 import           System.IO.Unsafe
 import           System.Timeout
+import           Unsafe.Coerce
 import           GHC.Generics
 
 -- $dynamicUpstreams
@@ -305,12 +305,6 @@ data UQuery = QueryA NameList UNamePriorityPolicy  -- ^ Query /A/ records
             | QuerySRV Name UNamePriorityPolicy    -- ^ Query an /SRV/ record
             deriving Read
 
--- FIXME: an awkward hack to avoid using orphan instance Hashable Name
-data HashUQuery = HashUQueryA (WeightedList ByteString) UNamePriorityPolicy
-                | HashUQuerySRV ByteString UNamePriorityPolicy
-                deriving (Read, Eq, Generic)
-                deriving anyclass Hashable
-
 -- | Weighted list.
 --
 -- A list of elements optionally annotated by weight values.
@@ -335,6 +329,18 @@ data PriorityPolicy a = SinglePriority a  -- ^ All items go to a single element
 
 -- | Priority policy of upstream names.
 type UNamePriorityPolicy = PriorityPolicy UName
+
+-- FIXME: an awkward hack to avoid using orphan instance Hashable Name,
+-- make sure that HashUQuery and UQuery have the same internal representation!
+data UQueryGen a = UQueryAGen (WeightedList a) UNamePriorityPolicy
+                 | UQerySRVGen a UNamePriorityPolicy
+                 deriving (Read, Eq, Generic)
+                 deriving anyclass Hashable
+
+type HashUQuery = UQueryGen ByteString
+
+hashUQuery :: UQuery -> HashUQuery
+hashUQuery = unsafeCoerce
 
 -- | Upstream configuration.
 --
@@ -379,16 +385,6 @@ collectedServerData ::
     IORef (TimeInterval, HashMap HashUQuery CollectedServerData)
 collectedServerData = unsafePerformIO $ newIORef (Unset, HM.empty)
 {-# NOINLINE collectedServerData #-}
-
-hashUQuery :: UQuery -> HashUQuery
-hashUQuery (QueryA (Singleton (Name n)) pl) =
-    HashUQueryA (Singleton n) pl
-hashUQuery (QueryA (PlainList ns) pl) =
-    HashUQueryA (PlainList $ map coerce ns) pl
-hashUQuery (QueryA (WeightedList ns) pl) =
-    HashUQueryA (WeightedList $ map (first coerce) ns) pl
-hashUQuery (QuerySRV (Name n) pl) =
-    HashUQuerySRV n pl
 
 httpManager :: Manager
 httpManager = unsafePerformIO newTlsManager
@@ -549,7 +545,7 @@ collectUpstreams Conf {..} = const $ do
     when (wt /= Unset) $ threadDelaySec $ toSec wt
     let (lTTL, hTTL) = (toTTL waitOnException, toTTL maxWait)
     srv <- handleCollectErrors $
-        mapConcurrently (\u -> (hashUQuery (uQuery u), ) <$>
+        mapConcurrently (\u@UData {..} -> (hashUQuery uQuery, ) <$>
                             withTimeout (collectServerData lTTL u)
                         ) upstreams
     let nwt = fromTTL $ max (TTL 1) $ min hTTL $ minimumTTL lTTL $
@@ -569,7 +565,7 @@ collectUpstreams Conf {..} = const $ do
           fromTTL (TTL ttl) = Sec $ fromIntegral ttl
           handleCollectErrors = handleAny $ \e -> do
               atomicModifyIORef' collectedServerData $
-                    (, ()) . first (const waitOnException)
+                  (, ()) . first (const waitOnException)
               throwIO e
           withTimeout act = do
               r <- timeout (toTimeout responseTimeout) act
@@ -580,6 +576,8 @@ collectUpstreams Conf {..} = const $ do
           toTimeout Unset = -1
           toTimeout v = toSec v * 1e6
 
+-- FIXME: running multiple instances of the service won't work as expected due
+-- to shared configuration Conf
 ngxExportSimpleServiceTyped 'collectUpstreams ''Conf $
     PersistentService Nothing
 
@@ -589,6 +587,8 @@ type Upconf = [Text]
 signalUpconf :: Upconf -> NgxExportService
 signalUpconf = voidHandler' . mapConcurrently_ getUrl
 
+-- FIXME: running multiple instances of the service won't work as expected due
+-- to shared configuration Upconf
 ngxExportSimpleServiceTyped 'signalUpconf ''Upconf $
     PersistentService Nothing
 

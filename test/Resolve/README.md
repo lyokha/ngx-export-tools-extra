@@ -39,6 +39,9 @@ $ sudo cp dnsmasq.conf /etc/resolv.conf
 $ sudo systemctl restart dnsmasq
 ```
 
+Note that *dnsmasq.conf* contains line *server=8.8.8.8* to not lose ability to
+resolve names in the system while running tests. Remove it if not needed.
+
 Run tests with *nginx.conf* and then restore */etc/resolv.conf* and
-*/etc/dnsmasq.conf* from backups.
+*/etc/dnsmasq.conf* from the backups.
 

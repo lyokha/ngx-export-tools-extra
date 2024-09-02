@@ -59,15 +59,7 @@ __DATA__
                            , uMaxFails = 1
                            , uFailTimeout = 10
                            }
-                    ]
-              , maxWait = Sec 300
-              , waitOnException = Sec 2
-              , responseTimeout = Unset
-              }';
-
-    haskell_run_service simpleService_collectUpstreams $hs_upstreams_srv
-        'Conf { upstreams =
-                    [UData { uQuery =
+                    ,UData { uQuery =
                                  QuerySRV
                                      (Name "_http._tcp.resolve.test")
                                          (SinglePriority "utest_srv")
@@ -80,9 +72,19 @@ __DATA__
               , responseTimeout = Unset
               }';
 
-#     haskell_run_service simpleService_collectUpstreams $hs_upstreams_srv
+#     haskell_run_service simpleService_collectUpstreams $hs_upstreams
 #         'Conf { upstreams =
 #                     [UData { uQuery =
+#                                  QueryA
+#                                      (WeightedList
+#                                          [(Name "www.resolve.test:8020", 2)
+#                                          ,(Name "www.resolve1.test:8030", 1)
+#                                          ]
+#                                      ) (PriorityList ["utest", "utest1"])
+#                            , uMaxFails = 1
+#                            , uFailTimeout = 10
+#                            }
+#                     ,UData { uQuery =
 #                                  QuerySRV
 #                                      (Name "_http._tcp.resolve.test")
 #                                          (PriorityList
@@ -97,15 +99,11 @@ __DATA__
 #               , responseTimeout = Unset
 #               }';
 
-    haskell_service_var_ignore_empty $hs_upstreams $hs_upstreams_srv;
-    haskell_service_var_in_shm upstreams 64k /tmp
-        $hs_upstreams $hs_upstreams_srv;
+    haskell_service_var_ignore_empty $hs_upstreams;
+    haskell_service_var_in_shm upstreams 64k /tmp $hs_upstreams;
 
     haskell_service_var_update_callback simpleService_signalUpconf
         $hs_upstreams '["http://127.0.0.1:8010/upconf"]';
-
-    haskell_service_var_update_callback simpleService_signalUpconf
-        $hs_upstreams_srv '["http://127.0.0.1:8010/upconf_srv"]';
 
     server {
         listen          127.0.0.1:9000;
@@ -142,24 +140,9 @@ __DATA__
             deny  all;
         }
 
-        location /upconf_srv {
-            upconf $hs_upstreams_srv;
-
-            allow 127.0.0.1;
-            deny  all;
-        }
-
         location /upstreams {
             default_type application/json;
             echo $hs_upstreams;
-
-            allow 127.0.0.1;
-            deny  all;
-        }
-
-        location /upstreams_srv {
-            default_type application/json;
-            echo $hs_upstreams_srv;
 
             allow 127.0.0.1;
             deny  all;
@@ -188,38 +171,31 @@ __DATA__
 --- request
     GET /upstreams
 --- response_body
-{"utest":[{"addr":"127.0.0.2:8020","fail_timeout":10,"host":"www.resolve.test:8020","max_fails":1}],"utest1":[{"addr":"127.0.0.3:8030","fail_timeout":10,"host":"www.resolve1.test:8030","max_fails":1}]}
+{"utest":[{"addr":"127.0.0.2:8020","fail_timeout":10,"host":"www.resolve.test:8020","max_fails":1}],"utest1":[{"addr":"127.0.0.3:8030","fail_timeout":10,"host":"www.resolve1.test:8030","max_fails":1}],"utest_srv":[{"addr":"127.0.0.2:8020","fail_timeout":10,"host":"www.resolve.test","max_fails":1}]}
 --- error_code: 200
 
-=== TEST 2: upstreams_srv
---- request
-    GET /upstreams_srv
---- response_body
-{"utest_srv":[{"addr":"127.0.0.2:8020","fail_timeout":10,"host":"www.resolve.test","max_fails":1}]}
---- error_code: 200
-
-=== TEST 3: utest
+=== TEST 2: utest
 --- request
     GET /utest
 --- response_body
 In www.resolve.test
 --- error_code: 200
 
-=== TEST 4: utest1
+=== TEST 3: utest1
 --- request
     GET /utest1
 --- response_body
 In www.resolve1.test
 --- error_code: 200
 
-=== TEST 5: utest_srv
+=== TEST 4: utest_srv
 --- request
     GET /utest_srv
 --- response_body
 In www.resolve.test
 --- error_code: 200
 
-=== TEST 6: utest1_srv
+=== TEST 5: utest1_srv
 --- request
     GET /utest1_srv
 --- response_body

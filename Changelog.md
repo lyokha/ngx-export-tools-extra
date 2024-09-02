@@ -2,7 +2,10 @@
 
 - Module *NgxExport.Tools.Resolve*.
   + Parameterize collected server data by query data to avoid getting wrong
-    values when multiple resolve services are running.
+    values when multiple resolve services are running. Note, however, that
+    running multiple resolve services is not currently supported as they share
+    the same configuration inside. Use multiple *UData* items in a single
+    resolve service instead.
   + Append port numbers to values of collected host names as Nginx directive
     *server* accepts such a notation.
 
