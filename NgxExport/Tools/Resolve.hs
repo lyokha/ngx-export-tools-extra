@@ -39,8 +39,10 @@ module NgxExport.Tools.Resolve (
                                ) where
 
 import           NgxExport
+import           NgxExport.Tools.Read
 import           NgxExport.Tools.Combinators
 import           NgxExport.Tools.SimpleService
+import           NgxExport.Tools.System
 import           NgxExport.Tools.TimeInterval
 
 import           Network.DNS
@@ -539,18 +541,27 @@ collectServerData lTTL ud@(UData (QuerySRV n p@(PriorityList pl)) _ _ ) = do
            ,M.fromList $ map (second $ sort . map (srvToServerData ud p)) srv'
            )
 
-collectUpstreams :: Conf -> NgxExportService
-collectUpstreams Conf {..} = const $ do
+collectUpstreams :: ByteString -> NgxExportService
+collectUpstreams conf = const $ do
+    let conf' = readFromByteString conf
+    when (isNothing conf') $ terminateWorkerProcess
+        "Configuration for collectUpstreams service is not readable"
+    let Conf {..} = fromJust conf'
     (wt, old) <- readIORef collectedServerData
     when (wt /= Unset) $ threadDelaySec $ toSec wt
     let (lTTL, hTTL) = (toTTL waitOnException, toTTL maxWait)
-    srv <- handleCollectErrors $
+    srv <- handleCollectErrors waitOnException $
         mapConcurrently (\u@UData {..} -> (hashUQuery uQuery, ) <$>
-                            withTimeout (collectServerData lTTL u)
+                            withTimeout responseTimeout
+                                (collectServerData lTTL u)
                         ) upstreams
     let nwt = fromTTL $ max (TTL 1) $ min hTTL $ minimumTTL lTTL $
             map (fst . snd) srv
         new = HM.fromList $ map (second snd) srv
+    -- FIXME: when there are multiple instances of the service, a healthy
+    -- instance may overwrite a short TTL written by an unhealthy instance which
+    -- causes the latter restarts later, and vice versa, an unhealthy instance
+    -- may write a short TTL which causes a healthy instance restarts sooner
     if new `HM.isSubmapOf` old
         then do
             when (nwt /= wt) $
@@ -563,12 +574,11 @@ collectUpstreams Conf {..} = const $ do
             return $ encode $ M.unions $ HM.elems new
     where toTTL = TTL . fromIntegral . toSec
           fromTTL (TTL ttl) = Sec $ fromIntegral ttl
-          handleCollectErrors = handleAny $ \e -> do
-              atomicModifyIORef' collectedServerData $
-                  (, ()) . first (const waitOnException)
+          handleCollectErrors t = handleAny $ \e -> do
+              atomicModifyIORef' collectedServerData $ (, ()) . first (const t)
               throwIO e
-          withTimeout act = do
-              r <- timeout (toTimeout responseTimeout) act
+          withTimeout t act = do
+              r <- timeout (toTimeout t) act
               case r of
                   Nothing -> throwIO $
                       userError "Collection of server data was timed out"
@@ -576,19 +586,17 @@ collectUpstreams Conf {..} = const $ do
           toTimeout Unset = -1
           toTimeout v = toSec v * 1e6
 
--- FIXME: running multiple instances of the service won't work as expected due
--- to shared configuration Conf
-ngxExportSimpleServiceTyped 'collectUpstreams ''Conf $
-    PersistentService Nothing
+ngxExportSimpleService 'collectUpstreams $ PersistentService Nothing
 
 -- a list of fully qualified URLs such as 'http://../..' or 'https://../..'
 type Upconf = [Text]
 
-signalUpconf :: Upconf -> NgxExportService
-signalUpconf = voidHandler' . mapConcurrently_ getUrl
+signalUpconf :: ByteString -> NgxExportService
+signalUpconf upconf = voidHandler' $ do
+    let upconf' = readFromByteString upconf :: Maybe Upconf
+    when (isNothing upconf') $ throwIO $
+        userError "Configuration for signalUpconf service is not readable"
+    mapConcurrently_ getUrl $ fromJust upconf'
 
--- FIXME: running multiple instances of the service won't work as expected due
--- to shared configuration Upconf
-ngxExportSimpleServiceTyped 'signalUpconf ''Upconf $
-    PersistentService Nothing
+ngxExportSimpleService 'signalUpconf $ PersistentService Nothing
 
