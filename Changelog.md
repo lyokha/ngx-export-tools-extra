@@ -1,10 +1,15 @@
-### 1.2.9.2
+### 1.2.10
 
 - Module *NgxExport.Tools.Resolve*.
   + Parameterize collected server data by query data to avoid getting wrong
-    values when multiple resolve services are running.
+    values when multiple instances of the resolve service are running.
+  + Use exporters from *ngx-export-tools &ge; 1.2.5* which do not share
+    configurations between multiple instances of the resolve service.
   + Append port numbers to values of collected host names as Nginx directive
     *server* accepts such a notation.
+- Module *NgxExport.Tools.PCRE*.
+  + Replace *SingleShotService* mode declaration in service *declareRegexes* by
+    *rareService* declaration from *ngx-export-tools &ge; 1.2.5*.
 
 ### 1.2.9.1
 

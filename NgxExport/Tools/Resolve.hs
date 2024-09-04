@@ -39,10 +39,8 @@ module NgxExport.Tools.Resolve (
                                ) where
 
 import           NgxExport
-import           NgxExport.Tools.Read
 import           NgxExport.Tools.Combinators
 import           NgxExport.Tools.SimpleService
-import           NgxExport.Tools.System
 import           NgxExport.Tools.TimeInterval
 
 import           Network.DNS
@@ -541,12 +539,8 @@ collectServerData lTTL ud@(UData (QuerySRV n p@(PriorityList pl)) _ _ ) = do
            ,M.fromList $ map (second $ sort . map (srvToServerData ud p)) srv'
            )
 
-collectUpstreams :: ByteString -> NgxExportService
-collectUpstreams conf = const $ do
-    let conf' = readFromByteString conf
-    when (isNothing conf') $ terminateWorkerProcess
-        "Configuration for collectUpstreams service is not readable"
-    let Conf {..} = fromJust conf'
+collectUpstreams :: Conf -> NgxExportService
+collectUpstreams Conf {..} = const $ do
     (wt, old) <- readIORef collectedServerData
     when (wt /= Unset) $ threadDelaySec $ toSec wt
     let (lTTL, hTTL) = (toTTL waitOnException, toTTL maxWait)
@@ -586,17 +580,15 @@ collectUpstreams conf = const $ do
           toTimeout Unset = -1
           toTimeout v = toSec v * 1e6
 
-ngxExportSimpleService 'collectUpstreams $ PersistentService Nothing
+ngxExportSimpleServiceTyped' 'collectUpstreams ''Conf $
+    PersistentService Nothing
 
 -- a list of fully qualified URLs such as 'http://../..' or 'https://../..'
 type Upconf = [Text]
 
-signalUpconf :: ByteString -> NgxExportService
-signalUpconf upconf = voidHandler' $ do
-    let upconf' = readFromByteString upconf :: Maybe Upconf
-    when (isNothing upconf') $ throwIO $
-        userError "Configuration for signalUpconf service is not readable"
-    mapConcurrently_ getUrl $ fromJust upconf'
+signalUpconf :: Upconf -> NgxExportService
+signalUpconf = voidHandler' . mapConcurrently_ getUrl
 
-ngxExportSimpleService 'signalUpconf $ PersistentService Nothing
+ngxExportSimpleServiceTyped' 'signalUpconf ''Upconf $
+    PersistentService Nothing
 

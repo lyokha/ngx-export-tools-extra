@@ -89,6 +89,7 @@ jobs:
           sudo wget -P /usr/include \
               https://raw.githubusercontent.com/zserge/jsmn/$JSMN_REV/jsmn.h
           git clone https://github.com/openresty/echo-nginx-module.git
+          git clone https://github.com/lyokha/nginx-custom-counters-module.git
 
           export TEST_NGINX_TELIB_DIR="$(pwd)/var/lib/nginx"
           install -d "$TEST_NGINX_TELIB_DIR"
@@ -102,6 +103,7 @@ jobs:
           fi
           $NGX_CONFIGURE --add-module=../nginx-haskell-module-${NGXHMVER} \
                          --add-module=../nginx-haskell-module-${NGXHMVER}/$UPCONF_MODULE_PATH \
+                         --add-module=../nginx-custom-counters-module \
                          --add-module=../echo-nginx-module
           make -j2
           export PATH="$(pwd)/objs:$PATH"
@@ -111,7 +113,7 @@ jobs:
           echo "$GHCVER" | grep -q '^8\.' &&
               LINKRTS="LINKRTS=-lHSrts_thr-ghc$(ghc --numeric-version)"
 
-          for dir in Aggregate EDE PCRE ServiceHookAdaptor Subrequest
+          for dir in Aggregate EDE PCRE Prometheus ServiceHookAdaptor Subrequest
           do
               cd $dir
               sed -i 's/^packages: .\+/'`
