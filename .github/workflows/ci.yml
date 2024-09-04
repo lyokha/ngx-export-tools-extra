@@ -101,7 +101,8 @@ jobs:
           else
               NGX_CONFIGURE=./configure
           fi
-          $NGX_CONFIGURE --add-module=../nginx-haskell-module-${NGXHMVER} \
+          $NGX_CONFIGURE --with-http_stub_status_module \
+                         --add-module=../nginx-haskell-module-${NGXHMVER} \
                          --add-module=../nginx-haskell-module-${NGXHMVER}/$UPCONF_MODULE_PATH \
                          --add-module=../nginx-custom-counters-module \
                          --add-module=../echo-nginx-module
