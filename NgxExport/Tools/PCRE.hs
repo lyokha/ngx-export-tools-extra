@@ -163,7 +163,7 @@ regexes = unsafePerformIO $ newIORef HM.empty
 declareRegexes :: InputRegexes -> NgxExportService
 declareRegexes = voidService
 
-ngxExportSimpleServiceTyped 'declareRegexes ''InputRegexes rareService
+ngxExportSimpleServiceTyped 'declareRegexes ''InputRegexes restartPromptly
 
 compileRegexes :: ByteString -> IO L.ByteString
 compileRegexes = voidHandler' $ do
