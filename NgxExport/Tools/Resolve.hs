@@ -43,6 +43,7 @@ import           NgxExport.Tools.Combinators
 import           NgxExport.Tools.SimpleService
 import           NgxExport.Tools.TimeInterval
 
+import           Language.Haskell.TH hiding (Name)
 import           Network.DNS
 import           Network.HTTP.Client
 import           Network.HTTP.Client.TLS (newTlsManager)
@@ -330,18 +331,6 @@ data PriorityPolicy a = SinglePriority a  -- ^ All items go to a single element
 -- | Priority policy of upstream names.
 type UNamePriorityPolicy = PriorityPolicy UName
 
--- FIXME: an awkward hack to avoid using orphan instance Hashable Name,
--- make sure that HashUQuery and UQuery have the same internal representation!
-data UQueryGen a = UQueryAGen (WeightedList a) UNamePriorityPolicy
-                 | UQerySRVGen a UNamePriorityPolicy
-                 deriving (Read, Eq, Generic)
-                 deriving anyclass Hashable
-
-type HashUQuery = UQueryGen ByteString
-
-hashUQuery :: UQuery -> HashUQuery
-hashUQuery = unsafeCoerce
-
 -- | Upstream configuration.
 --
 -- Includes DNS query model and parameters for Nginx /server/ description.
@@ -380,6 +369,41 @@ instance ToJSON ServerData where
 
 -- | Collected server data.
 type CollectedServerData = Map UName [ServerData]
+
+-- FIXME: an awkward hack to avoid using orphan instance Hashable Name,
+-- the Template Haskell splice below produces the following definitions:
+--   1. data HashUQuery deriving Hashable which is essentially data UQuery
+--      with all Name entries replaced with ByteString,
+--   2. hashUQuery :: UQuery -> HashUQuery which is mere unsafeCoerce
+do
+    TyConI (DataD [] name [] Nothing cs _) <- reify ''UQuery
+    let name' = nameBase name
+        nameHashT = mkName $ "Hash" ++ name'
+        nameHashF = mkName $ "hash" ++ name'
+        hcs = map (\case
+                       NormalC n ts ->
+                           NormalC (mkName $ "Hash" ++ nameBase n) $
+                               map (\case
+                                        (b, ConT t)
+                                            | t == ''Name ->
+                                                (b, ConT ''ByteString)
+                                            | t == ''NameList ->
+                                                (b
+                                                ,AppT (ConT ''WeightedList) $
+                                                    ConT ''ByteString
+                                                )
+                                        t -> t
+                                   ) ts
+                       _ -> undefined
+                  ) cs
+    sequence
+        [dataD (return []) nameHashT [] Nothing (return <$> hcs)
+            [derivClause Nothing $ conT <$> [''Eq, ''Generic]
+            ,derivClause (Just AnyclassStrategy) $ conT <$> [''Hashable]
+            ]
+        ,sigD nameHashF $ appT (appT arrowT $ conT name) $ conT nameHashT
+        ,funD nameHashF [clause [] (normalB [|unsafeCoerce|]) []]
+        ]
 
 collectedServerData ::
     IORef (TimeInterval, HashMap HashUQuery CollectedServerData)

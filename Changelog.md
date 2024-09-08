@@ -1,5 +1,7 @@
 ### 1.2.11
 
+- Module *NgxExport.Tools.Resolve*.
+  + A smarter implementation of the internal hashable data *HashUQuery*.
 - Module *NgxExport.Tools.PCRE*.
   + Replace *rareService* mode declaration in service *declareRegexes* by
     *restartPromptly* declaration from *ngx-export-tools &ge; 1.2.6*.
