@@ -579,11 +579,10 @@ collectUpstreams Conf {..} = const $ do
     -- causes the latter restarts later, and vice versa, an unhealthy instance
     -- may write a short TTL which causes a healthy instance restarts sooner
     if new `HM.isSubmapOf` old
-        then do
+        then voidHandler $
             when (nwt /= wt) $
                 atomicModifyIORef' collectedServerData $
                     (, ()) . first (const nwt)
-            return ""
         else do
             atomicModifyIORef' collectedServerData $
                 (, ()) . (const nwt *** (new `HM.union`))
