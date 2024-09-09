@@ -378,30 +378,28 @@ type CollectedServerData = Map UName [ServerData]
 do
     TyConI (DataD [] name [] Nothing cs _) <- reify ''UQuery
     let name' = nameBase name
-        nameHashT = mkName $ "Hash" ++ name'
-        nameHashF = mkName $ "hash" ++ name'
-        hcs = map (\case
-                       NormalC n ts ->
-                           NormalC (mkName $ "Hash" ++ nameBase n) $
-                               map (\case
-                                        (b, ConT t)
-                                            | t == ''Name ->
-                                                (b, ConT ''ByteString)
-                                            | t == ''NameList ->
-                                                (b
-                                                ,AppT (ConT ''WeightedList) $
-                                                    ConT ''ByteString
-                                                )
-                                        t -> t
-                                   ) ts
-                       _ -> undefined
-                  ) cs
+        (hashU, hashL) = ("Hash", "hash")
+        nameHashT = mkName $ hashU ++ name'
+        nameHashF = mkName $ hashL ++ name'
     sequence
-        [dataD (return []) nameHashT [] Nothing (return <$> hcs)
-            [derivClause Nothing $ conT <$> [''Eq, ''Generic]
-            ,derivClause (Just AnyclassStrategy) $ conT <$> [''Hashable]
-            ]
-        ,sigD nameHashF $ appT (appT arrowT $ conT name) $ conT nameHashT
+        [dataD (return []) nameHashT [] Nothing
+            (map (\case
+                      NormalC n ts ->
+                          normalC (mkName $ hashU ++ nameBase n) $
+                              map (\(b, t) -> bangType (return b) $
+                                      case t of
+                                          ConT c
+                                              | c == ''Name -> [t|ByteString|]
+                                              | c == ''NameList ->
+                                                  [t|WeightedList ByteString|]
+                                          _ -> return t
+                                  ) ts
+                      _ -> undefined
+                 ) cs
+            ) [derivClause Nothing [[t|Eq|], [t|Generic|]]
+              ,derivClause (Just AnyclassStrategy) [[t|Hashable|]]
+              ]
+        ,sigD nameHashF [t|$(conT name) -> $(conT nameHashT)|]
         ,funD nameHashF [clause [] (normalB [|unsafeCoerce|]) []]
         ]
 
