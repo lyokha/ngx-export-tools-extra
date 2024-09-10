@@ -21,7 +21,7 @@ build it locally, augment stanza *packages* inside
 
 ##### Testing with dnsmasq
 
-This works in *Fedora*, maybe requires some tweaks in other Linux distributions.
+This works in *Fedora 40*, may require some tweaks in other Linux distributions.
 
 Before testing, backup files */etc/resolv.conf* and */etc/dnsmasq.conf*.
 
@@ -32,10 +32,11 @@ $ sudo unlink /etc/resolv.conf
 $ sudo echo nameserver 127.0.0.1 > /etc/resolv.conf
 ```
 
-Copy *dnsmasq.conf* into */etc/dnsmasq.conf* and start service *dnsmasq*.
+Copy *dnsmasq.conf* from this directory into */etc/dnsmasq.conf* and (re)start
+service *dnsmasq*.
 
 ```ShellSession
-$ sudo cp dnsmasq.conf /etc/resolv.conf
+$ sudo cp dnsmasq.conf /etc/dnsmasq.conf
 $ sudo systemctl restart dnsmasq
 ```
 

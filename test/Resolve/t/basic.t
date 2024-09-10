@@ -19,11 +19,11 @@ __DATA__
         server localhost:9000;
     }
 
-   upstream utest1 {
-       zone utest1 64k;
-       upconf_round_robin;
-       server localhost:9000;
-   }
+    upstream utest1 {
+        zone utest1 64k;
+        upconf_round_robin;
+        server localhost:9000;
+    }
 
 #    upstrand utest {
 #        upstream utest;
@@ -72,32 +72,32 @@ __DATA__
               , responseTimeout = Unset
               }';
 
-#     haskell_run_service simpleService_collectUpstreams $hs_upstreams
-#         'Conf { upstreams =
-#                     [UData { uQuery =
-#                                  QueryA
-#                                      (WeightedList
-#                                          [(Name "www.resolve.test:8020", 2)
-#                                          ,(Name "www.resolve1.test:8030", 1)
-#                                          ]
-#                                      ) (PriorityList ["utest", "utest1"])
-#                            , uMaxFails = 1
-#                            , uFailTimeout = 10
-#                            }
-#                     ,UData { uQuery =
-#                                  QuerySRV
-#                                      (Name "_http._tcp.resolve.test")
-#                                          (PriorityList
-#                                              ["utest_srv", "utest1_srv"]
-#                                          )
-#                            , uMaxFails = 1
-#                            , uFailTimeout = 10
-#                            }
-#                     ]
-#               , maxWait = Sec 300
-#               , waitOnException = Sec 2
-#               , responseTimeout = Unset
-#               }';
+#    haskell_run_service simpleService_collectUpstreams $hs_upstreams
+#        'Conf { upstreams =
+#                    [UData { uQuery =
+#                                 QueryA
+#                                     (WeightedList
+#                                         [(Name "www.resolve.test:8020", 2)
+#                                         ,(Name "www.resolve1.test:8030", 1)
+#                                         ]
+#                                     ) (PriorityList ["utest", "utest1"])
+#                           , uMaxFails = 1
+#                           , uFailTimeout = 10
+#                           }
+#                    ,UData { uQuery =
+#                                 QuerySRV
+#                                     (Name "_http._tcp.resolve.test")
+#                                         (PriorityList
+#                                             ["utest_srv", "utest1_srv"]
+#                                         )
+#                           , uMaxFails = 1
+#                           , uFailTimeout = 10
+#                           }
+#                    ]
+#              , maxWait = Sec 300
+#              , waitOnException = Sec 2
+#              , responseTimeout = Unset
+#              }';
 
     haskell_service_var_ignore_empty $hs_upstreams;
     haskell_service_var_in_shm upstreams 64k /tmp $hs_upstreams;
@@ -164,9 +164,9 @@ __DATA__
             proxy_pass http://utest1_srv;
         }
 
-#         location /upstrand {
-#             proxy_pass http://$upstrand_utest;
-#         }
+#        location /upstrand {
+#            proxy_pass http://$upstrand_utest;
+#        }
 --- init: sleep 1
 --- request
     GET /upstreams
