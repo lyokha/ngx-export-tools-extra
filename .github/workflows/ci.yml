@@ -48,9 +48,10 @@ jobs:
         with:
           install: "Test::Nginx"
           tests: false
-      - name: Install dnsmasq
+      - name: Install libpcre and dnsmasq
         run: |
           sudo apt-get update 
+          sudo apt-get install -y libpcre3-dev
           sudo apt-get install -y dnsmasq
       - name: Install and test
         env:
