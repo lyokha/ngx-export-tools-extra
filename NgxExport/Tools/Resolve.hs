@@ -5,7 +5,7 @@
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  NgxExport.Tools.Resolve
--- Copyright   :  (c) Alexey Radkov 2022-2024
+-- Copyright   :  (c) Alexey Radkov 2022-2025
 -- License     :  BSD-style
 --
 -- Maintainer  :  alexey.radkov@gmail.com
@@ -425,6 +425,9 @@ minimumTTL _ ttls = minimum ttls
 
 -- | Queries an /A/ record for the given domain name.
 --
+-- If the domain name happens to be non-canonical, this function tries to
+-- resolve the chain of alias records of maximum depth up to 12.
+--
 -- Returns a list of IP addresses and the minimum value of their TTLs. If the
 -- list is empty, then the returned TTL value gets taken from the first
 -- argument.
@@ -433,8 +436,18 @@ collectA
     -> Name                     -- ^ Domain name
     -> IO (TTL, [IPv4])
 collectA lTTL (Name n) = do
-    !srv <- queryA $ Name $ C8.takeWhile (':' /=) n
+    !srv <- collectName (0 :: Int) $ Name $ C8.takeWhile (':' /=) n
     return (minimumTTL lTTL $ map fst srv, map snd srv)
+    where collectName 12 _ = return []
+          collectName i n' = do
+              addrs <- queryA n'
+              case addrs of
+                  [] -> do
+                      cn <- queryCNAME n'
+                      case cn of
+                          (_, cn') : _ -> collectName (succ i) cn'
+                          _ -> return addrs
+                  _ -> return addrs
 
 -- | Queries an /SRV/ record for the given service name.
 --

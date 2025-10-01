@@ -1,3 +1,9 @@
+### 1.2.12
+
+- Module *NgxExport.Tools.Resolve*.
+  + Resolve non-canonical names in *collectA*. Alias records chains of depth up
+    to 12 are supported.
+
 ### 1.2.11
 
 - Module *NgxExport.Tools.Resolve*.
