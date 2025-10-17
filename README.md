@@ -19,7 +19,7 @@ at [*the Hackage page*](http://hackage.haskell.org/package/ngx-export-tools-extr
 - [Module NgxExport.Tools.Resolve](#module-ngxexporttoolsresolve)
 - [Module NgxExport.Tools.ServiceHookAdaptor](#module-ngxexporttoolsservicehookadaptor)
 - [Module NgxExport.Tools.Subrequest](#module-ngxexporttoolssubrequest)
-- [Building and installation](#building-and-installation) 
+- [Building and installation](#building-and-installation)
 
 #### Module *NgxExport.Tools.Aggregate*
 
@@ -940,7 +940,7 @@ cnt_uptime 8.0
 # HELP cnt_uptime_reload Nginx master uptime after reload
 # TYPE cnt_uptime_reload counter
 cnt_uptime_reload 8.0
-# HELP hst_bytes_sent 
+# HELP hst_bytes_sent
 # TYPE hst_bytes_sent histogram
 hst_bytes_sent_bucket{le="0"} 0
 hst_bytes_sent_bucket{le="10"} 0
@@ -950,7 +950,7 @@ hst_bytes_sent_bucket{le="10000"} 0
 hst_bytes_sent_bucket{le="+Inf"} 0
 hst_bytes_sent_count 0
 hst_bytes_sent_sum 0.0
-# HELP hst_bytes_sent_err 
+# HELP hst_bytes_sent_err
 # TYPE hst_bytes_sent_err counter
 hst_bytes_sent_err 0.0
 # HELP hst_request_time Request duration
@@ -968,7 +968,7 @@ hst_request_time_bucket{le="60.0"} 0
 hst_request_time_bucket{le="+Inf"} 0
 hst_request_time_count 0
 hst_request_time_sum 0.0
-# HELP hst_request_time_err 
+# HELP hst_request_time_err
 # TYPE hst_request_time_err counter
 hst_request_time_err 0.0
 ```
@@ -1001,7 +1001,7 @@ cnt_uptime 371.0
 # HELP cnt_uptime_reload Nginx master uptime after reload
 # TYPE cnt_uptime_reload counter
 cnt_uptime_reload 371.0
-# HELP hst_bytes_sent 
+# HELP hst_bytes_sent
 # TYPE hst_bytes_sent histogram
 hst_bytes_sent_bucket{le="0"} 0
 hst_bytes_sent_bucket{le="10"} 0
@@ -1011,7 +1011,7 @@ hst_bytes_sent_bucket{le="10000"} 51
 hst_bytes_sent_bucket{le="+Inf"} 51
 hst_bytes_sent_count 51
 hst_bytes_sent_sum 9458.0
-# HELP hst_bytes_sent_err 
+# HELP hst_bytes_sent_err
 # TYPE hst_bytes_sent_err counter
 hst_bytes_sent_err 0.0
 # HELP hst_request_time Request duration
@@ -1029,7 +1029,7 @@ hst_request_time_bucket{le="60.0"} 51
 hst_request_time_bucket{le="+Inf"} 51
 hst_request_time_count 51
 hst_request_time_sum 40.006
-# HELP hst_request_time_err 
+# HELP hst_request_time_err
 # TYPE hst_request_time_err counter
 hst_request_time_err 0.0
 ```
@@ -1398,7 +1398,7 @@ $ for i in {1..20} ; do curl -D- 'http://localhost:8010/backends' & done
 ```
 
 ```ShellSession
-$ curl -s 'http://localhost:8020/' 
+$ curl -s 'http://localhost:8020/'
 # HELP cnt_status Number of responses with given status
 # TYPE cnt_status counter
 cnt_status{value="4xx",from="response"} 11.0
@@ -1414,7 +1414,7 @@ cnt_uptime 70.0
 # HELP cnt_uptime_reload Nginx master uptime after reload
 # TYPE cnt_uptime_reload counter
 cnt_uptime_reload 70.0
-# HELP hst_bytes_sent 
+# HELP hst_bytes_sent
 # TYPE hst_bytes_sent histogram
 hst_bytes_sent_bucket{le="0"} 0
 hst_bytes_sent_bucket{le="10"} 0
@@ -1424,7 +1424,7 @@ hst_bytes_sent_bucket{le="10000"} 21
 hst_bytes_sent_bucket{le="+Inf"} 21
 hst_bytes_sent_count 21
 hst_bytes_sent_sum 4348.0
-# HELP hst_bytes_sent_err 
+# HELP hst_bytes_sent_err
 # TYPE hst_bytes_sent_err counter
 hst_bytes_sent_err 0.0
 # HELP hst_request_time Request duration
@@ -1455,7 +1455,7 @@ hst_request_time_bucket{le="60.0",scope="total"} 21
 hst_request_time_bucket{le="+Inf",scope="total"} 21
 hst_request_time_count{scope="total"} 21
 hst_request_time_sum{scope="total"} 7.02
-# HELP hst_request_time_err 
+# HELP hst_request_time_err
 # TYPE hst_request_time_err counter
 hst_request_time_err{scope="in_upstreams"} 0.0
 hst_request_time_err{scope="total"} 0.0
@@ -2606,6 +2606,22 @@ $ cabal v1-install ngx-export-tools-extra
 
 ```ShellSession
 $ cabal build
+```
+
+Note that module *NgxExport.Tools.PCRE* depends on the old PCRE library which
+may be missing in basic sets of installed packages in modern Linux
+distributions. If the PCRE module is not needed, you may simply skip building
+it by putting line
+
+```Cabal Config
+constraints: ngx-export-tools-extra -pcre
+```
+
+inside *cabal.project*. Otherwise, the old PCRE library must be installed. In
+*Ubuntu 24.04* this can be done with command
+
+```ShellSession
+$ sudo apt-get install libpcre3-dev
 ```
 
 ##### Building custom libraries
