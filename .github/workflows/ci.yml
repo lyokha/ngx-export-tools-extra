@@ -60,7 +60,7 @@ jobs:
           sudo apt-get install -y libpcre3-dev
           sudo apt-get install -y dnsmasq
 
-      - name: Build Nginx module
+      - name: Build Nginx modules
         env:
           NGXVER: ${{ matrix.nginx }}
           NGXHMVER: ${{ matrix.nginx-haskell-module }}
@@ -105,7 +105,7 @@ jobs:
           make -j2
           echo "$(pwd)/objs" >> "$GITHUB_PATH"
 
-      - name: Build Haskell module
+      - name: Build Haskell modules
         run: |
           cabal --version
           echo "$(ghc --version) "`

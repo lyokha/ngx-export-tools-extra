@@ -95,7 +95,8 @@ $(DISTR): $(SETUPCONFIG) $(SRC)
 	runhaskell --ghc-arg=-package=base \
 	  --ghc-arg=-package="$(PKGDISTR)" Setup.hs build \
 	  --builddir="$(BUILDDIR)" \
-	  --ghc-options="$(SRC) -o $(LIB) -ddump-splices $(LINKRTS)"
+	  --ghc-options="$(SRC) -o $(LIB) -package-env $(GHCENVLNK) "` \
+	    `"-ddump-splices $(LINKRTS)"
 
 install: $(DISTR)
 	install -d "$(PREFIX)"
