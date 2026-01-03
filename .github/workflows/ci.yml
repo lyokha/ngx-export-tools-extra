@@ -117,7 +117,7 @@ jobs:
           GHCVER: ${{ matrix.ghc }}
           TOPDIR: ${{ github.workspace }}
         run: |
-          TEST_NGINX_TELIB_DIR="$TOPDIR/var/lib/nginx"
+          export TEST_NGINX_TELIB_DIR="$TOPDIR/var/lib/nginx"
           install -d "$TEST_NGINX_TELIB_DIR"
 
           cd test
