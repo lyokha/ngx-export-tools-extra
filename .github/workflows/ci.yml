@@ -15,14 +15,18 @@ jobs:
         nginx-haskell-module: [3.4.3]
         experimental: [false]
         include:
-          - ghc: '9.12'
+          - ghc: '9.14'
             cabal: '3.16'
             nginx: head
             nginx-haskell-module: head
             experimental: true
+          - ghc: '9.14'
+            cabal: '3.16'
+            nginx: 1.28.1
+            nginx-haskell-module: head
           - ghc: '9.12'
             cabal: '3.16'
-            nginx: 1.28.0
+            nginx: 1.28.1
             nginx-haskell-module: head
             experimental: false
           - ghc: '9.10'
@@ -37,12 +41,13 @@ jobs:
             experimental: false
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Install GHC and Cabal
         uses: haskell-actions/setup@v2
         with:
           ghc-version: ${{ matrix.ghc }}
           cabal-version: ${{ matrix.cabal }}
+          cabal-update: true
       - name: Install prove
         uses: perl-actions/install-with-cpanm@v1.7
         with:
@@ -53,28 +58,20 @@ jobs:
           sudo apt-get update 
           sudo apt-get install -y libpcre3-dev
           sudo apt-get install -y dnsmasq
-      - name: Install and test
+
+      - name: Build Nginx module
         env:
-          GHCVER: ${{ matrix.ghc }}
           NGXVER: ${{ matrix.nginx }}
-          CABALVER: ${{ matrix.cabal }}
-          JSMN_REV: 25647e692c7906b96ffd2b05ca54c097948e879c
           NGXHMVER: ${{ matrix.nginx-haskell-module }}
+          JSMN_REV: 25647e692c7906b96ffd2b05ca54c097948e879c
           UPCONF_MODULE_PATH: examples/dynamicUpstreams/nginx-upconf-module
         run: |
-          cabal --version
-          echo "$(ghc --version) "`
-              `"[$(ghc --print-project-git-commit-id 2>/dev/null || echo '?')]"
-
-          cabal update
-          cabal build
-
           if [ "$NGXVER" = head ]
           then
               git clone https://github.com/nginx/nginx.git nginx-head
           else
-              wget http://nginx.org/download/nginx-${NGXVER}.tar.gz &&
-                  tar xzvf nginx-${NGXVER}.tar.gz
+              wget http://nginx.org/download/nginx-"$NGXVER".tar.gz &&
+                  tar xzvf nginx-"$NGXVER".tar.gz
           fi
 
           if [ "$NGXHMVER" = head ]
@@ -83,19 +80,16 @@ jobs:
                   nginx-haskell-module-head
           else
               wget "https://github.com/lyokha/nginx-haskell-module/"`
-                  `"archive/refs/tags/${NGXHMVER}.tar.gz" \
-                      -O nginx-haskell-module-${NGXHMVER}.tar.gz &&
-                      tar xzvf nginx-haskell-module-${NGXHMVER}.tar.gz
+                  `"archive/refs/tags/$NGXHMVER.tar.gz" \
+                      -O nginx-haskell-module-"$NGXHMVER".tar.gz &&
+                      tar xzvf nginx-haskell-module-"$NGXHMVER".tar.gz
           fi
           sudo wget -P /usr/include \
-              https://raw.githubusercontent.com/zserge/jsmn/$JSMN_REV/jsmn.h
+              https://raw.githubusercontent.com/zserge/jsmn/"$JSMN_REV"/jsmn.h
           git clone https://github.com/openresty/echo-nginx-module.git
           git clone https://github.com/lyokha/nginx-custom-counters-module.git
 
-          export TEST_NGINX_TELIB_DIR="$(pwd)/var/lib/nginx"
-          install -d "$TEST_NGINX_TELIB_DIR"
-
-          cd nginx-${NGXVER}/
+          cd nginx-"$NGXVER"
           if [ "$NGXVER" = head ]
           then
               NGX_CONFIGURE=./auto/configure
@@ -103,13 +97,27 @@ jobs:
               NGX_CONFIGURE=./configure
           fi
           $NGX_CONFIGURE --with-http_stub_status_module \
-                         --add-module=../nginx-haskell-module-${NGXHMVER} \
-                         --add-module=../nginx-haskell-module-${NGXHMVER}/$UPCONF_MODULE_PATH \
+                         --add-module=../nginx-haskell-module-"$NGXHMVER" \
+                         --add-module=../nginx-haskell-module-"$NGXHMVER/$UPCONF_MODULE_PATH" \
                          --add-module=../nginx-custom-counters-module \
                          --add-module=../echo-nginx-module
           make -j2
-          export PATH="$(pwd)/objs:$PATH"
-          cd -
+          echo "$(pwd)/objs" >> "$GITHUB_PATH"
+
+      - name: Build Haskell module
+        run: |
+          cabal --version
+          echo "$(ghc --version) "`
+              `"[$(ghc --print-project-git-commit-id 2>/dev/null || echo '?')]"
+          cabal build
+
+      - name: Build and run tests
+        env:
+          GHCVER: ${{ matrix.ghc }}
+          TOPDIR: ${{ github.workspace }}
+        run: |
+          TEST_NGINX_TELIB_DIR="$(TOPDIR)/var/lib/nginx"
+          install -d "$TEST_NGINX_TELIB_DIR"
 
           cd test
           echo "$GHCVER" | grep -q '^8\.' &&
@@ -117,7 +125,7 @@ jobs:
 
           for dir in Aggregate EDE PCRE Prometheus ServiceHookAdaptor Subrequest
           do
-              cd $dir
+              cd "$dir"
               sed -i 's/^packages: .\+/'`
                     `'& ..\/..\/ngx-export-tools-extra.cabal/' cabal.project
               make PREFIX="$TEST_NGINX_TELIB_DIR" INPLACE=1 $LINKRTS
