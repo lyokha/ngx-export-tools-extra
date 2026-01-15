@@ -13,18 +13,20 @@ jobs:
         cabal: ['3.10']
         nginx: [1.22.1]
         nginx-haskell-module: [3.4.3]
-        experimental: [false]
         include:
+          - experimental: false
           - ghc: '9.14'
             cabal: '3.16'
             nginx: head
             nginx-haskell-module: head
             experimental: true
+            allownewer: true
           - ghc: '9.14'
             cabal: '3.16'
             nginx: 1.28.1
             nginx-haskell-module: head
             experimental: true
+            allownewer: true
           - ghc: '9.12'
             cabal: '3.16'
             nginx: 1.28.1
@@ -106,11 +108,14 @@ jobs:
           echo "$(pwd)/objs" >> "$GITHUB_PATH"
 
       - name: Build Haskell modules
+        env:
+          ALLOW_NEWER: ${{ matrix.allownewer && '--allow-newer=all' || '' }}
         run: |
           cabal --version
           echo "$(ghc --version) "`
               `"[$(ghc --print-project-git-commit-id 2>/dev/null || echo '?')]"
-          cabal build
+          cabal build $ALLOW_NEWER
+          cabal sdist
 
       - name: Build and run tests
         env:
@@ -129,6 +134,10 @@ jobs:
               cd "$dir"
               sed -i 's/^packages: .\+/'`
                     `'& ..\/..\/ngx-export-tools-extra.cabal/' cabal.project
+              if [ "${{ matrix.allownewer }}" = true ]
+              then
+                  echo "allow-newer: all" >> cabal.project
+              fi
               make PREFIX="$TEST_NGINX_TELIB_DIR" INPLACE=1 $LINKRTS
               make PREFIX="$TEST_NGINX_TELIB_DIR" install
               prove -r t
@@ -147,6 +156,10 @@ jobs:
           sudo systemctl restart dnsmasq
           sed -i 's/^packages: .\+/'`
                 `'& ..\/..\/ngx-export-tools-extra.cabal/' cabal.project
+          if [ "${{ matrix.allownewer }}" = true ]
+          then
+              echo "allow-newer: all" >> cabal.project
+          fi
           make PREFIX="$TEST_NGINX_TELIB_DIR" INPLACE=1 $LINKRTS
           make PREFIX="$TEST_NGINX_TELIB_DIR" install
           prove -r t
