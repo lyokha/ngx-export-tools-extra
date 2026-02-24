@@ -131,13 +131,13 @@ import           GHC.Generics
 --
 --     haskell_run_service __/simpleService_collectUpstreams/__ $hs_upstreams
 --         \'Conf { upstreams =
---                     ['UData' { 'uQuery' =
---                                  'QuerySRV'
---                                      ('Name' \"_http._tcp.mycompany.com\")
---                                          ('SinglePriority' \"__/utest/__\")
---                            , 'uMaxFails' = 1
---                            , 'uFailTimeout' = 10
---                            }
+--                     [ v'UData' { 'uQuery' =
+--                                   'QuerySRV'
+--                                       ( v'Name' \"_http._tcp.mycompany.com\" )
+--                                           ( 'SinglePriority' \"__/utest/__\" )
+--                             , 'uMaxFails' = 1
+--                             , 'uFailTimeout' = 10
+--                             }
 --                     ]
 --               , maxWait = 'Sec' 300
 --               , waitOnException = 'Sec' 2
@@ -214,13 +214,13 @@ import           GHC.Generics
 -- @
 --     haskell_run_service __/simpleService_collectUpstreams/__ $hs_upstreams
 --         \'Conf { upstreams =
---                     ['UData' { 'uQuery' =
---                                  'QuerySRV'
---                                      ('Name' \"_http._tcp.mycompany.com\")
---                                          ('PriorityList' [\"__/utest/__\", \"__/utest1/__\"])
---                            , 'uMaxFails' = 1
---                            , 'uFailTimeout' = 10
---                            }
+--                     [ v'UData' { 'uQuery' =
+--                                   'QuerySRV'
+--                                       ( v'Name' \"_http._tcp.mycompany.com\" )
+--                                           ( 'PriorityList' [\"__/utest/__\", \"__/utest1/__\"] )
+--                             , 'uMaxFails' = 1
+--                             , 'uFailTimeout' = 10
+--                             }
 --                     ]
 --               , maxWait = 'Sec' 300
 --               , waitOnException = 'Sec' 2
@@ -300,8 +300,8 @@ type SAddress = Text
 -- - /priority list, SRV query/: weights are taken from 'srvWeight'.
 --
 -- Names in the /QueryA/ name list may contain suffix /:port/ (a port number)
--- which is ignored in 'collectA' and only appended to values of 'sAddr'
--- collected by 'collectServerData'.
+-- which is ignored in 'NgxExport.Tools.Resolve.collectA' and only appended to
+-- values of 'sAddr' collected by 'NgxExport.Tools.Resolve.collectServerData'.
 data UQuery = QueryA NameList UNamePriorityPolicy  -- ^ Query /A/ records
             | QuerySRV Name UNamePriorityPolicy    -- ^ Query an /SRV/ record
             deriving Read
@@ -451,9 +451,10 @@ collectA lTTL (Name n) = do
 
 -- | Queries an /SRV/ record for the given service name.
 --
--- After getting the /SRV/ record, runs 'collectA' for each collected element.
+-- After getting the /SRV/ record, runs 'NgxExport.Tools.Resolve.collectA' for
+-- each collected element.
 --
--- Returns a list of pairs /(Domain name, IP address)/ wrapped in an 'SRV'
+-- Returns a list of pairs /(Domain name, IP address)/ wrapped in an t'SRV'
 -- container and the minimum value of their TTLs. If the list is empty, then
 -- the returned TTL value gets taken from the first argument. Note that trailing
 -- dots in the collected domain names (as in /www.mycompany.com./) get removed

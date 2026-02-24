@@ -4,7 +4,7 @@
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  NgxExport.Tools.Subrequest
--- Copyright   :  (c) Alexey Radkov 2020-2024
+-- Copyright   :  (c) Alexey Radkov 2020-2026
 -- License     :  BSD-style
 --
 -- Maintainer  :  alexey.radkov@gmail.com
@@ -411,8 +411,6 @@ makeSubrequest =
     maybe (throwIO SubrequestParseError) subrequestBody .
         readFromByteStringAsJSON @SubrequestConf
 
-ngxExportAsyncIOYY 'makeSubrequest
-
 -- | Makes an HTTP request.
 --
 -- Behaves exactly as 'makeSubrequest' except it parses Haskell terms
@@ -440,8 +438,6 @@ makeSubrequestWithRead
 makeSubrequestWithRead =
     maybe (throwIO SubrequestParseError) subrequestBody .
         readFromByteString @SubrequestConf
-
-ngxExportAsyncIOYY 'makeSubrequestWithRead
 
 -- $internalHTTPSubrequests
 --
@@ -515,8 +511,6 @@ configureUDS = ignitionService $ \UDSConf {..} -> voidHandler $ do
               s <- S.socket S.AF_UNIX S.Stream S.defaultProtocol
               S.connect s (S.SockAddrUnix path)
               makeConnection (SB.recv s 4096) (SB.sendAll s) (S.close s)
-
-ngxExportSimpleServiceTyped 'configureUDS ''UDSConf SingleShotService
 
 -- $subrequestsWithCustomManager
 --
@@ -769,8 +763,6 @@ makeSubrequestFull =
                   (400, [], "", "Unreadable subrequest data")
           ) subrequestFull . readFromByteStringAsJSON @SubrequestConf
 
-ngxExportAsyncIOYY 'makeSubrequestFull
-
 -- | Makes an HTTP request.
 --
 -- The same as 'makeSubrequestWithRead' except it returns a binary encoded
@@ -788,8 +780,6 @@ makeSubrequestFullWithRead =
                   (400, [], "", "Unreadable subrequest data")
           ) subrequestFull . readFromByteString @SubrequestConf
 
-ngxExportAsyncIOYY 'makeSubrequestFullWithRead
-
 -- | Extracts the HTTP status from an encoded response.
 --
 -- Must be used to extract response data encoded by 'makeSubrequestFull' or
@@ -800,8 +790,6 @@ extractStatusFromFullResponse
     -> L.ByteString
 extractStatusFromFullResponse = C8L.pack . show .
     (\(a, _, _, _) -> a) . Binary.decode @FullResponse . L.fromStrict
-
-ngxExportYY 'extractStatusFromFullResponse
 
 -- | Extracts a specified header from an encoded response.
 --
@@ -821,8 +809,6 @@ extractHeaderFromFullResponse v =
         (_, hs, _, _) = Binary.decode @FullResponse $ L.fromStrict b
     in maybe "" L.fromStrict $ lookup h $ map (first mk) hs
 
-ngxExportYY 'extractHeaderFromFullResponse
-
 -- | Extracts the body from an encoded response.
 --
 -- Must be used to extract response data encoded by 'makeSubrequestFull' or
@@ -833,8 +819,6 @@ extractBodyFromFullResponse
     -> L.ByteString
 extractBodyFromFullResponse =
     (\(_, _, a, _) -> a) . Binary.decode @FullResponse . L.fromStrict
-
-ngxExportYY 'extractBodyFromFullResponse
 
 -- | Extracts the exception from an encoded response.
 --
@@ -849,8 +833,6 @@ extractExceptionFromFullResponse
     -> L.ByteString
 extractExceptionFromFullResponse = L.fromStrict .
     (\(_, _, _, a) -> a) . Binary.decode @FullResponse . L.fromStrict
-
-ngxExportYY 'extractExceptionFromFullResponse
 
 -- $forwardingFullResponse
 --
@@ -981,15 +963,11 @@ fromFullResponse :: ByteString -> ContentHandlerResult
 fromFullResponse =
     contentFromFullResponse notForwardableResponseHeaders True const
 
-ngxExportHandler 'fromFullResponse
-
 fromFullResponseWithException :: ByteString -> ContentHandlerResult
 fromFullResponseWithException =
     contentFromFullResponse notForwardableResponseHeaders True f
     where f "" = L.fromStrict
           f b = const b
-
-ngxExportHandler 'fromFullResponseWithException
 
 -- $makingBridgedHTTPSubrequests
 --
@@ -1224,8 +1202,6 @@ makeBridgedSubrequest =
     maybe (throwIO BridgeParseError) bridgedSubrequestBody .
         readFromByteStringAsJSON @BridgeConf
 
-ngxExportAsyncIOYY 'makeBridgedSubrequest
-
 -- | Makes a bridged HTTP request.
 --
 -- Behaves exactly as 'makeBridgedSubrequest' except it parses Haskell terms
@@ -1268,8 +1244,6 @@ makeBridgedSubrequestWithRead =
     maybe (throwIO BridgeParseError) bridgedSubrequestBody .
         readFromByteString @BridgeConf
 
-ngxExportAsyncIOYY 'makeBridgedSubrequestWithRead
-
 -- | Makes a bridged HTTP request.
 --
 -- The same as 'makeBridgedSubrequest' except it returns a binary encoded
@@ -1287,8 +1261,6 @@ makeBridgedSubrequestFull =
                   (400, [], "", "Unreadable bridged subrequest data")
           ) bridgedSubrequestFull . readFromByteStringAsJSON @BridgeConf
 
-ngxExportAsyncIOYY 'makeBridgedSubrequestFull
-
 -- | Makes a bridged HTTP request.
 --
 -- The same as 'makeBridgedSubrequestWithRead' except it returns a binary
@@ -1305,6 +1277,37 @@ makeBridgedSubrequestFullWithRead =
               Binary.encode @FullResponse
                   (400, [], "", "Unreadable bridged subrequest data")
           ) bridgedSubrequestFull . readFromByteString @BridgeConf
+
+
+-- TH: services and handlers
+
+ngxExportAsyncIOYY 'makeSubrequest
+
+ngxExportAsyncIOYY 'makeSubrequestWithRead
+
+ngxExportSimpleServiceTyped 'configureUDS ''UDSConf SingleShotService
+
+ngxExportAsyncIOYY 'makeSubrequestFull
+
+ngxExportAsyncIOYY 'makeSubrequestFullWithRead
+
+ngxExportYY 'extractStatusFromFullResponse
+
+ngxExportYY 'extractHeaderFromFullResponse
+
+ngxExportYY 'extractBodyFromFullResponse
+
+ngxExportYY 'extractExceptionFromFullResponse
+
+ngxExportHandler 'fromFullResponse
+
+ngxExportHandler 'fromFullResponseWithException
+
+ngxExportAsyncIOYY 'makeBridgedSubrequest
+
+ngxExportAsyncIOYY 'makeBridgedSubrequestWithRead
+
+ngxExportAsyncIOYY 'makeBridgedSubrequestFull
 
 ngxExportAsyncIOYY 'makeBridgedSubrequestFullWithRead
 

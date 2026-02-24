@@ -210,7 +210,7 @@ type ReportValue a = Maybe (Int32, Maybe a)
 --
 -- The aggregate service /stats/ must be referred from the Nginx configuration
 -- file with prefix __/simpleService_aggregate_/__. Its configuration is typed,
--- the type is 'AggregateServerConf'. Though its only constructor
+-- the type is t'AggregateServerConf'. Though its only constructor
 -- /AggregateServerConf/ is not exported from this module, the service is still
 -- configurable from an Nginx configuration. Here, the aggregate service listens
 -- on TCP port /8100/, and its /purge interval/ is 5 minutes. Notice that an
@@ -447,7 +447,7 @@ handleAggregateExceptions cmsg = handleAny $ \e ->
 --
 -- The service is implemented via
 -- 'NgxExport.Tools.SimpleService.ngxExportSimpleServiceTyped' with
--- 'AggregateServerConf' as the name of its custom type. This is an
+-- t'AggregateServerConf' as the name of its custom type. This is an
 -- 'NgxExport.Tools.SplitService.ignitionService' with an HTTP server based on
 -- the [Snap framework](http://snapframework.com/) running inside. The internal
 -- HTTP server collects data from worker processes at URL

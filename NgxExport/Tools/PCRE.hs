@@ -3,7 +3,7 @@
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  NgxExport.Tools.PCRE
--- Copyright   :  (c) Alexey Radkov 2021-2024
+-- Copyright   :  (c) Alexey Radkov 2021-2026
 -- License     :  BSD-style
 --
 -- Maintainer  :  alexey.radkov@gmail.com
@@ -160,40 +160,12 @@ regexes :: IORef Regexes
 regexes = unsafePerformIO $ newIORef HM.empty
 {-# NOINLINE regexes #-}
 
-declareRegexes :: InputRegexes -> NgxExportService
-declareRegexes = voidService
-
-ngxExportSimpleServiceTyped 'declareRegexes ''InputRegexes restartPromptly
-
-compileRegexes :: ByteString -> IO L.ByteString
-compileRegexes = voidHandler' $ do
-    !inputRegexes <- fromJust <$> readIORef storage_InputRegexes_declareRegexes
-    let !compiledRegexes =
-            foldl' (\a (!k, !v, !m) -> let !r = compile v $ mods $ C8.unpack m
-                                           !hm = HM.insert k r a
-                                       in hm
-                   ) HM.empty inputRegexes
-    writeIORef regexes compiledRegexes
-    where md 'i' = Just caseless
-          md 's' = Just dotall
-          md 'm' = Just multiline
-          md  _  = Nothing
-          mods = map NE.head . NE.group . sort . mapMaybe md
-
-ngxExportServiceHook 'compileRegexes
-
 type InputSubs = [(ByteString, ByteString)]
 type Subs = HashMap ByteString ByteString
 
 substitutions :: IORef Subs
 substitutions = unsafePerformIO $ newIORef HM.empty
 {-# NOINLINE substitutions #-}
-
-mapSubs :: InputSubs -> NgxExportService
-mapSubs = ignitionService $ voidHandler .
-    writeIORef substitutions . foldl (\a (k, v) -> HM.insert k v a) HM.empty
-
-ngxExportSimpleServiceTyped 'mapSubs ''InputSubs SingleShotService
 
 type RegexF = Regex -> ByteString -> IO ByteString
 
@@ -227,8 +199,6 @@ matchRegex
     -> IO L.ByteString
 matchRegex = rtRegex doMatchRegex
 
-ngxExportIOYY 'matchRegex
-
 -- $substitutionPCRE
 --
 -- There are handlers to make substitutions using PCRE regexes. An
@@ -255,7 +225,7 @@ ngxExportIOYY 'matchRegex
 -- import qualified Data.ByteString.Lazy as L
 --
 -- gsubSwapAround :: ByteString -> IO L.ByteString
--- __/gsubSwapAround/__ = 'gsubRegexWith' $ const $ \\case 
+-- __/gsubSwapAround/__ = 'gsubRegexWith' $ const $ \\case
 --     a : d : b : _ -> B.concat [b, d, a]
 --     \_ -> B.empty
 --
@@ -346,8 +316,6 @@ subRegex
     -> IO L.ByteString
 subRegex = rtRegex $ doSubRegex sub Nothing
 
-ngxExportIOYY 'subRegex
-
 -- | Pastes /functional/ substitutions using a named regex and a function.
 --
 -- The substitutions get applied only to the first occurrence of the match.
@@ -368,8 +336,6 @@ gsubRegex
     -> IO L.ByteString
 gsubRegex = rtRegex $ doSubRegex gsub Nothing
 
-ngxExportIOYY 'gsubRegex
-
 -- | Pastes /functional/ substitutions using a named regex and a function.
 --
 -- The same as 'subRegexWith' except that the substitutions get applied
@@ -379,4 +345,41 @@ gsubRegexWith
     -> ByteString       -- ^ Keys to find the regex and the sub, and the value
     -> IO L.ByteString
 gsubRegexWith = rtRegex . doSubRegex gsub . Just
+
+
+-- TH: services and handlers
+
+declareRegexes :: InputRegexes -> NgxExportService
+declareRegexes = voidService
+
+ngxExportSimpleServiceTyped 'declareRegexes ''InputRegexes restartPromptly
+
+compileRegexes :: ByteString -> IO L.ByteString
+compileRegexes = voidHandler' $ do
+    !inputRegexes <- fromJust <$> readIORef storage_InputRegexes_declareRegexes
+    let !compiledRegexes =
+            foldl' (\a (!k, !v, !m) -> let !r = compile v $ mods $ C8.unpack m
+                                           !hm = HM.insert k r a
+                                       in hm
+                   ) HM.empty inputRegexes
+    writeIORef regexes compiledRegexes
+    where md 'i' = Just caseless
+          md 's' = Just dotall
+          md 'm' = Just multiline
+          md  _  = Nothing
+          mods = map NE.head . NE.group . sort . mapMaybe md
+
+ngxExportServiceHook 'compileRegexes
+
+mapSubs :: InputSubs -> NgxExportService
+mapSubs = ignitionService $ voidHandler .
+    writeIORef substitutions . foldl (\a (k, v) -> HM.insert k v a) HM.empty
+
+ngxExportSimpleServiceTyped 'mapSubs ''InputSubs SingleShotService
+
+ngxExportIOYY 'matchRegex
+
+ngxExportIOYY 'subRegex
+
+ngxExportIOYY 'gsubRegex
 

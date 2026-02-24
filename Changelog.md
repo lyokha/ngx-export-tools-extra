@@ -1,3 +1,7 @@
+### 1.2.12.1
+
+- Group Template Haskell declarations to fix Haddock out-of-scope errors.
+
 ### 1.2.12
 
 - Module *NgxExport.Tools.Resolve*.
