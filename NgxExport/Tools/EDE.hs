@@ -260,8 +260,8 @@ extraEDEFilters = HM.fromList
 -- | Renders an EDE template from a JSON object.
 --
 -- This is the core function of the /renderEDETemplate/ handler. Accepts a JSON
--- object written in a 'L.ByteString' and a key to find a compiled EDE template
--- declared by the /compileEDETemplates/ handler.
+-- object written in a 'Data.ByteString.Lazy.ByteString' and a key to find a
+-- compiled EDE template declared by the /compileEDETemplates/ handler.
 renderEDETemplate :: L.ByteString       -- ^ JSON object
                   -> ByteString         -- ^ Key to find the EDE template
                   -> IO L.ByteString
