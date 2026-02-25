@@ -14,7 +14,7 @@ library
                           , ngx-export
                           , ngx-export-tools
                           , ngx-export-tools-extra
-                          , bytestring
+                          , bytestring >= 0.11.2.0
                           , aeson
 
   ghc-options:             -Wall -O2
