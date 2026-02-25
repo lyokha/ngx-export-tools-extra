@@ -15,6 +15,7 @@
 --
 -----------------------------------------------------------------------------
 
+
 module NgxExport.Tools.PCRE (
     -- * Matching against regular expressions
     -- $matchingPCRE
@@ -37,6 +38,7 @@ import           Data.HashMap.Strict (HashMap)
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as L
+import           Data.ByteString.Lazy (LazyByteString)
 import           Data.List
 import qualified Data.List.NonEmpty as NE
 import           Data.Maybe
@@ -169,7 +171,7 @@ substitutions = unsafePerformIO $ newIORef HM.empty
 
 type RegexF = Regex -> ByteString -> IO ByteString
 
-rtRegex :: RegexF -> ByteString -> IO L.ByteString
+rtRegex :: RegexF -> ByteString -> IO LazyByteString
 rtRegex f = fmap L.fromStrict . uncurry doRtRegex .
     second C8.tail . C8.break (== '|')
     where doRtRegex k v = do
@@ -196,7 +198,7 @@ doMatchRegex r v = return $
 -- This is the core function of the /matchRegex/ handler.
 matchRegex
     :: ByteString           -- ^ Key to find the regex, and the value
-    -> IO L.ByteString
+    -> IO LazyByteString
 matchRegex = rtRegex doMatchRegex
 
 -- $substitutionPCRE
@@ -220,11 +222,11 @@ matchRegex = rtRegex doMatchRegex
 -- import           NgxExport
 -- import           NgxExport.Tools.PCRE
 --
--- import           Data.ByteString (ByteString)
 -- import qualified Data.ByteString as B
--- import qualified Data.ByteString.Lazy as L
+-- import           Data.ByteString (ByteString)
+-- import           Data.ByteString.Lazy (LazyByteString)
 --
--- gsubSwapAround :: ByteString -> IO L.ByteString
+-- gsubSwapAround :: ByteString -> IO LazyByteString
 -- __/gsubSwapAround/__ = 'gsubRegexWith' $ const $ \\case
 --     a : d : b : _ -> B.concat [b, d, a]
 --     \_ -> B.empty
@@ -313,7 +315,7 @@ doSubRegex f p r v =
 -- This is the core function of the /subRegex/ handler.
 subRegex
     :: ByteString       -- ^ Keys to find the regex and the sub, and the value
-    -> IO L.ByteString
+    -> IO LazyByteString
 subRegex = rtRegex $ doSubRegex sub Nothing
 
 -- | Pastes /functional/ substitutions using a named regex and a function.
@@ -322,7 +324,7 @@ subRegex = rtRegex $ doSubRegex sub Nothing
 subRegexWith
     :: SubPasteF        -- ^ Function to paste substitutions
     -> ByteString       -- ^ Keys to find the regex and the sub, and the value
-    -> IO L.ByteString
+    -> IO LazyByteString
 subRegexWith = rtRegex . doSubRegex sub . Just
 
 -- | Pastes a named /plain/ substitution using a named regex.
@@ -333,7 +335,7 @@ subRegexWith = rtRegex . doSubRegex sub . Just
 -- This is the core function of the /gsubRegex/ handler.
 gsubRegex
     :: ByteString       -- ^ Keys to find the regex and the sub, and the value
-    -> IO L.ByteString
+    -> IO LazyByteString
 gsubRegex = rtRegex $ doSubRegex gsub Nothing
 
 -- | Pastes /functional/ substitutions using a named regex and a function.
@@ -343,7 +345,7 @@ gsubRegex = rtRegex $ doSubRegex gsub Nothing
 gsubRegexWith
     :: SubPasteF        -- ^ Function to paste substitutions
     -> ByteString       -- ^ Keys to find the regex and the sub, and the value
-    -> IO L.ByteString
+    -> IO LazyByteString
 gsubRegexWith = rtRegex . doSubRegex gsub . Just
 
 
@@ -354,7 +356,7 @@ declareRegexes = voidService
 
 ngxExportSimpleServiceTyped 'declareRegexes ''InputRegexes restartPromptly
 
-compileRegexes :: ByteString -> IO L.ByteString
+compileRegexes :: ByteString -> IO LazyByteString
 compileRegexes = voidHandler' $ do
     !inputRegexes <- fromJust <$> readIORef storage_InputRegexes_declareRegexes
     let !compiledRegexes =

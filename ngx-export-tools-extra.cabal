@@ -1,5 +1,5 @@
 name:                       ngx-export-tools-extra
-version:                    1.2.12.1
+version:                    1.2.12.2
 synopsis:                   More extra tools for Nginx Haskell module
 description:                More extra tools for
         <https://github.com/lyokha/nginx-haskell-module Nginx Haskell module>.
@@ -37,7 +37,7 @@ library
   default-language:         Haskell2010
   build-depends:            base >= 4.8 && < 5
                           , template-haskell >= 2.11.0.0
-                          , bytestring >= 0.10.0.0
+                          , bytestring >= 0.11.2.0
                           , base64 >= 0.3.0.0
                           , ngx-export
                           , ngx-export-tools >= 1.2.6

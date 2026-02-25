@@ -47,7 +47,7 @@ import           NgxExport.Tools
 import           NgxExport.Tools.Aggregate
 
 import           Data.ByteString (ByteString)
-import qualified Data.ByteString.Lazy.Char8 as C8L
+import           Data.ByteString.Lazy (LazyByteString)
 import           Data.Aeson
 import           Data.Maybe
 import           Data.IORef
@@ -65,7 +65,7 @@ stats :: IORef Stats
 stats = unsafePerformIO $ newIORef $ Stats 0 0 0
 {-# NOINLINE stats #-}
 
-updateStats :: ByteString -> IO C8L.ByteString
+updateStats :: ByteString -> IO LazyByteString
 updateStats s = voidHandler $ do
     let cbs = readFromByteString @Int s
     modifyIORef' stats $ \(Stats bs rs _) ->
@@ -75,7 +75,7 @@ updateStats s = voidHandler $ do
         in Stats nbs nrs nmbs
 ngxExportIOYY 'updateStats
 
-reportStats :: Int -> Bool -> IO C8L.ByteString
+reportStats :: Int -> Bool -> IO LazyByteString
 reportStats = deferredService $ \port -> voidHandler $ do
     s <- readIORef stats
     reportAggregate port (Just s) "stats"
@@ -370,9 +370,10 @@ import           NgxExport.Tools.EDE ()
 
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as L
+import           Data.ByteString.Lazy (LazyByteString)
 import qualified Network.HTTP.Types.URI as URI
 
-urlDecode :: ByteString -> L.ByteString
+urlDecode :: ByteString -> LazyByteString
 urlDecode = L.fromStrict . URI.urlDecode False
 
 ngxExportYY 'urlDecode
@@ -631,11 +632,11 @@ module TestToolsExtraPCRE where
 import           NgxExport
 import           NgxExport.Tools.PCRE
 
-import           Data.ByteString (ByteString)
 import qualified Data.ByteString as B
-import qualified Data.ByteString.Lazy as L
+import           Data.ByteString (ByteString)
+import           Data.ByteString.Lazy (LazyByteString)
 
-gsubSwapAround :: ByteString -> IO L.ByteString
+gsubSwapAround :: ByteString -> IO LazyByteString
 gsubSwapAround = gsubRegexWith $ const $ \case
     a : d : b : _ -> B.concat [b, d, a]
     _ -> B.empty
@@ -1682,9 +1683,10 @@ module TestToolsExtraServiceHookAdaptor where
 import           NgxExport
 import           NgxExport.Tools.ServiceHookAdaptor ()
 
-import           Data.ByteString (ByteString)
 import qualified Data.ByteString as B
+import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as L
+import           Data.ByteString.Lazy (LazyByteString)
 import           Data.IORef
 import           Control.Monad
 import           Control.Exception
@@ -1700,7 +1702,7 @@ secretWord :: IORef ByteString
 secretWord = unsafePerformIO $ newIORef ""
 {-# NOINLINE secretWord #-}
 
-testSecretWord :: ByteString -> IO L.ByteString
+testSecretWord :: ByteString -> IO LazyByteString
 testSecretWord v = do
     s <- readIORef secretWord
     when (B.null s) $ throwIO SecretWordUnset
@@ -1709,7 +1711,7 @@ testSecretWord v = do
                  else ""
 ngxExportIOYY 'testSecretWord
 
-changeSecretWord :: ByteString -> IO L.ByteString
+changeSecretWord :: ByteString -> IO LazyByteString
 changeSecretWord s = do
     writeIORef secretWord s
     return "The secret word was changed"
@@ -1846,7 +1848,7 @@ hook to reset the secret word.
 ###### File *test_tools_extra_servicehookadaptor.hs*: reset the secret word
 
 ```haskell
-resetSecretWord :: ByteString -> IO L.ByteString
+resetSecretWord :: ByteString -> IO LazyByteString
 resetSecretWord = const $ do
     writeIORef secretWord ""
     return "The secret word was reset"
@@ -1885,7 +1887,7 @@ You may also want to change the hook message in *changeSecretWord* to
 properly log the reset case.
 
 ```haskell
-changeSecretWord :: ByteString -> IO L.ByteString
+changeSecretWord :: ByteString -> IO LazyByteString
 changeSecretWord s = do
     writeIORef secretWord s
     return $ "The secret word was " `L.append` if B.null s
@@ -1915,7 +1917,7 @@ import           NgxExport.Tools
 import           NgxExport.Tools.Subrequest
 
 import           Data.ByteString (ByteString)
-import qualified Data.ByteString.Lazy as L
+import           Data.ByteString.Lazy (LazyByteString)
 
 makeRequest :: ByteString -> NgxExportService
 makeRequest = const . makeSubrequest
@@ -2130,12 +2132,11 @@ import           NgxExport.Tools
 import           NgxExport.Tools.Subrequest
 
 import           Data.ByteString (ByteString)
-import qualified Data.ByteString.Lazy as L
+import qualified Data.ByteString.Char8 as C8
 
 import           Network.HTTP.Client hiding (path)
 import qualified Network.Socket as S
 import qualified Network.Socket.ByteString as SB
-import qualified Data.ByteString.Char8 as C8
 
 configureUdsManager :: ByteString -> NgxExportService
 configureUdsManager = ignitionService $ \path -> voidHandler $ do
@@ -2429,7 +2430,7 @@ Let's extend our example with bridged subrequests.
 ###### File *test_tools_extra_subrequest.hs*: auxiliary read body handler
 
 ```haskell
-reqBody :: L.ByteString -> ByteString -> IO L.ByteString
+reqBody :: LazyByteString -> ByteString -> IO LazyByteString
 reqBody = const . return
 
 ngxExportAsyncOnReqBody 'reqBody

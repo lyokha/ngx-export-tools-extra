@@ -47,9 +47,9 @@ import           Language.Haskell.TH
 import           Network.HTTP.Client
 import           Foreign.C.Types
 import qualified Data.ByteString as B
-import qualified Data.ByteString.Char8 as C8
 import           Data.ByteString (ByteString)
-import qualified Data.ByteString.Lazy as L
+import qualified Data.ByteString.Char8 as C8
+import           Data.ByteString.Lazy (LazyByteString)
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import           Data.IORef
@@ -107,7 +107,7 @@ type ReportValue a = Maybe (Int32, Maybe a)
 -- import           NgxExport.Tools.Aggregate
 --
 -- import           Data.ByteString (ByteString)
--- import qualified Data.ByteString.Lazy.Char8 as C8L
+-- import           Data.ByteString.Lazy (LazyByteString)
 -- import           Data.Aeson
 -- import           Data.Maybe
 -- import           Data.IORef
@@ -125,7 +125,7 @@ type ReportValue a = Maybe (Int32, Maybe a)
 -- stats = unsafePerformIO $ newIORef $ Stats 0 0 0
 -- {-\# NOINLINE stats \#-}
 --
--- updateStats :: ByteString -> IO C8L.ByteString
+-- updateStats :: ByteString -> IO LazyByteString
 -- __/updateStats/__ s = voidHandler $ do
 --     let cbs = 'NgxExport.Tools.Read.readFromByteString' \@Int s
 --     modifyIORef\' stats $ \\(Stats bs rs _) ->
@@ -135,7 +135,7 @@ type ReportValue a = Maybe (Int32, Maybe a)
 --         in Stats nbs nrs nmbs
 -- 'NgxExport.ngxExportIOYY' \'updateStats
 --
--- reportStats :: Int -> Bool -> IO C8L.ByteString
+-- reportStats :: Int -> Bool -> IO LazyByteString
 -- __/reportStats/__ = 'deferredService' $ \\port -> voidHandler $ do
 --     s <- readIORef stats
 --     'reportAggregate' port (Just s) \"__/stats/__\"
@@ -344,7 +344,7 @@ updateAggregate a s int = do
             )
 
 receiveAggregate :: FromJSON a =>
-    Aggregate a -> L.ByteString -> ByteString -> IO L.ByteString
+    Aggregate a -> LazyByteString -> ByteString -> IO LazyByteString
 receiveAggregate a v sint = do
     let !s = decode' v
         !int = toNominalDiffTime $ readDef (Min 5) $ C8.unpack sint
@@ -485,14 +485,15 @@ ngxExportAggregateService f a = do
 #ifdef SNAP_AGGREGATE_SERVER
             ,sigD uName [t|ByteString|]
             ,funD uName [clause [] (normalB [|C8.pack f|]) []]
-            ,sigD fName [t|AggregateServerConf -> Bool -> IO L.ByteString|]
+            ,sigD fName [t|AggregateServerConf -> Bool -> IO LazyByteString|]
             ,funD fName
                 [clause []
                     (normalB [|$(varE nameF) $(storage) $(varE uName)|])
                     []
                 ]
 #endif
-            ,sigD recvName [t|L.ByteString -> ByteString -> IO L.ByteString|]
+            ,sigD recvName
+                [t|LazyByteString -> ByteString -> IO LazyByteString|]
             ,funD recvName
                 [clause []
                     (normalB [|$(varE nameRecv) $(storage)|])

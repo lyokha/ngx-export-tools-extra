@@ -1,3 +1,7 @@
+### 1.2.12.2
+
+- Use type synonym *LazyByteString* from *bytestring &ge; 0.11.2.0*.
+
 ### 1.2.12.1
 
 - Group Template Haskell declarations to fix Haddock out-of-scope errors.

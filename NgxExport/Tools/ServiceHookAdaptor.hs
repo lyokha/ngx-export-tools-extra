@@ -47,9 +47,10 @@ import           Control.Monad
 -- import           NgxExport
 -- import           NgxExport.Tools.ServiceHookAdaptor ()
 --
--- import           Data.ByteString (ByteString)
 -- import qualified Data.ByteString as B
+-- import           Data.ByteString (ByteString)
 -- import qualified Data.ByteString.Lazy as L
+-- import           Data.ByteString.Lazy (LazyByteString)
 -- import           Data.IORef
 -- import           Control.Monad
 -- import           Control.Exception
@@ -65,7 +66,7 @@ import           Control.Monad
 -- secretWord = unsafePerformIO $ newIORef ""
 -- {-\# NOINLINE secretWord \#-}
 --
--- testSecretWord :: ByteString -> IO L.ByteString
+-- testSecretWord :: ByteString -> IO LazyByteString
 -- __/testSecretWord/__ v = do
 --     s <- readIORef secretWord
 --     when (B.null s) $ throwIO SecretWordUnset
@@ -74,7 +75,7 @@ import           Control.Monad
 --                  else \"\"
 -- 'NgxExport.ngxExportIOYY' 'testSecretWord
 --
--- changeSecretWord :: ByteString -> IO L.ByteString
+-- changeSecretWord :: ByteString -> IO LazyByteString
 -- __/changeSecretWord/__ s = do
 --     writeIORef secretWord s
 --     return \"The secret word was changed\"
@@ -196,7 +197,7 @@ import           Control.Monad
 --
 -- ==== File /test_tools_extra_servicehookadaptor.hs/: reset the secret word
 -- @
--- resetSecretWord :: ByteString -> IO L.ByteString
+-- resetSecretWord :: ByteString -> IO LazyByteString
 -- __/resetSecretWord/__ = const $ do
 --     writeIORef secretWord \"\"
 --     return \"The secret word was reset\"
@@ -234,7 +235,7 @@ import           Control.Monad
 -- properly log the reset case.
 --
 -- @
--- changeSecretWord :: ByteString -> IO L.ByteString
+-- changeSecretWord :: ByteString -> IO LazyByteString
 -- __/changeSecretWord/__ s = do
 --     writeIORef secretWord s
 --     return $ \"The secret word was \" \`L.append\` if B.null s

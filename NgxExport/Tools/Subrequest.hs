@@ -65,6 +65,7 @@ import           Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as L
+import           Data.ByteString.Lazy (LazyByteString)
 import qualified Data.ByteString.Lazy.Char8 as C8L
 import           Data.IORef
 import qualified Data.Text.Encoding as T
@@ -104,7 +105,7 @@ import           System.IO.Unsafe
 -- import           NgxExport.Tools.Subrequest
 --
 -- import           Data.ByteString (ByteString)
--- import qualified Data.ByteString.Lazy as L
+-- import           Data.ByteString.Lazy (LazyByteString)
 --
 -- makeRequest :: ByteString -> 'NgxExportService'
 -- __/makeRequest/__ = const . 'makeSubrequest'
@@ -252,7 +253,7 @@ data ConnectionManager = Default
 data SubrequestConf =
     SubrequestConf { srMethod          :: ByteString
                    , srUri             :: String
-                   , srBody            :: L.ByteString
+                   , srBody            :: LazyByteString
                    , srHeaders         :: RequestHeaders
                    , srResponseTimeout :: ResponseTimeout
                    , srManager         :: ConnectionManager
@@ -305,19 +306,20 @@ makeRequest SubrequestConf {..} req =
           setTimeout _ = undefined
 
 subrequest :: (String -> IO Request) ->
-    (Response L.ByteString -> L.ByteString) -> SubrequestConf ->
-    IO L.ByteString
+    (Response LazyByteString -> LazyByteString) -> SubrequestConf ->
+    IO LazyByteString
 subrequest parseRequestF buildResponseF sub@SubrequestConf {..} = do
     man <- getManager sub
     req <- parseRequestF srUri
     buildResponseF <$> httpLbsBrReadWithTimeout (makeRequest sub req) man
 
-subrequestBody :: SubrequestConf -> IO L.ByteString
+subrequestBody :: SubrequestConf -> IO LazyByteString
 subrequestBody = subrequest parseUrlThrow responseBody
 
-type FullResponse = (Int, [(ByteString, ByteString)], L.ByteString, ByteString)
+type FullResponse =
+    (Int, [(ByteString, ByteString)], LazyByteString, ByteString)
 
-handleFullResponse :: IO L.ByteString -> IO L.ByteString
+handleFullResponse :: IO LazyByteString -> IO LazyByteString
 handleFullResponse = handle $ \e -> do
     let msg = C8.pack $ show e
         responseXXX = (, [], "", msg)
@@ -336,14 +338,14 @@ handleFullResponse = handle $ \e -> do
                     _ -> response500
             _ -> response500
 
-buildFullResponse :: Response L.ByteString -> L.ByteString
+buildFullResponse :: Response LazyByteString -> LazyByteString
 buildFullResponse r =
     let status = statusCode $ responseStatus r
         headers = map (first original) $ responseHeaders r
         body = responseBody r
     in Binary.encode @FullResponse (status, headers, body, "")
 
-subrequestFull :: SubrequestConf -> IO L.ByteString
+subrequestFull :: SubrequestConf -> IO LazyByteString
 subrequestFull = handleFullResponse . subrequest parseRequest buildFullResponse
 
 httpManager :: Manager
@@ -406,7 +408,7 @@ getManager SubrequestConf {..} =
 -- /haskell_var_empty_on_error/.
 makeSubrequest
     :: ByteString       -- ^ Subrequest configuration
-    -> IO L.ByteString
+    -> IO LazyByteString
 makeSubrequest =
     maybe (throwIO SubrequestParseError) subrequestBody .
         readFromByteStringAsJSON @SubrequestConf
@@ -434,7 +436,7 @@ makeSubrequest =
 -- manager.
 makeSubrequestWithRead
     :: ByteString       -- ^ Subrequest configuration
-    -> IO L.ByteString
+    -> IO LazyByteString
 makeSubrequestWithRead =
     maybe (throwIO SubrequestParseError) subrequestBody .
         readFromByteString @SubrequestConf
@@ -532,12 +534,11 @@ configureUDS = ignitionService $ \UDSConf {..} -> voidHandler $ do
 -- import           NgxExport.Tools.Subrequest
 --
 -- import           Data.ByteString (ByteString)
--- import qualified Data.ByteString.Lazy as L
+-- import qualified Data.ByteString.Char8 as C8
 --
 -- import           Network.HTTP.Client hiding (path)
 -- import qualified Network.Socket as S
 -- import qualified Network.Socket.ByteString as SB
--- import qualified Data.ByteString.Char8 as C8
 --
 -- configureUdsManager :: ByteString -> 'NgxExportService'
 -- __/configureUdsManager/__ = 'ignitionService' $ \\path -> 'voidHandler' $ do
@@ -756,7 +757,7 @@ registerCustomManager = (modifyIORef' httpCustomManager .) . HM.insert
 -- /makeSubrequestFull/.
 makeSubrequestFull
     :: ByteString       -- ^ Subrequest configuration
-    -> IO L.ByteString
+    -> IO LazyByteString
 makeSubrequestFull =
     maybe (return $
               Binary.encode @FullResponse
@@ -773,7 +774,7 @@ makeSubrequestFull =
 -- /makeSubrequestFullWithRead/.
 makeSubrequestFullWithRead
     :: ByteString       -- ^ Subrequest configuration
-    -> IO L.ByteString
+    -> IO LazyByteString
 makeSubrequestFullWithRead =
     maybe (return $
               Binary.encode @FullResponse
@@ -787,7 +788,7 @@ makeSubrequestFullWithRead =
 -- /extractStatusFromFullResponse/.
 extractStatusFromFullResponse
     :: ByteString       -- ^ Encoded HTTP response
-    -> L.ByteString
+    -> LazyByteString
 extractStatusFromFullResponse = C8L.pack . show .
     (\(a, _, _, _) -> a) . Binary.decode @FullResponse . L.fromStrict
 
@@ -803,7 +804,7 @@ extractStatusFromFullResponse = C8L.pack . show .
 -- found.
 extractHeaderFromFullResponse
     :: ByteString       -- ^ Encoded HTTP response
-    -> L.ByteString
+    -> LazyByteString
 extractHeaderFromFullResponse v =
     let (h, b) = mk *** C8.tail $ C8.break ('|' ==) v
         (_, hs, _, _) = Binary.decode @FullResponse $ L.fromStrict b
@@ -816,7 +817,7 @@ extractHeaderFromFullResponse v =
 -- /extractBodyFromFullResponse/.
 extractBodyFromFullResponse
     :: ByteString       -- ^ Encoded HTTP response
-    -> L.ByteString
+    -> LazyByteString
 extractBodyFromFullResponse =
     (\(_, _, a, _) -> a) . Binary.decode @FullResponse . L.fromStrict
 
@@ -830,7 +831,7 @@ extractBodyFromFullResponse =
 -- subrequest. Non-/2xx/ responses are not regarded as exceptions as well.
 extractExceptionFromFullResponse
     :: ByteString       -- ^ Encoded HTTP response
-    -> L.ByteString
+    -> LazyByteString
 extractExceptionFromFullResponse = L.fromStrict .
     (\(_, _, _, a) -> a) . Binary.decode @FullResponse . L.fromStrict
 
@@ -948,7 +949,7 @@ deleteHeaders headersToDelete deleteXAccel =
 contentFromFullResponse
     :: HashSet HeaderName   -- ^ Set of not forwardable response headers
     -> Bool                 -- ^ Do not forward /X-Accel-.../ response headers
-    -> (L.ByteString -> ByteString -> L.ByteString)
+    -> (LazyByteString -> ByteString -> LazyByteString)
                             -- ^ Function to compose response body and exception
     -> ByteString           -- ^ Encoded HTTP response
     -> ContentHandlerResult
@@ -986,7 +987,7 @@ fromFullResponseWithException =
 --
 -- ==== File /test_tools_extra_subrequest.hs/: auxiliary read body handler
 -- @
--- reqBody :: L.ByteString -> ByteString -> IO L.ByteString
+-- reqBody :: LazyByteString -> ByteString -> IO LazyByteString
 -- reqBody = const . return
 --
 -- 'ngxExportAsyncOnReqBody' \'reqBody
@@ -1132,8 +1133,8 @@ makeStreamingRequest givesPopper conf req =
                 req { requestBody = RequestBodyStreamChunked givesPopper }
 
 bridgedSubrequest :: (String -> IO Request) ->
-    (Response L.ByteString -> L.ByteString) -> BridgeConf ->
-    IO L.ByteString
+    (Response LazyByteString -> LazyByteString) -> BridgeConf ->
+    IO LazyByteString
 bridgedSubrequest parseRequestF buildResponseF BridgeConf {..} = do
     manIn <- getManager bridgeSource
     manOut <- getManager bridgeSink
@@ -1155,10 +1156,10 @@ bridgedSubrequest parseRequestF buildResponseF BridgeConf {..} = do
             httpLbsBrReadWithTimeout
                 (makeStreamingRequest givesPopper bridgeSink reqOut') manOut
 
-bridgedSubrequestBody :: BridgeConf -> IO L.ByteString
+bridgedSubrequestBody :: BridgeConf -> IO LazyByteString
 bridgedSubrequestBody = bridgedSubrequest parseUrlThrow responseBody
 
-bridgedSubrequestFull :: BridgeConf -> IO L.ByteString
+bridgedSubrequestFull :: BridgeConf -> IO LazyByteString
 bridgedSubrequestFull =
     handleFullResponse . bridgedSubrequest parseRequest buildFullResponse
 
@@ -1197,7 +1198,7 @@ bridgedSubrequestFull =
 -- /haskell_var_empty_on_error/.
 makeBridgedSubrequest
     :: ByteString       -- ^ Bridge configuration
-    -> IO L.ByteString
+    -> IO LazyByteString
 makeBridgedSubrequest =
     maybe (throwIO BridgeParseError) bridgedSubrequestBody .
         readFromByteStringAsJSON @BridgeConf
@@ -1239,7 +1240,7 @@ makeBridgedSubrequest =
 -- must be listed in this order.
 makeBridgedSubrequestWithRead
     :: ByteString       -- ^ Bridge configuration
-    -> IO L.ByteString
+    -> IO LazyByteString
 makeBridgedSubrequestWithRead =
     maybe (throwIO BridgeParseError) bridgedSubrequestBody .
         readFromByteString @BridgeConf
@@ -1254,7 +1255,7 @@ makeBridgedSubrequestWithRead =
 -- /makeBridgedSubrequestFull/.
 makeBridgedSubrequestFull
     :: ByteString       -- ^ Bridge configuration
-    -> IO L.ByteString
+    -> IO LazyByteString
 makeBridgedSubrequestFull =
     maybe (return $
               Binary.encode @FullResponse
@@ -1271,7 +1272,7 @@ makeBridgedSubrequestFull =
 -- /makeBridgedSubrequestFullWithRead/.
 makeBridgedSubrequestFullWithRead
     :: ByteString       -- ^ Bridge configuration
-    -> IO L.ByteString
+    -> IO LazyByteString
 makeBridgedSubrequestFullWithRead =
     maybe (return $
               Binary.encode @FullResponse

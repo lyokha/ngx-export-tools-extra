@@ -43,7 +43,7 @@ import           Data.HashSet (HashSet)
 import qualified Data.HashSet as HS
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as C8
-import qualified Data.ByteString.Lazy as L
+import           Data.ByteString.Lazy (LazyByteString)
 import qualified Data.ByteString.Lazy.Char8 as C8L
 import           Data.IORef
 import           Data.Text (Text)
@@ -529,7 +529,7 @@ toPrometheusMetrics' PrometheusConf {..} (srv, cnts, hs, ocnts) =
                           T.breakOn "@" k
               in T.concat [b, e, a]
 
-showPrometheusMetrics :: PrometheusMetrics -> L.ByteString
+showPrometheusMetrics :: PrometheusMetrics -> LazyByteString
 showPrometheusMetrics = TL.encodeUtf8 . M.foldlWithKey
     (\a k (h, ms) ->
         let k' = TL.fromStrict k
@@ -590,7 +590,7 @@ showPrometheusMetrics = TL.encodeUtf8 . M.foldlWithKey
                           ,n'
                           )
 
-toPrometheusMetrics :: ByteString -> IO L.ByteString
+toPrometheusMetrics :: ByteString -> IO LazyByteString
 toPrometheusMetrics v = do
     let cs = fromJust $ readFromByteStringAsJSON @AllMetrics v
     pc <- readIORef conf
@@ -622,7 +622,7 @@ scale n = round . (fromIntegral n *)
 -- on conversion failure which results in returning an empty string.
 scale1000
     :: ByteString   -- ^ Floating point value
-    -> L.ByteString
+    -> LazyByteString
 scale1000 v = let v' = fromJust $ readFromByteString @Double v
               in C8L.pack $ show $ scale 1000 v'
 
@@ -868,7 +868,7 @@ extractValues :: ByteString -> [ByteString]
 extractValues = filter ((&&) <$> not . C8.null <*> isDigit . C8.head)
                 . C8.splitWith ((&&) <$> not . isDigit <*> (/= '.'))
 
-statusLayout :: ByteString -> L.ByteString
+statusLayout :: ByteString -> LazyByteString
 statusLayout = C8L.pack . intercalate "," . map show . statuses
     where statuses s = runST $ do
               a <- newArray bs 0 :: ST s (STUArray s Int Int)
@@ -888,12 +888,12 @@ ngxExportYY 'statusLayout
 cumulativeValue' :: (Num a, Read a) => ByteString -> a
 cumulativeValue' = foldr ((+) . (read . C8.unpack)) 0 . extractValues
 
-cumulativeValue :: ByteString -> L.ByteString
+cumulativeValue :: ByteString -> LazyByteString
 cumulativeValue = C8L.pack . show . cumulativeValue' @Int
 
 ngxExportYY 'cumulativeValue
 
-cumulativeFPValue :: ByteString -> L.ByteString
+cumulativeFPValue :: ByteString -> LazyByteString
 cumulativeFPValue = C8L.pack . show . cumulativeValue' @Double
 
 ngxExportYY 'cumulativeFPValue

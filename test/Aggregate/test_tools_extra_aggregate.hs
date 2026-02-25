@@ -8,7 +8,7 @@ import           NgxExport.Tools
 import           NgxExport.Tools.Aggregate
 
 import           Data.ByteString (ByteString)
-import qualified Data.ByteString.Lazy.Char8 as C8L
+import           Data.ByteString.Lazy (LazyByteString)
 import           Data.Aeson
 import           Data.Maybe
 import           Data.IORef
@@ -26,7 +26,7 @@ stats :: IORef Stats
 stats = unsafePerformIO $ newIORef $ Stats 0 0 0
 {-# NOINLINE stats #-}
 
-updateStats :: ByteString -> IO C8L.ByteString
+updateStats :: ByteString -> IO LazyByteString
 updateStats s = voidHandler $ do
     let cbs = readFromByteString @Int s
     modifyIORef' stats $ \(Stats bs rs _) ->
@@ -36,7 +36,7 @@ updateStats s = voidHandler $ do
         in Stats nbs nrs nmbs
 ngxExportIOYY 'updateStats
 
-reportStats :: Int -> Bool -> IO C8L.ByteString
+reportStats :: Int -> Bool -> IO LazyByteString
 reportStats = deferredService $ \port -> voidHandler $ do
     s <- readIORef stats
     reportAggregate port (Just s) "stats"

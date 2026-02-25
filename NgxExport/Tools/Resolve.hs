@@ -17,6 +17,7 @@
 --
 -----------------------------------------------------------------------------
 
+
 module NgxExport.Tools.Resolve (
     -- * Dynamic upstreams in Nginx
     -- $dynamicUpstreams
@@ -50,7 +51,7 @@ import           Network.HTTP.Client.TLS (newTlsManager)
 import           Network.HTTP.Client.BrReadWithTimeout
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as C8
-import qualified Data.ByteString.Lazy as L
+import           Data.ByteString.Lazy (LazyByteString)
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import qualified Data.HashMap.Strict as HM
@@ -412,11 +413,11 @@ httpManager :: Manager
 httpManager = unsafePerformIO newTlsManager
 {-# NOINLINE httpManager #-}
 
-getResponse :: Text -> (Request -> IO (Response L.ByteString)) ->
-    IO L.ByteString
+getResponse :: Text -> (Request -> IO (Response LazyByteString)) ->
+    IO LazyByteString
 getResponse url = fmap responseBody . (parseUrlThrow (T.unpack url) >>=)
 
-getUrl :: Text -> IO L.ByteString
+getUrl :: Text -> IO LazyByteString
 getUrl url = getResponse url $ flip httpLbsBrReadWithTimeout httpManager
 
 minimumTTL :: TTL -> [TTL] -> TTL

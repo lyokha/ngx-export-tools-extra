@@ -5,9 +5,10 @@ module TestToolsExtraServiceHookAdaptor where
 import           NgxExport
 import           NgxExport.Tools.ServiceHookAdaptor ()
 
-import           Data.ByteString (ByteString)
 import qualified Data.ByteString as B
+import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as L
+import           Data.ByteString.Lazy (LazyByteString)
 import           Data.IORef
 import           Control.Monad
 import           Control.Exception
@@ -23,7 +24,7 @@ secretWord :: IORef ByteString
 secretWord = unsafePerformIO $ newIORef ""
 {-# NOINLINE secretWord #-}
 
-testSecretWord :: ByteString -> IO L.ByteString
+testSecretWord :: ByteString -> IO LazyByteString
 testSecretWord v = do
     s <- readIORef secretWord
     when (B.null s) $ throwIO SecretWordUnset
@@ -32,7 +33,7 @@ testSecretWord v = do
                  else ""
 ngxExportIOYY 'testSecretWord
 
-changeSecretWord :: ByteString -> IO L.ByteString
+changeSecretWord :: ByteString -> IO LazyByteString
 changeSecretWord s = do
     writeIORef secretWord s
     return $ "The secret word was " `L.append` if B.null s

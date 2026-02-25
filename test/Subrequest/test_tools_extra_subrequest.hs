@@ -7,7 +7,7 @@ import           NgxExport.Tools
 import           NgxExport.Tools.Subrequest
 
 import           Data.ByteString (ByteString)
-import qualified Data.ByteString.Lazy as L
+import           Data.ByteString.Lazy (LazyByteString)
 
 import           Network.HTTP.Client hiding (path)
 import qualified Network.Socket as S
@@ -31,7 +31,7 @@ configureUdsManager = ignitionService $ \path -> voidHandler $ do
 
 ngxExportSimpleService 'configureUdsManager SingleShotService
 
-reqBody :: L.ByteString -> ByteString -> IO L.ByteString
+reqBody :: LazyByteString -> ByteString -> IO LazyByteString
 reqBody = const . return
 
 ngxExportAsyncOnReqBody 'reqBody

@@ -45,6 +45,7 @@ import           Data.HashMap.Strict (HashMap)
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as L
+import           Data.ByteString.Lazy (LazyByteString)
 import qualified Data.ByteString.Lazy.Char8 as C8L
 import           Data.ByteString.Base64.URL
 #if MIN_VERSION_base64(1,0,0)
@@ -86,9 +87,10 @@ import           System.IO.Unsafe
 --
 -- import           Data.ByteString (ByteString)
 -- import qualified Data.ByteString.Lazy as L
+-- import           Data.ByteString.Lazy (LazyByteString)
 -- import qualified Network.HTTP.Types.URI as URI
 --
--- urlDecode :: ByteString -> L.ByteString
+-- urlDecode :: ByteString -> LazyByteString
 -- urlDecode = L.fromStrict . URI.urlDecode False
 --
 -- 'ngxExportYY' \'urlDecode
@@ -262,9 +264,9 @@ extraEDEFilters = HM.fromList
 -- This is the core function of the /renderEDETemplate/ handler. Accepts a JSON
 -- object written in a 'Data.ByteString.Lazy.ByteString' and a key to find a
 -- compiled EDE template declared by the /compileEDETemplates/ handler.
-renderEDETemplate :: L.ByteString       -- ^ JSON object
+renderEDETemplate :: LazyByteString     -- ^ JSON object
                   -> ByteString         -- ^ Key to find the EDE template
-                  -> IO L.ByteString
+                  -> IO LazyByteString
 renderEDETemplate = renderEDETemplateWith decode extraEDEFilters
 
 -- | Renders an EDE template with custom decoding function and filters.
@@ -272,11 +274,11 @@ renderEDETemplate = renderEDETemplateWith decode extraEDEFilters
 -- Choice of the decoding function makes EDE available for templating from any
 -- configuration language that maps to the Aeson's 'Value'.
 renderEDETemplateWith
-    :: (L.ByteString -> Maybe Value)    -- ^ Decoding function
+    :: (LazyByteString -> Maybe Value)  -- ^ Decoding function
     -> HashMap Id Term                  -- ^ Collection of extra filters
-    -> L.ByteString                     -- ^ JSON object
+    -> LazyByteString                   -- ^ JSON object
     -> ByteString                       -- ^ Key to find the EDE template
-    -> IO L.ByteString
+    -> IO LazyByteString
 renderEDETemplateWith fdec flt v k = do
     tpls <- readIORef templates
     case HM.lookup k tpls of
@@ -307,7 +309,7 @@ ngxExportAsyncOnReqBody 'renderEDETemplate
 -- as /key|$hs_json/.
 renderEDETemplateFromFreeValue
     :: ByteString           -- ^ Key to find the EDE template | JSON object
-    -> IO L.ByteString
+    -> IO LazyByteString
 renderEDETemplateFromFreeValue = uncurry (flip renderEDETemplate) .
     second (L.fromStrict . C8.tail) . C8.break (== '|')
 
