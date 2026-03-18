@@ -1151,7 +1151,7 @@ bridgedSubrequest parseRequestF buildResponseF BridgeConf {..} = do
                              }
             tmo = fromResponseTimeout reqIn manIn
             givesPopper needsPopper = needsPopper $
-                brReadWithTimeout tmo reqIn $ responseBody respIn
+                brReadWithTimeout tmo $ responseBody respIn
         buildResponseF <$>
             httpLbsBrReadWithTimeout
                 (makeStreamingRequest givesPopper bridgeSink reqOut') manOut

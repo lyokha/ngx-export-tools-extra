@@ -1,3 +1,7 @@
+### 1.2.12.3
+
+- Require *http-client-brread-timeout &ge; 0.3.0.0*.
+
 ### 1.2.12.2
 
 - Use type synonym *LazyByteString* from *bytestring &ge; 0.11.2.0*.
