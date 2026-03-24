@@ -1,8 +1,12 @@
 ### 1.2.13
 
+- Module *NgxExport.Tools.Prometheus*.
+  + Reimplement handler *statusLayout* without using a mutable array.
+- Module *NgxExport.Tools.EDE*.
+  + Drop all CPP macros.
+- Drop Cabal flag *EDEUsePrettyprinter*.
 - Require *time &ge; 1.9.1*, *base64 &ge; 1.0*, *prettyprinter &ge; 1.7.0*.
-- Remove Cabal flag *EDEUsePrettyprinter* and CPP macros in module
-  *NgxExport.Tools.EDE*.
+- Drop dependency on packages *array* and *safe*.
 
 ### 1.2.12.3
 

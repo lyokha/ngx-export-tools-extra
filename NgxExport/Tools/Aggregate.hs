@@ -4,7 +4,7 @@
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  NgxExport.Tools.Aggregate
--- Copyright   :  (c) Alexey Radkov 2019-2023
+-- Copyright   :  (c) Alexey Radkov 2019-2026
 -- License     :  BSD-style
 --
 -- Maintainer  :  alexey.radkov@gmail.com
@@ -62,7 +62,7 @@ import           Data.Maybe
 import           Control.Monad
 import           Control.Exception
 import           System.IO.Unsafe
-import           Safe
+import           Text.Read
 
 #ifdef SNAP_AGGREGATE_SERVER
 import qualified Data.Text as T
@@ -338,7 +338,8 @@ receiveAggregate :: FromJSON a =>
     Aggregate a -> LazyByteString -> ByteString -> IO LazyByteString
 receiveAggregate a v sint = do
     let !s = decode' v
-        !int = toNominalDiffTime $ readDef (Min 5) $ C8.unpack sint
+        !int = toNominalDiffTime $
+            fromMaybe (Min 5) $ readMaybe $ C8.unpack sint
     when (isNothing s) $ throwUserError "Unreadable aggregate!"
     updateAggregate a (fromJust s) int
     return "done"

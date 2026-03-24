@@ -51,9 +51,7 @@ library
                           , containers
                           , unordered-containers
                           , hashable
-                          , array
                           , text
-                          , safe
 
   if flag(SnapAggregateServer)
     build-depends:          snap-core

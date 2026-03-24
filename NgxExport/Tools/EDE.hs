@@ -3,7 +3,7 @@
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  NgxExport.Tools.EDE
--- Copyright   :  (c) Alexey Radkov 2020-2024
+-- Copyright   :  (c) Alexey Radkov 2020-2026
 -- License     :  BSD-style
 --
 -- Maintainer  :  alexey.radkov@gmail.com

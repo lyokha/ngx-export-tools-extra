@@ -4,7 +4,7 @@
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  NgxExport.Tools.Prometheus
--- Copyright   :  (c) Alexey Radkov 2020-2023
+-- Copyright   :  (c) Alexey Radkov 2020-2026
 -- License     :  BSD-style
 --
 -- Maintainer  :  alexey.radkov@gmail.com
@@ -58,13 +58,9 @@ import           Data.List.NonEmpty (NonEmpty)
 import qualified Data.List.NonEmpty as NE
 import           Data.Char
 import           Data.Word
-import           Data.Array.ST hiding (range)
 import           Control.Arrow
-import           Control.Monad
-import           Control.Monad.ST
 import           System.IO.Unsafe
 import           GHC.Generics
-import           Safe
 
 type ServerName = Text
 type MetricsName = Text
@@ -474,15 +470,10 @@ toPrometheusMetrics' PrometheusConf {..} (srv, cnts, hs, ocnts) =
     in M.mapWithKey (\k -> (fromMaybe "" (M.lookup k pcMetrics),)) cntsA
     where labeledRange = M.union . M.filter (not . T.null) . range
           hCounter (ks, ts) k = const $
-              k `M.member` ts ||
-                  headDef False
-                      (dropWhile not $
-                          foldr (\v ->
-                                     let v1 = v `T.append` "_sum"
-                                         v2 = v `T.append` "_cnt"
-                                     in ((k == v1 || k == v2) :)
-                                ) [] ks
-                      )
+              k `M.member` ts || any (\v -> let v1 = v `T.append` "_sum"
+                                                v2 = v `T.append` "_cnt"
+                                            in k == v1 || k == v2
+                                     ) ks
           gCounter = const . flip HS.member pcGauges
           toHistogram cs hk rs =
               let ranges = M.mapWithKey
@@ -865,23 +856,32 @@ ngxExportYY 'scale1000
 -- /0.2/ seconds that was added there.
 
 extractValues :: ByteString -> [ByteString]
-extractValues = filter ((&&) <$> not . C8.null <*> isDigit . C8.head)
-                . C8.splitWith ((&&) <$> not . isDigit <*> (/= '.'))
+extractValues =
+    filter ((&&) <$> (3 ==) . C8.length . C8.takeWhile isDigit
+                 <*> ('1' /=) . C8.head
+           )
+    . C8.splitWith ((&&) <$> not . isDigit <*> (/= '.'))
 
 statusLayout :: ByteString -> LazyByteString
 statusLayout = C8L.pack . intercalate "," . map show . statuses
-    where statuses s = runST $ do
-              a <- newArray bs 0 :: ST s (STUArray s Int Int)
-              mapM_ (uncurry $ writeStatus a) $ toPairs s
-              getElems a
+    where statuses = take (hb - lb + 1)
+                     . (++ repeat 0)
+                     . snd
+                     . foldl (\a@(i, cur) (j, n) ->
+                                 if j > hb
+                                     then a
+                                     else (j + 1
+                                          ,cur ++ replicate (j - i) 0 ++ pure n
+                                          )
+                             ) (lb, [])
+                     . toPairs
           toPairs = map (subtract (ord '0') . ord . C8.head . NE.head
                             &&& NE.length
                         )
                     . NE.groupBy ((==) `on` C8.head)
                     . sort
                     . extractValues
-          writeStatus a i = when (i >= lb && i <= ub) . writeArray a i
-          bs@(lb, ub) = (2, 5)
+          (lb, hb) = (2, 5)  -- 4 cells: [2xx .. 5xx]
 
 ngxExportYY 'statusLayout
 
