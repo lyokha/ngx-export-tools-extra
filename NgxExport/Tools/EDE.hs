@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, TemplateHaskell, OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell, OverloadedStrings #-}
 
 -----------------------------------------------------------------------------
 -- |
@@ -31,15 +31,7 @@ import           NgxExport.Tools.SimpleService
 
 import           Text.EDE
 import           Text.EDE.Filters
-#ifdef EDE_USE_PRETTYPRINTER
-#if MIN_VERSION_prettyprinter(1,7,0)
 import           Prettyprinter (unAnnotate)
-#else
-import           Data.Text.Prettyprint.Doc (unAnnotate)
-#endif
-#else
-import           Text.PrettyPrint.ANSI.Leijen (plain)
-#endif
 import qualified Data.HashMap.Strict as HM
 import           Data.HashMap.Strict (HashMap)
 import           Data.ByteString (ByteString)
@@ -48,9 +40,7 @@ import qualified Data.ByteString.Lazy as L
 import           Data.ByteString.Lazy (LazyByteString)
 import qualified Data.ByteString.Lazy.Char8 as C8L
 import           Data.ByteString.Base64.URL
-#if MIN_VERSION_base64(1,0,0)
 import           Data.Base64.Types
-#endif
 import           Data.IORef
 import           Data.Text (Text)
 import qualified Data.Text.Encoding as T
@@ -253,11 +243,7 @@ extraEDEFilters = HM.fromList
     where applyToValue :: (ByteString -> Text) -> Value -> Text
           applyToValue f (String t) = f $ T.encodeUtf8 t
           applyToValue f v = f $ L.toStrict $ encode v
-#if MIN_VERSION_base64(1,0,0)
           eb64 = extractBase64 . encodeBase64
-#else
-          eb64 = encodeBase64
-#endif
 
 -- | Renders an EDE template from a JSON object.
 --
@@ -293,12 +279,7 @@ renderEDETemplateWith fdec flt v k = do
                     case renderWith flt tpl obj of
                         Failure msg -> throwIO $ EDERenderError $ showPlain msg
                         Success r -> return $ LT.encodeUtf8 r
-    where showPlain = show .
-#ifdef EDE_USE_PRETTYPRINTER
-              unAnnotate
-#else
-              plain
-#endif
+    where showPlain = show . unAnnotate
 
 ngxExportAsyncOnReqBody 'renderEDETemplate
 

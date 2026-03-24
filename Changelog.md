@@ -1,3 +1,9 @@
+### 1.2.13
+
+- Require *time &ge; 1.9.1*, *base64 &ge; 1.0*, *prettyprinter &ge; 1.7.0*.
+- Remove Cabal flag *EDEUsePrettyprinter* and CPP macros in module
+  *NgxExport.Tools.EDE*.
+
 ### 1.2.12.3
 
 - Require *http-client-brread-timeout &ge; 0.3.0.0*.

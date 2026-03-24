@@ -54,9 +54,7 @@ import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import           Data.IORef
 import           Data.Int
-#if MIN_VERSION_time(1,9,1)
 import           Data.Fixed
-#endif
 import           Data.Time.Clock
 import           Data.Time.Calendar
 import           Data.Aeson
@@ -304,20 +302,13 @@ type ReportValue a = Maybe (Int32, Maybe a)
 throwUserError :: String -> IO a
 throwUserError = ioError . userError
 
-#if MIN_VERSION_time(1,9,1)
 asIntegerPart :: forall a. HasResolution a => Integer -> Fixed a
 asIntegerPart = MkFixed . (resolution (undefined :: Fixed a) *)
 {-# SPECIALIZE INLINE asIntegerPart :: Integer -> Pico #-}
-#endif
 
 toNominalDiffTime :: TimeInterval -> NominalDiffTime
 toNominalDiffTime =
-#if MIN_VERSION_time(1,9,1)
-    secondsToNominalDiffTime . asIntegerPart
-#else
-    fromRational . toRational . secondsToDiffTime
-#endif
-    . fromIntegral . toSec
+    secondsToNominalDiffTime . asIntegerPart . fromIntegral . toSec
 
 updateAggregate :: Aggregate a -> ReportValue a -> NominalDiffTime -> IO ()
 updateAggregate a s int = do
