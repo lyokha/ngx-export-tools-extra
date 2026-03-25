@@ -856,11 +856,8 @@ ngxExportYY 'scale1000
 -- /0.2/ seconds that was added there.
 
 extractValues :: ByteString -> [ByteString]
-extractValues =
-    filter ((&&) <$> (3 ==) . C8.length . C8.takeWhile isDigit
-                 <*> ('1' /=) . C8.head
-           )
-    . C8.splitWith ((&&) <$> not . isDigit <*> (/= '.'))
+extractValues = filter ((3 ==) . C8.length . C8.takeWhile isDigit)
+                . C8.splitWith ((&&) <$> not . isDigit <*> (/= '.'))
 
 statusLayout :: ByteString -> LazyByteString
 statusLayout = C8L.pack . intercalate "," . map show . statuses
@@ -868,7 +865,7 @@ statusLayout = C8L.pack . intercalate "," . map show . statuses
                      . (++ repeat 0)
                      . snd
                      . foldl (\a@(i, cur) (j, n) ->
-                                 if j > hb
+                                 if j < lb || j > hb
                                      then a
                                      else (j + 1
                                           ,cur ++ replicate (j - i) 0 ++ pure n
