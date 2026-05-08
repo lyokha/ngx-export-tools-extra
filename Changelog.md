@@ -1,3 +1,8 @@
+### 1.2.13.1
+
+- Module *NgxExport.Tools.Aggregate*.
+  + Remove unnecessary wrapping of the reported value in *Maybe*.
+
 ### 1.2.13
 
 - Module *NgxExport.Tools.Prometheus*.

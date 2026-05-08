@@ -77,7 +77,7 @@ import           Snap.Core
 type AggregateValue a = (UTCTime, Map Int32 (UTCTime, Maybe a))
 type Aggregate a = IORef (AggregateValue a)
 
-type ReportValue a = Maybe (Int32, Maybe a)
+type ReportValue a = (Int32, Maybe a)
 
 -- $aggregateServiceExporter
 --
@@ -311,8 +311,7 @@ toNominalDiffTime =
     secondsToNominalDiffTime . asIntegerPart . fromIntegral . toSec
 
 updateAggregate :: Aggregate a -> ReportValue a -> NominalDiffTime -> IO ()
-updateAggregate a s int = do
-    let (pid, v) = fromJust s
+updateAggregate a (pid, v) int = do
     !t <- getCurrentTime
     atomicModifyIORef' a $
         \(t', v') ->
