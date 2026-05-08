@@ -310,8 +310,8 @@ toNominalDiffTime :: TimeInterval -> NominalDiffTime
 toNominalDiffTime =
     secondsToNominalDiffTime . asIntegerPart . fromIntegral . toSec
 
-updateAggregate :: Aggregate a -> ReportValue a -> NominalDiffTime -> IO ()
-updateAggregate a (pid, v) int = do
+updateAggregate :: Aggregate a -> NominalDiffTime -> ReportValue a -> IO ()
+updateAggregate a !int (!pid, !v) = do
     !t <- getCurrentTime
     atomicModifyIORef' a $
         \(t', v') ->
@@ -336,11 +336,10 @@ updateAggregate a (pid, v) int = do
 receiveAggregate :: FromJSON a =>
     Aggregate a -> LazyByteString -> ByteString -> IO LazyByteString
 receiveAggregate a v sint = do
-    let !s = decode' v
-        !int = toNominalDiffTime $
+    let int = toNominalDiffTime $
             fromMaybe (Min 5) $ readMaybe $ C8.unpack sint
-    when (isNothing s) $ throwUserError "Unreadable aggregate!"
-    updateAggregate a (fromJust s) int
+    maybe (throwUserError "Unreadable aggregate!")
+        (updateAggregate a int) $ decode' v
     return "done"
 
 sendAggregate :: ToJSON a =>
@@ -380,7 +379,7 @@ data AggregateServerConf =
 aggregateServer :: (FromJSON a, ToJSON a) =>
     Aggregate a -> ByteString -> AggregateServerConf -> NgxExportService
 aggregateServer a u = ignitionService $ \conf -> voidHandler $ do
-    let !int = toNominalDiffTime $ asPurgeInterval conf
+    let int = toNominalDiffTime $ asPurgeInterval conf
     simpleHttpServe (asConfig $ asPort conf) $ asHandler a u int
 
 asConfig :: Int -> Config Snap a
@@ -404,9 +403,9 @@ asHandler a u int =
 receiveAggregateSnap :: FromJSON a => Aggregate a -> NominalDiffTime -> Snap ()
 receiveAggregateSnap a int =
     handleAggregateExceptions "Exception while receiving aggregate" $ do
-        !s <- decode' <$> readRequestBody 65536
-        when (isNothing s) $ liftIO $ throwUserError "Unreadable aggregate!"
-        liftIO $ updateAggregate a (fromJust s) int
+        v <- readRequestBody 65536
+        maybe (liftIO $ throwUserError "Unreadable aggregate!")
+            (liftIO . updateAggregate a int) $ decode' v
         finishWith emptyResponse
 
 sendAggregateSnap :: ToJSON a => Aggregate a -> Snap ()
