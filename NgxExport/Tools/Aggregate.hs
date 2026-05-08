@@ -311,7 +311,7 @@ toNominalDiffTime =
     secondsToNominalDiffTime . asIntegerPart . fromIntegral . toSec
 
 updateAggregate :: Aggregate a -> NominalDiffTime -> ReportValue a -> IO ()
-updateAggregate a !int (!pid, !v) = do
+updateAggregate a int (!pid, !v) = do
     !t <- getCurrentTime
     atomicModifyIORef' a $
         \(t', v') ->
@@ -336,7 +336,7 @@ updateAggregate a !int (!pid, !v) = do
 receiveAggregate :: FromJSON a =>
     Aggregate a -> LazyByteString -> ByteString -> IO LazyByteString
 receiveAggregate a v sint = do
-    let int = toNominalDiffTime $
+    let !int = toNominalDiffTime $
             fromMaybe (Min 5) $ readMaybe $ C8.unpack sint
     maybe (throwUserError "Unreadable aggregate!")
         (updateAggregate a int) $ decode' v
@@ -379,7 +379,7 @@ data AggregateServerConf =
 aggregateServer :: (FromJSON a, ToJSON a) =>
     Aggregate a -> ByteString -> AggregateServerConf -> NgxExportService
 aggregateServer a u = ignitionService $ \conf -> voidHandler $ do
-    let int = toNominalDiffTime $ asPurgeInterval conf
+    let !int = toNominalDiffTime $ asPurgeInterval conf
     simpleHttpServe (asConfig $ asPort conf) $ asHandler a u int
 
 asConfig :: Int -> Config Snap a
