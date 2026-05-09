@@ -65,8 +65,6 @@ import           System.IO.Unsafe
 import           Text.Read
 
 #ifdef SNAP_AGGREGATE_SERVER
-import qualified Data.Text as T
-import qualified Data.Text.Encoding as T
 import           Control.Monad.IO.Class
 import           Control.Exception.Enclosed (handleAny)
 import           Snap.Http.Server
@@ -415,12 +413,11 @@ sendAggregateSnap a =
         modifyResponse $ setContentType "application/json"
         writeLBS $ encode s
 
-handleAggregateExceptions :: String -> Snap () -> Snap ()
-handleAggregateExceptions cmsg = handleAny $ \e ->
-    writeErrorResponse 500 $ show (e :: SomeException)
+handleAggregateExceptions :: ByteString -> Snap () -> Snap ()
+handleAggregateExceptions cmsg = handleAny $ writeErrorResponse 500 . show
     where writeErrorResponse c msg = do
-              modifyResponse $ setResponseStatus c $ T.encodeUtf8 $ T.pack cmsg
-              writeBS $ T.encodeUtf8 $ T.pack msg
+              modifyResponse $ setResponseStatus c cmsg
+              writeBS $ C8.pack msg
 
 #endif
 

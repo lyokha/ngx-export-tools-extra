@@ -2,6 +2,7 @@
 
 - Module *NgxExport.Tools.Aggregate*.
   + Remove unnecessary wrapping of the reported value in *Maybe*.
+  + Drop dependency on modules from package *text*.
 - Drop support for GHC versions older than *9.6* due to the updated constraints
   in revision *3* of package *base64-1.0* on Hackage.
 
